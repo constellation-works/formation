@@ -1,16 +1,29 @@
 //! Single owner of Formation's stdout, stderr, and diagnostic rendering.
 
-pub(crate) mod payload;
+mod hook;
 
-mod render;
+mod mail;
 
-pub(crate) use render::{
-    HistoryFormat, failure, hook_error, hook_json, hook_rewake, hook_usage, mail, sent_history,
-    summary,
+mod roster;
+
+mod shared;
+
+mod watch;
+
+pub(crate) use hook::{
+    hook_error, hook_json, hook_rewake, hook_usage, prompt as hook_prompt, stop as hook_stop,
 };
 
+pub(crate) use mail::{HistoryFormat, payload as mail_payload, sent_history, write as mail_write};
+
+pub(crate) use roster::summary;
+
+pub(crate) use shared::failure;
+
+pub(crate) use watch::{payload as watch_payload, write as watch_write};
+
 pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
-    render::mail_error(&payload::error(error))
+    shared::write_json_error(&shared::error_payload(error))
 }
 
 pub(crate) fn init_logging() {

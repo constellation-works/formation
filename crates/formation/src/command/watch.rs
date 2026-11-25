@@ -48,7 +48,7 @@ pub(crate) fn run(env: Env, args: Watch) -> ExitCode {
     };
 
     watch::exec(&env, cmd, |result| match result {
-        Ok(out) => output::mail(&output::payload::watch(out)),
+        Ok(out) => output::watch_write(&output::watch_payload(out)),
         Err(error) => output::error(&error),
     })
 }

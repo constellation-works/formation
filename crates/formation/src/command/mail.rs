@@ -95,7 +95,7 @@ pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
         Ok(mail::Outcome::SentHistory { messages, total }) => {
             output::sent_history(&messages, total, format)
         }
-        Ok(out) => output::mail(&output::payload::mail(out)),
+        Ok(out) => output::mail_write(&output::mail_payload(out)),
         Err(error) => output::error(&error),
     })
 }
