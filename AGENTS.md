@@ -9,7 +9,7 @@ Keep the template architecture as Formation grows. The CLI maps arguments and ou
 ## Rules
 
 - A roster check grants no routes. Qualify wake on the exact receiving host before exposing it as a capability.
-- Update the [initial design](docs/design/formation/1_scope.md) when a proposed capability becomes verified.
+- Start with the [Formation overview](docs/design/formation/1_overview.md) for roles, units and authority. Update the [shift-messaging scope](docs/design/shift-messaging/1_scope.md) when a proposed delivery capability becomes verified.
 
 ## Branching
 
