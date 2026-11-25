@@ -49,6 +49,7 @@ fn upgrade_retains_seats_and_pending_receipts() -> Result<(), Box<dyn std::error
         ),
         (17, "chief", "first", "retained")
     );
+    assert_eq!(pending[0].sent, None);
     Ok(())
 }
 

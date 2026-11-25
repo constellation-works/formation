@@ -10,20 +10,22 @@ const INBOX_PAGE_SIZE: i64 = 32;
 /// Envelopes visible in a committed read.
 pub struct Messages<'a> {
     pub(crate) conn: &'a Connection,
+    pub(crate) has_sent_column: bool,
 }
 
 impl Messages<'_> {
     /// Oldest pending messages for a recipient.
     pub fn unread(&self, seat: &str) -> Result<Vec<Message>, Error> {
+        let sent = if self.has_sent_column { "sent" } else { "NULL" };
         let mut statement = self
             .conn
-            .prepare(
-                "SELECT receipt, id, sender, body
+            .prepare(&format!(
+                "SELECT receipt, id, sender, body, {sent}
                    FROM messages
                   WHERE recipient = ?1 AND ack = 0
                   ORDER BY receipt
-                  LIMIT ?2",
-            )
+                  LIMIT ?2"
+            ))
             .map_err(error::sql)?;
 
         statement
@@ -33,6 +35,9 @@ impl Messages<'_> {
                     id: row.get(1)?,
                     sender: row.get(2)?,
                     body: row.get(3)?,
+                    sent: row
+                        .get::<_, Option<i64>>(4)?
+                        .and_then(crate::contract::rfc3339),
                 })
             })
             .map_err(error::sql)?
@@ -84,13 +89,20 @@ impl MessagesMut<'_> {
             .map_err(error::sql)
     }
 
-    /// Insert an envelope and return its durable receipt.
-    pub fn insert(&self, sender: &str, to: &str, id: &str, body: &str) -> Result<i64, Error> {
+    /// Insert an envelope stored at `sent` (Unix seconds) and return its durable receipt.
+    pub fn insert(
+        &self,
+        sender: &str,
+        to: &str,
+        id: &str,
+        body: &str,
+        sent: i64,
+    ) -> Result<i64, Error> {
         self.conn
             .execute(
-                "INSERT INTO messages (sender, recipient, id, body)
-                 VALUES (?, ?, ?, ?)",
-                params![sender, to, id, body],
+                "INSERT INTO messages (sender, recipient, id, body, sent)
+                 VALUES (?, ?, ?, ?, ?)",
+                params![sender, to, id, body, sent],
             )
             .map_err(error::sql)?;
         Ok(self.conn.last_insert_rowid())

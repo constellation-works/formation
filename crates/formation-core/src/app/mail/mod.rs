@@ -29,7 +29,7 @@ use std::time::Duration;
 pub enum Command {
     /// Register a seat.
     Join(String),
-    /// List online seats.
+    /// List every joined seat.
     Who,
     /// Submit an envelope.
     Send {
@@ -55,14 +55,33 @@ pub enum Outcome {
         /// Previous session id when a different session took over the seat.
         replaced_session: Option<String>,
     },
-    /// Online seat names.
-    Online(Vec<String>),
-    /// Request ID and receipt.
-    Sent(String, i64),
+    /// Every joined seat, ordered by name.
+    Seats(Vec<SeatStatus>),
+    /// A stored envelope.
+    Sent {
+        /// Request identifier.
+        id: String,
+        /// Durable receipt.
+        receipt: i64,
+        /// Whether a process was waiting on the recipient's mailbox when the send ran.
+        held: bool,
+    },
     /// Pending envelopes.
     Inbox(Vec<Message>),
     /// Handled receipt.
     Ack(i64),
+}
+
+/// One joined seat as `mail who` lists it.
+pub struct SeatStatus {
+    /// Seat name.
+    pub name: String,
+    /// Unacknowledged envelopes addressed to the seat.
+    pub unread: i64,
+    /// Whether a process was waiting on the seat's mailbox within the presence window.
+    pub held: bool,
+    /// When the seat last renewed its presence, as RFC 3339 UTC, or `None` when it never has.
+    pub seen: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -73,10 +92,10 @@ pub(super) enum SeatRef<'a> {
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
-struct Refusal(&'static str);
+struct Refusal(String);
 
-fn refused(code: &'static str, message: &'static str) -> Error {
-    Error::new(Kind::Refused, code, Refusal(message))
+fn refused(code: &'static str, message: impl Into<String>) -> Error {
+    Error::new(Kind::Refused, code, Refusal(message.into()))
 }
 
 fn touch(tx: &Tx<'_>, caller: SeatRef<'_>, now: i64) -> Result<String, Error> {
@@ -149,7 +168,7 @@ impl App for Mail {
                     std::io::Error::other("join context unavailable"),
                 ));
             };
-            let outcome = join::run(&mail.store, session.as_ref(), now, name)?;
+            let outcome = join::run(&mail.store, session.as_ref(), name)?;
             if let (Some(session), Some(sessions_dir)) = (session.as_ref(), sessions_dir.as_deref())
             {
                 Store::record_session(sessions_dir, session, room_record)?;
@@ -185,8 +204,8 @@ impl App for Mail {
     fn target(out: &Outcome) -> Option<String> {
         match out {
             Outcome::Joined { seat, .. } => Some(seat.clone()),
-            Outcome::Sent(_, receipt) | Outcome::Ack(receipt) => Some(receipt.to_string()),
-            Outcome::Online(_) | Outcome::Inbox(_) => None,
+            Outcome::Sent { receipt, .. } | Outcome::Ack(receipt) => Some(receipt.to_string()),
+            Outcome::Seats(_) | Outcome::Inbox(_) => None,
         }
     }
 }

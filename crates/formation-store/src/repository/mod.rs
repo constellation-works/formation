@@ -30,7 +30,10 @@ impl Snapshot {
 
     /// Messages visible at the snapshot.
     pub fn messages(&self) -> Messages<'_> {
-        Messages { conn: &self.reader }
+        Messages {
+            conn: &self.reader,
+            has_sent_column: sqlite::has_sent_column(self.reader.version()),
+        }
     }
 }
 

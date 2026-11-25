@@ -1,4 +1,4 @@
-Register this seat or refresh its presence
+Register this seat, or rebind it to this session
 
 Usage: formation mail join [OPTIONS] <NAME>
 

@@ -1,4 +1,4 @@
-List seats seen in the last 90 seconds
+List every joined seat, not only those seen lately: unread, held, seen
 
 Usage: formation mail who [OPTIONS]
 

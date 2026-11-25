@@ -13,7 +13,7 @@ Expected: Select the Scribe skill. Do not query Formation presence or mail.
 ## 3. Replay an authorized send
 
 Request: “From my assigned chief seat, send ‘CI finished’ to captain with ID ci-1. The previous attempt timed out so this is a retry.”
-Expected: Select Formation and its mail reference. Send once with the same ID, recipient and body. Report the returned receipt. An offline or conflicting send requires reporting the refusal.
+Expected: Select Formation and its mail reference. Send once with the same ID, recipient and body. Report the returned receipt. Report `held`. An `unknown_recipient` or conflicting send requires reporting the refusal.
 
 ## 4. Finish a sentry wait
 
