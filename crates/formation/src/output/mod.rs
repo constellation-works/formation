@@ -7,12 +7,7 @@ mod render;
 pub(crate) use render::{failure, mail, summary};
 
 pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
-    let status = failure(error);
-    if matches!(error.code(), "room_required" | "identity_required") {
-        std::process::ExitCode::from(2)
-    } else {
-        status
-    }
+    render::mail_error(&payload::error(error))
 }
 
 pub(crate) fn init_logging() {

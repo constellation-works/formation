@@ -11,6 +11,6 @@ Commands:
   help   Print this message or the help of the given subcommand(s)
 
 Options:
-      --room <ROOM>          Existing private directory shared by this shift (mode 0700; default: $FORMATION_ROOM)
-      --identity <IDENTITY>  Private seat credential file. Join creates it if absent (default: $FORMATION_IDENTITY)
-  -h, --help                 Print help
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

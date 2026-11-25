@@ -14,21 +14,21 @@ For CLI-only use, run `make install`. Checking a roster works offline without a 
 
 ## Local inbox
 
-Build the CLI with `make build` and use `target/debug/formation`, or use the installed binary. Create one local, private directory per shift and give each seat its own identity file. In this example the operator runs both seats from one shell:
+Build the CLI with `make build` and use `target/debug/formation`, or use the installed binary. A room is selected by `--room <name|path>` (or `FORMATION_ROOM`), accepted before or after the subcommand. A value with a path separator or leading `.` or `~` is a directory path; any other value (1 to 96 ASCII letters, digits, hyphens or underscores) resolves to `<home>/rooms/<name>/`, where `<home>` is `FORMATION_HOME` or `~/.formation`. `mail join` creates a missing room (directory mode 0700, database mode 0600); every other command refuses a missing room with `room_not_found` and creates nothing.
+
+In a Claude Code or Codex session (`CLAUDE_CODE_SESSION_ID`, else `CODEX_THREAD_ID`), `mail join <seat>` binds that session id to the seat and records the room in `<home>/sessions/<session id>`. Later commands in that session find both the room and the seat with no flags. Joining a seat already held by another session takes it over and reports `rebound: true` with `replaced_session`; the replaced session's next call without `--as` is refused with `seat_required`. Outside a session (or to select another seat explicitly), pass `--as <seat>`:
 
 ```sh
-export FORMATION_ROOM="$(mktemp -d)"
-export FORMATION_IDENTITY="$FORMATION_ROOM/chief.key"
-formation mail join chief
-FORMATION_IDENTITY="$FORMATION_ROOM/captain.key" formation mail join captain
-formation mail who
-formation mail send captain --id check-1 --body 'CI finished'
-FORMATION_IDENTITY="$FORMATION_ROOM/captain.key" formation mail inbox --wait 30
-FORMATION_IDENTITY="$FORMATION_ROOM/captain.key" formation mail ack 1
+formation mail join chief --room trial
+formation mail join captain --room trial
+formation mail who --room trial --as chief
+formation mail send captain --id check-1 --body 'CI finished' --room trial --as chief
+formation mail inbox --wait 30 --room trial --as captain
+formation mail ack 1 --room trial --as captain
 ```
 
-All mail commands return JSON. A seat is online for 90 seconds after activity. A waiting inbox renews that seat every 15 seconds and checks SQLite every half second inside one bounded command. An empty array means the wait expired. Each read returns up to 32 unread messages, oldest first. A recipient acknowledgment is repeatable and retains the stored envelope. A retry with the same sender, ID, recipient and body returns the original receipt, even after acknowledgment or expiry of the recipient's presence. A changed payload using the same ID fails.
+All mail commands return JSON on stdout, and command refusals print one JSON line with `code` and `error` on stderr and exit 1. A seat is online for 90 seconds after activity. A waiting inbox renews that seat every 15 seconds and checks SQLite every half second inside one bounded command. An empty array means the wait expired. Each read returns up to 32 unread messages, oldest first. A recipient acknowledgment is repeatable and retains the stored envelope. A retry with the same sender, ID, recipient and body returns the original receipt, even after acknowledgment or expiry of the recipient's presence. A changed payload using the same ID fails.
 
-The room is for cooperating processes on one machine under one OS account. Any joined seat can send to any online seat in that room. The identity file selects the seat and prevents accidental reads or acknowledgments for a different seat. Processes with direct filesystem access under the same account can access the database and credentials. The CLI requires a private room and creates seat files with owner-only access. Keep the room on a local filesystem. The roster validator and Scribe groups are independent of room membership.
+The room is for cooperating processes on one machine under one OS account. Any joined seat can send to any online seat in that room. The seat name is an accident guard and not a security boundary: any process under the same OS account can pass `--as`, read the database or act as any seat, so no authority or access control depends on a seat name. The CLI requires private directories (mode 0700) and private files (mode 0600). Keep the room on a local filesystem. The roster validator and Scribe groups are independent of room membership.
 
-Existing rooms keep their seat keys, messages and receipt numbers. The first database write upgrades an unversioned inbox in place. Early builds could create `inbox.sqlite3` with mode 0644 inside a private room. The shared SQLite driver requires an owner-only file. If the diagnostic identifies that permission issue, run `chmod 600 "$FORMATION_ROOM/inbox.sqlite3"` for your own room and retry. Newly created databases already use mode 0600.
+Existing rooms from earlier builds open in place and keep their seat names, messages and receipt numbers on the first database write. Early builds could create `inbox.sqlite3` with mode 0644 inside a private room. The shared SQLite driver requires an owner-only file. If the diagnostic identifies that permission issue, run `chmod 600 "<room>/inbox.sqlite3"` for your own room and retry. Newly created databases already use mode 0600.

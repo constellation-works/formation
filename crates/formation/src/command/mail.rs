@@ -5,18 +5,17 @@ use clap::{Args, Subcommand};
 use formation_core::Env;
 use formation_core::app::mail;
 use formation_core::app::mail::Command;
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
 #[derive(Args)]
 pub(crate) struct Mail {
-    /// Existing private directory shared by this shift (mode 0700; default: $FORMATION_ROOM).
-    #[arg(long)]
-    room: Option<PathBuf>,
-    /// Private seat credential file. Join creates it if absent (default: $FORMATION_IDENTITY).
-    #[arg(long)]
-    identity: Option<PathBuf>,
+    /// Room name or directory path (default: $FORMATION_ROOM or session file).
+    #[arg(long, global = true, value_name = "NAME|PATH")]
+    room: Option<String>,
+    /// Seat name for this command (default: seat recorded for this session).
+    #[arg(long = "as", global = true, value_name = "SEAT")]
+    seat: Option<String>,
     #[command(subcommand)]
     action: Action,
 }
@@ -25,7 +24,7 @@ pub(crate) struct Mail {
 enum Action {
     /// Register this seat or refresh its presence.
     Join {
-        /// Unique seat name for this identity.
+        /// Seat name to register or rebind.
         name: String,
     },
     /// List seats seen in the last 90 seconds.
@@ -55,7 +54,7 @@ enum Action {
 }
 
 pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
-    let env = env.with_mail_paths(args.room, args.identity);
+    let env = env.with_mail_options(args.room, args.seat);
     let cmd = match args.action {
         Action::Join { name } => Command::Join(name),
         Action::Who => Command::Who,

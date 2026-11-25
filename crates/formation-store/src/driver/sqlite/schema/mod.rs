@@ -6,4 +6,11 @@ mod message;
 
 mod seat;
 
-pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[seat::CREATE, message::CREATE, audit::CREATE];
+pub(crate) const SESSION_SCHEMA_VERSION: u32 = 4;
+
+pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
+    seat::CREATE,
+    message::CREATE,
+    audit::CREATE,
+    seat::SESSION_BINDING,
+];

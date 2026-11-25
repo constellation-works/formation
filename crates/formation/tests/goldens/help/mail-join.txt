@@ -1,9 +1,11 @@
 Register this seat or refresh its presence
 
-Usage: formation mail join <NAME>
+Usage: formation mail join [OPTIONS] <NAME>
 
 Arguments:
-  <NAME>  Unique seat name for this identity
+  <NAME>  Seat name to register or rebind
 
 Options:
-  -h, --help  Print help
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

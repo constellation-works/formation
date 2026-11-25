@@ -1,14 +1,14 @@
-use super::{Error, Outcome, Store, refused};
+use super::{Error, Outcome, SessionId, Store};
 
-pub(super) fn run(store: &Store, key: &[u8], now: i64, name: String) -> Result<Outcome, Error> {
-    store.write(|tx| {
-        if tx.seats().bind(&name, key, now)? {
-            Ok(Outcome::Joined(name))
-        } else {
-            Err(refused(
-                "seat_taken",
-                "seat already belongs to another identity",
-            ))
-        }
+pub(super) fn run(
+    store: &Store,
+    session: Option<&SessionId>,
+    now: i64,
+    name: String,
+) -> Result<Outcome, Error> {
+    let replaced_session = store.write(|tx| tx.seats().bind(&name, session, now))?;
+    Ok(Outcome::Joined {
+        seat: name,
+        replaced_session,
     })
 }

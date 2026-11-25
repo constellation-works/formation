@@ -10,6 +10,14 @@ pub(crate) fn failure(error: &dyn Display) -> ExitCode {
     ExitCode::FAILURE
 }
 
+pub(crate) fn mail_error(value: &serde_json::Value) -> ExitCode {
+    let mut err = io::stderr().lock();
+    let _ = serde_json::to_writer(&mut err, value)
+        .map_err(io::Error::from)
+        .and_then(|()| writeln!(err));
+    ExitCode::FAILURE
+}
+
 pub(crate) fn summary(summary: &Summary, json: bool) -> ExitCode {
     let mut out = io::stdout().lock();
     let result = if json {

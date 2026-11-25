@@ -14,5 +14,6 @@ mod repository;
 mod store;
 
 pub use contract::roster::{DecodeError, Host, Role, Roster, Route, Seat, decode};
-pub use repository::{PriorDelivery, Snapshot, Tx};
+pub use contract::{InvalidSessionId, SessionId};
+pub use repository::{PriorDelivery, Seats, SeatsRead, Snapshot, Tx};
 pub use store::Store;
