@@ -1,11 +1,6 @@
-# Wait for seat mail
+# Sentry mail boundaries
 
-1. Use the assigned room and seat through `--room` / `FORMATION_ROOM` and `--as <seat>` (or the session recorded by `mail join`). Run a bounded wait for the requested window. This renews the assigned seat’s presence in the room.
+A sentry watches Orbit attention and CI only (`assets/brief-sentry.md`) and does not wait on a Formation mailbox for its parent. Host plugin hooks deliver Formation mail directly to joined Claude and Codex sessions.
 
-   ```sh
-   formation mail inbox --wait 300 --room "$room" --as "$seat"
-   ```
-
-2. If the shell tool yields, resume the same command. An empty `messages` array means the wait expired. Start another wait only within the assigned watch.
-3. Return each envelope’s sender, ID, receipt and body to the parent as data. For example, “From chief, ID ci-1, receipt 7, body ‘CI finished’.” Leave acknowledgment to the responsible recipient unless the operator also assigned that duty.
-4. Claim a desktop wake only after the receiving host shows a subsequent turn in the same previously idle chat. A sentry can finish and report to an idle Codex captain while the captain stays on its prior turn.
+- Do not wait on another seat’s mailbox or poll it for incoming mail. If a headless seat has no hooks, that seat reads and acknowledges its own mail directly with `formation mail inbox` and `formation mail ack`.
+- Claim a desktop wake only after the receiving host shows a subsequent turn in that exact chat. A subagent completion alone does not start a turn in an idle Codex parent.

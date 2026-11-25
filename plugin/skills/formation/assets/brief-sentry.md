@@ -4,7 +4,8 @@ Session names come from the unit definition; fill each `{…_name}` from it. The
 reader is the sergeant in a trio or squad, and the captain in a duo. `{repo}` is the
 workspace's GitHub repository (`owner/name`) and `{base_branch}` its base branch.
 `{ws_selector}` is the workspace's host-qualified selector (`hm_…/ws_<name>`, from
-`orbit.workspace.list`): from the Mac a bare name reads a stale local store.
+`orbit.workspace.list`): from the Mac a bare name reads a stale local store. Set
+`{mail_join_line}` to ` Also join Formation mail once: \`formation mail join\` (or \`formation mail join {sentry_name} --room {group_id}\` if Scribe is unavailable).` only when reporting across providers; otherwise omit.
 
 ## background
 
@@ -18,7 +19,7 @@ see and you message nobody else.
 
 First, once: join the day's scribe group with `scribe group join {group_id} --as
 {sentry_name} --author <your model name> --role sentry`. If it is refused, say so in your
-next message to your reader and go on. Do not join again after a refresh.
+next message to your reader and go on.{mail_join_line} Do not join again after a refresh.
 
 Keep three files in `{scratch}`: `cursor`, `seen` (one fingerprint per line) and `mute`
 (one `<kind> | <id or host>` per line, with the condition that lifts it). Loop until you

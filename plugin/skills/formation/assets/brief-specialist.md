@@ -1,6 +1,6 @@
 # Brief: specialist (`1-spec-{subject}`)
 
-Fill all placeholders. Deliver both sections using the receiving provider’s staffing procedure.
+Fill all placeholders. Deliver both sections using the receiving provider’s staffing procedure. Set `{mail_join_line}` to ` Also join Formation mail once: \`formation mail join\` (or \`formation mail join 1-spec-{subject} --room {group_id}\` if Scribe is unavailable).` when an asker uses another provider; otherwise omit.
 
 ## background
 
@@ -16,7 +16,7 @@ that approves nothing.
 
 First, once: join the day's scribe group with `scribe group join {group_id} --as
 1-spec-{subject} --author <your model name> --role specialist`. If it is refused, say so in
-your next message to the chief and go on. Do not join again after a refresh.
+your next message to the chief and go on.{mail_join_line} Do not join again after a refresh.
 
 1. Load your subject now: {sources}. Then end your turn with one line and wait for asks.
 2. An ask is a message from a session on your roster with one question, a record id and

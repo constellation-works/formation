@@ -17,7 +17,9 @@ On a requested formation in Constellation, turn off the Claude Docs connector fo
 
 Implementation lieutenants use their own persistent worktrees. A peer-initiated turn may require proposing the start for the operator or waiting for their typed turn.
 
-Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes. An idle, detached Claude session has received a native peer message and started a turn in the tested host. Formation mail requires its own receiving watch.
+Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
+
+For cross-provider routes, mail arrives through the Claude plugin hooks: `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` runs in the background with `asyncRewake` to wake the session when mail arrives. A joined seat needs no separate mail watcher.
 
 A background sleep may notify a live Claude sentry on exit. Confirm that capability before promising a watch.
 

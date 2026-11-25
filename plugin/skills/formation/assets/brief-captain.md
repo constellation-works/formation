@@ -17,7 +17,7 @@ attention counts; read the items yourself.
 
 1. Join the day's scribe group: `scribe group join {group_id} --as {capt_name} --author
    <your model name> --role captain`. A refusal goes to the chief once and does not stop
-   you. Then claim your assignment `{assignment_id}` with the `orchestration-session`
+   you.{mail_join_line} Then claim your assignment `{assignment_id}` with the `orchestration-session`
    skill. The chief filed it; you write its plan. It is your record; keep your state
    there, not in chat. When your context starts with a handoff instead of this brief, you
    were refreshed: do not join, claim or staff again; follow step 11. Then read the
@@ -110,3 +110,6 @@ Values for the placeholders:
   cross-workspace ask, and the day's specialists. The ids follow in the roster message.
 - `{specialist_line}`: "Today's specialists: `1-spec-<subject>` on <subject>, …" or "None
   is staffed today; if two units keep needing the same context, tell the chief."
+- `{mail_join_line}`: " Also join Formation mail once: `formation mail join` (or
+  `formation mail join {capt_name} --room {group_id}` if Scribe is unavailable)." when
+  this unit has a cross-provider edge; otherwise omit.
