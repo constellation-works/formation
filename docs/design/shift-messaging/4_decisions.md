@@ -48,3 +48,11 @@ The alternative was to keep both spellings accepted as warning no-ops until a fi
 
 - No deprecated key-file flag or environment variable remains in the CLI, core composition, store or skill references.
 - Cost: afterwards `--identity` is rejected as a usage error by the argument parser (exit 2), and any `FORMATION_IDENTITY` left in an environment is ignored.
+
+## Follow the host hook protocol
+
+**Recorded:** 2026-11 · Approved shift-messaging hook design and command contract.
+
+Claude Code interprets exit 2 as a request to wake or continue the session and reads the payload on stderr. The hook reserves that response for Claude Stop mail. Hook failures, including invalid command arguments and a failed write to the host, use exit 1 and a single diagnostic line. This adapts `STD-01@4 §R12`, `STD-01@4 §R13` and `STD-01@4 §R20` to that protocol.
+
+The host owns the input JSON and includes fields for other hook behaviors. Formation consumes `session_id` and the presence of `agent_id` and accepts the rest of the host document, under a narrow exception to `STD-01@4 §R29`. [Claude Code hooks](https://code.claude.com/docs/en/hooks), [Codex hooks](https://learn.chatgpt.com/docs/hooks)

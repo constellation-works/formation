@@ -10,6 +10,8 @@ mod rule;
 
 mod send;
 
+mod sent;
+
 mod who;
 
 use crate::Env;
@@ -23,7 +25,12 @@ use formation_store::SessionId;
 use formation_store::Store;
 use formation_store::Tx;
 use formation_store::contract::Message;
+pub use formation_store::contract::SentMessage;
 use std::time::Duration;
+
+pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+pub(super) const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 /// A mail operation.
 pub enum Command {
@@ -42,6 +49,8 @@ pub enum Command {
     },
     /// Inspect the inbox with a bounded wait.
     Inbox(Duration),
+    /// List the caller's newest sent envelopes, up to the supplied limit.
+    Sent(i64),
     /// Acknowledge a receipt.
     Ack(i64),
 }
@@ -68,6 +77,13 @@ pub enum Outcome {
     },
     /// Pending envelopes.
     Inbox(Vec<Message>),
+    /// Sent envelopes and the total before applying the limit.
+    SentHistory {
+        /// Matching envelopes in newest-first order.
+        messages: Vec<SentMessage>,
+        /// Number of sent envelopes.
+        total: i64,
+    },
     /// Handled receipt.
     Ack(i64),
 }
@@ -136,9 +152,11 @@ impl App for Mail {
     fn room_access(cmd: &Command) -> RoomAccess<'_> {
         match cmd {
             Command::Join(name) => RoomAccess::Join(name),
-            Command::Who | Command::Send { .. } | Command::Inbox(_) | Command::Ack(_) => {
-                RoomAccess::Existing
-            }
+            Command::Who
+            | Command::Send { .. }
+            | Command::Inbox(_)
+            | Command::Sent(_)
+            | Command::Ack(_) => RoomAccess::Existing,
         }
     }
 
@@ -147,7 +165,7 @@ impl App for Mail {
             Command::Join(_) => Some("mail join"),
             Command::Ack(_) => Some("mail ack"),
             Command::Send { .. } => Some("mail send"),
-            Command::Who | Command::Inbox(_) => None,
+            Command::Who | Command::Inbox(_) | Command::Sent(_) => None,
         }
     }
 
@@ -197,6 +215,7 @@ impl App for Mail {
             Command::Who => who::run(&mail.store, seat, now),
             Command::Send { to, id, body } => send::run(&mail.store, seat, now, &to, id, &body),
             Command::Inbox(wait) => inbox::run(ctx, &mail.store, seat, wait),
+            Command::Sent(limit) => sent::run(&mail.store, seat, limit),
             Command::Ack(receipt) => ack::run(&mail.store, seat, now, receipt),
         }
     }
@@ -205,7 +224,7 @@ impl App for Mail {
         match out {
             Outcome::Joined { seat, .. } => Some(seat.clone()),
             Outcome::Sent { receipt, .. } | Outcome::Ack(receipt) => Some(receipt.to_string()),
-            Outcome::Seats(_) | Outcome::Inbox(_) => None,
+            Outcome::Seats(_) | Outcome::Inbox(_) | Outcome::SentHistory { .. } => None,
         }
     }
 }

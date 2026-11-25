@@ -17,3 +17,7 @@ pub(crate) fn has_session_column(version: u32) -> bool {
 pub(crate) fn has_sent_column(version: u32) -> bool {
     version >= schema::SENT_SCHEMA_VERSION
 }
+
+pub(crate) fn has_delivered_column(version: u32) -> bool {
+    version >= schema::DELIVERED_SCHEMA_VERSION
+}

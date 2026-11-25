@@ -2,6 +2,8 @@
 
 use clap::Subcommand;
 
+pub(crate) mod hook;
+
 pub(crate) mod mail;
 
 pub(crate) mod roster;
@@ -12,4 +14,6 @@ pub(crate) enum Command {
     Roster(roster::Roster),
     /// Exchange messages in a private local room.
     Mail(mail::Mail),
+    /// Hand unread mail to a Claude Code or Codex session.
+    Hook(hook::Hook),
 }

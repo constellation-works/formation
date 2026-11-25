@@ -1,6 +1,6 @@
 //! Wire payloads preserved independently of the application's outcome types.
 
-use formation_core::app::mail::Outcome;
+use formation_core::app::mail::{Outcome, SentMessage};
 use serde_json::{Value, json};
 
 pub(crate) fn mail(out: Outcome) -> Value {
@@ -26,8 +26,34 @@ pub(crate) fn mail(out: Outcome) -> Value {
             json!({"id": id, "receipt": receipt, "held": held})
         }
         Outcome::Inbox(messages) => json!({"messages": messages}),
+        Outcome::SentHistory { messages, total } => sent_history(&messages, total),
         Outcome::Ack(receipt) => json!({"acknowledged": receipt}),
     }
+}
+
+pub(super) fn sent_history(messages: &[SentMessage], total: i64) -> Value {
+    json!({
+        "messages": messages,
+        "total": total,
+        "truncated": is_truncated(messages.len(), total),
+    })
+}
+
+pub(super) fn is_truncated(count: usize, total: i64) -> bool {
+    i64::try_from(count).is_ok_and(|count| count < total)
+}
+
+pub(crate) fn prompt(text: &str) -> Value {
+    json!({
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": text,
+        },
+    })
+}
+
+pub(crate) fn stop(text: &str) -> Value {
+    json!({"decision": "block", "reason": text})
 }
 
 pub(crate) fn error(error: &formation_core::Error) -> Value {

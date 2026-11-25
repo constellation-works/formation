@@ -5,10 +5,11 @@ mod audit;
 mod exec;
 
 use crate::composition::MailContext;
+pub(crate) use audit::record_delivery;
 pub(crate) use exec::{App, RoomAccess, exec};
 
 pub(crate) struct Ctx<'a> {
-    mail: Option<MailContext>,
+    pub(crate) mail: Option<MailContext>,
     pub(crate) actor: Option<&'a str>,
     pub(crate) clock: fn() -> time::OffsetDateTime,
 }

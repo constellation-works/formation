@@ -12,6 +12,17 @@ pub struct SeatsRead<'a> {
 }
 
 impl SeatsRead<'_> {
+    /// Whether a seat with this name has joined.
+    pub fn contains(&self, name: &str) -> Result<bool, Error> {
+        self.conn
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM seats WHERE name = ?)",
+                [name],
+                |row| row.get(0),
+            )
+            .map_err(error::sql)
+    }
+
     /// Look up the seat currently bound to `session`.
     pub fn by_session(&self, session: &SessionId) -> Result<Option<String>, Error> {
         if !self.has_session_column {
@@ -48,6 +59,15 @@ pub struct Seats<'a> {
 }
 
 impl Seats<'_> {
+    /// Look up the seat currently bound to `session` inside a write transaction.
+    pub fn by_session(&self, session: &SessionId) -> Result<Option<String>, Error> {
+        SeatsRead {
+            conn: self.conn,
+            has_session_column: true,
+        }
+        .by_session(session)
+    }
+
     /// Bind or rebind a seat to an optional session, returning any replaced session id.
     ///
     /// Joining does not renew presence: a new seat reads as never seen.

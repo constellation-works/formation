@@ -9,12 +9,52 @@ pub struct Message {
     pub receipt: i64,
     /// Sender's unique request identifier.
     pub id: String,
-    /// Authenticated sending seat.
+    /// Sending seat recorded on the envelope.
     pub sender: String,
     /// Message contents.
     pub body: String,
     /// When the envelope was stored, as RFC 3339 UTC. Null for envelopes stored by earlier builds.
     pub sent: Option<String>,
+    /// When a hook delivered the envelope, as RFC 3339 UTC, if delivered.
+    pub delivered: Option<String>,
+}
+
+/// Furthest point an envelope has reached.
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeliveryState {
+    /// Stored and awaiting delivery.
+    Stored,
+    /// Handed over by a hook.
+    Delivered,
+    /// Acknowledged by the recipient.
+    Acked,
+}
+
+impl DeliveryState {
+    /// Stable token used in sent history.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stored => "stored",
+            Self::Delivered => "delivered",
+            Self::Acked => "acked",
+        }
+    }
+}
+
+/// A sender's view of a stored envelope.
+#[derive(Serialize)]
+pub struct SentMessage {
+    /// Durable receipt.
+    pub receipt: i64,
+    /// Sender's unique request identifier.
+    pub id: String,
+    /// Addressed seat.
+    pub recipient: String,
+    /// When the envelope was stored, as RFC 3339 UTC, if known.
+    pub sent: Option<String>,
+    /// Furthest point this envelope has reached.
+    pub state: DeliveryState,
 }
 
 /// One joined seat's mailbox, as listed for the room.
