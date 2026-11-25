@@ -90,11 +90,9 @@ pub(crate) fn run(env: &Env, args: Hook) -> ExitCode {
         |result| match result {
             Ok(None) => ExitCode::SUCCESS,
             Ok(Some(text)) => match (args.event, args.provider) {
-                (HookEvent::UserPrompt, _) => output::hook_json(&output::payload::prompt(&text)),
+                (HookEvent::UserPrompt, _) => output::hook_json(&output::hook_prompt(&text)),
                 (HookEvent::Stop, Provider::Claude) => output::hook_rewake(&text),
-                (HookEvent::Stop, Provider::Codex) => {
-                    output::hook_json(&output::payload::stop(&text))
-                }
+                (HookEvent::Stop, Provider::Codex) => output::hook_json(&output::hook_stop(&text)),
             },
             Err(error) => output::error(&error),
         },
