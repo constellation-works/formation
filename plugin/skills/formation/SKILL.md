@@ -1,6 +1,6 @@
 ---
 name: formation
-description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats and sentry inbox watches. A lookup of recorded group sessions belongs exclusively to the Scribe skill. Orbit owns task execution and resident mandates.
+description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats, network formation and delegated sentry watches. A lookup of recorded group sessions belongs exclusively to the Scribe skill. Orbit owns task execution and resident mandates.
 ---
 
 # Formation
@@ -23,6 +23,6 @@ The operator talks to the chief, aide and captains. Keep one attention owner per
 - Use [handoff and replacement](references/continuity.md) when a seat approaches its context limit or changes hands.
 - Fill [aide](assets/brief-aide.md) for the opening briefing, Scribe upkeep and relays, and [captain](assets/brief-captain.md) for each workspace mandate.
 - Fill [lieutenant](assets/brief-lieutenant.md) for a heavy order, [sergeant](assets/brief-sergeant.md) for triage and mechanical fixes, [sentry](assets/brief-sentry.md) for monitoring, or [specialist](assets/brief-specialist.md) for standing subject advice.
-- Use [the CI reader](scripts/ci-read.sh) for base-branch and PR checks and [the pace helper](scripts/sentry-pace.sh) after an attention wake. Set `formation_skill` to the absolute directory containing this installed SKILL.md when filling shell commands.
-- Use [roster checks](references/roster.md) for offline validation, [seat mail](references/mail.md) for local presence, send, read or acknowledgement, and [sentry inbox waits](references/sentry.md) for a delegated mail watch or a wake claim.
+- Use [the CI reader](scripts/ci-read.sh) for base-branch and PR checks and [the pace helper](scripts/sentry-pace.sh) for the [workspace attention and CI watch](references/workspace-watch.md). Set `formation_skill` to the absolute directory containing this installed SKILL.md when filling shell commands.
+- Use [roster checks](references/roster.md) for offline validation, [seat mail](references/mail.md) for local presence, send, read or acknowledgement, and [sentry watches](references/sentry.md) for busy seats, cross-provider mailbox coverage or other repeating observations.
 - Use [evaluation cases](evals/cases.md) when changing routing, staffing, permissions or lifecycle behavior.

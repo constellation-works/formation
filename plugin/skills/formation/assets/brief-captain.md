@@ -79,7 +79,8 @@ Values for the placeholders:
   group's summary says waits for Daniel. No item detail.
 - `{group_id}`: the day's scribe group (`g-<n>`). The captain fills it into each
   subordinate's brief.
-- `{unit_lineup}` and `{staffing_line}`, by unit:
+- Assign sentries by source and beneficiary. A lieutenant can request a watch while it works; give the sentry the authorized route to that lieutenant or relay through you. For a network formation agree with the other provider on mailbox coverage in each direction.
+- `{unit_lineup}` and `{staffing_line}`, by unit. Rest and watch instructions below apply to the workspace attention and CI assignment only:
   - solo, no active resident: "you alone". "You staff no sessions. You own attention in
     `{ws}`: read it with `orbit.attention` at each wake, with no timer, and clear it. When
     items sit unread, ask the chief for a sentry."
@@ -90,7 +91,7 @@ Values for the placeholders:
     being you, send it your id, then apply the provider’s reporting mode. You clear what it reports. It paces
     itself by load. Pause it with `rest` whenever no work is expected (no drain running,
     no order out, no run's pull request waiting on checks), and send `watch` when a
-    drain or an order starts: a paused sentry reads nothing. A task or pull request
+    drain or an order starts: the paused workspace watch does no reads. A task or pull request
     somebody works by hand is not load; where you judge one needs the sentry, send
     `watch <minutes>`. No other sessions."
   - duo with a sergeant specified instead of a sentry: staff the sergeant alone. It reads attention on its own wakes.
@@ -99,8 +100,7 @@ Values for the placeholders:
     sergeant. Send each the ids it may message, then apply their provider’s reporting mode. Record each id on your
     assignment. The sentry paces itself by load. Have it paused with `rest` whenever no
     work is expected (no drain running, no order out, no run's pull request waiting on
-    checks), and sent `watch` when a drain or an order starts: a paused sentry reads
-    nothing. A task or pull request somebody works by hand is not load; where you judge
+    checks), and sent `watch` when a drain or an order starts: the paused workspace watch does no reads. A task or pull request somebody works by hand is not load; where you judge
     one needs the sentry, have it sent `watch <minutes>`. No other sessions."
   - squad: "you, a lieutenant, a sergeant and a sentry". The trio line, then: "Start
     `{lt_name}` when the first order for it comes up, and keep it."

@@ -8,18 +8,18 @@ feature: shift-messaging
 doc_role: scope
 summary: A standalone plugin for directed, operator-approved messages between desktop and headless sessions.
 stage: building
-next: Qualify parent wake independently of inbox delivery on each desktop host.
+next: Exchange a message and reply between Claude and Codex seats with assigned mailbox sentries.
 ---
 
 # Formation — Shift messaging
 
 ## Problem
 
-Daniel talks mainly to a chief and an aide, and occasionally directly to the captain of a workspace. Each chat carries context worth preserving. Today a sentry can notice failed CI and leave a task comment while the captain’s idle desktop chat waits for its next prompt. Daniel becomes the messenger exactly when an exception needs a decision.
+Daniel talks mainly to a chief and an aide, and occasionally directly to the captain of a workspace. Each chat carries context worth preserving. An order can reach a captain’s inbox while the captain is working or its desktop chat is idle. Daniel becomes the messenger exactly when an exception needs a decision.
 
 ## Goal
 
-A headless sentry reports a failed check to its captain. The Codex captain can ask a Claude chief for a decision and receive the answer in the same conversation. Daniel authorizes those directed routes for one shift. Each receiving session retains its original identity, history and tool permissions. A fresh alert can wake an idle recipient without a chat polling for mail.
+The first milestone is a **network formation**, a shift whose seats run on different providers. On one machine, a Claude chief sends an order to a Codex captain. A sentry watches the captain’s mailbox and reports the order to the captain. A reply follows an authorized return route to the chief's mailbox and its assigned watcher. Each side keeps its existing session, and neither principal has to poll while working. Whether an idle principal starts a turn is a separate result for each receiving host.
 
 The first implementation provides an offline roster checker and a local SQLite inbox with seat credentials, presence, idempotent sends, bounded sentry waits and explicit acknowledgments. A room admits cooperating seats under one OS account. Directed route grants, binding to a provider session and host-managed wake remain proposals. Existing Formation role briefs still govern the team's work. Orbit may supply a task link or CI event through an adapter. Formation can operate independently of an Orbit installation.
 
@@ -29,7 +29,7 @@ The first implementation provides an offline roster checker and a local SQLite i
 
 **Future plugin and host boundary.** Claude and Codex load a thin plugin over the same Rust core. The proposed local relay persists messages, checks grants, and pushes a notification to the receiver’s authenticated adapter. Only the owning host can start a turn, queue a follow-up or confirm an existing turn consumed a message. The desktop surface stays open to Daniel while workers can use host-controlled CLI/SDK sessions. The relay never edits provider transcript files. A receiver without a verified wake capability offers an inbox or notification and reports that limitation to the sender.
 
-**Delivery example.** The sentry submits a check URL and a unique message ID on its approved route. The relay records the envelope before acknowledging acceptance. A busy captain queues the alert behind its active turn. When ready, the adapter checks the binding and grant again and submits with agent authorship. The chief receives an escalation only on a separately approved captain-to-chief route. A reply names the original message and requires a valid return route.
+**Delivery example.** The chief sends an order with a fresh message ID. Its receipt identifies the stored envelope. The captain’s sentry reports the sender, ID, receipt and body through the assigned route. The captain handles the order, acknowledges it and sends a linked reply with its own ID. If the host cannot bring the report into the chat, the envelope stays pending for the captain’s next turn.
 
 | Receipt | What the sender can infer |
 | --- | --- |
@@ -44,26 +44,21 @@ The first implementation provides an offline roster checker and a local SQLite i
 
 **Candidate interfaces.** An operator binds a seat, grants a route and ends a shift. An agent can send on its own approved route, inspect a receipt, or acknowledge delivery to its own seat. The adapter offers a capability handshake for the exact host, session and build. Task administration, filesystem grants and model credentials remain with their current owners. Cross-machine transport and message retention after shift close need separate decisions before wider rollout.
 
-## Sentries and delivery into a chat
+## Sentry watches
 
-The [portable-kit proposal](../formation/references/portable.md) suggests two ideas for the next trial. A script can recognize repeat observations before a model spends a turn, and an adapter can offer pending mail when the recipient already has a turn. Both use the existing Formation room, seat credentials and receipts.
+Give repeated checking to a sentry when a busy seat needs to concentrate on its order or when a network formation needs a receiver on another provider. A captain can assign watches for itself and its lieutenants. A chief or another captain can have its own mailbox watched on its receiving host. The sentry observes and reports. The named recipient owns the decision and any acknowledgment.
 
-**Watch one CI check first.** Give the captain a sentry seat and one assigned watch. The [CI reader](../../../plugin/skills/formation/scripts/ci-read.sh) already emits a fingerprint and a report for each red item. A script can compare observations and send the first failure with its evidence link. A subagent can use the same seat when the captain also needs someone to interpret a failure. Only one watcher owns a given watch at a time.
+Each assignment names the source, what change matters, the seat that needs the result, the authorized reporting route, the cadence or bounded wait, and when to stop. For example, a lieutenant can ask its captain for a review-queue watch until a decision arrives. The sentry may report directly to the lieutenant on an assigned route, or its parent can relay. A mailbox, CI check, review queue, job or workspace attention feed can all be watched independently. Only one watcher owns a given source and scope. Resting a CI watch leaves a live mailbox watch running.
 
-Keep the watch fingerprint separate from the mail ID. Repeated observations of the same failure produce one report. Capture the report body and a fresh mail ID before sending, then reuse both if the send outcome is uncertain or the recipient is offline. Mark the change reported after Formation returns its receipt. If the source confirms recovery and the same check later fails again, send a fresh report. A failed or partial source read leaves the last known state intact. A burst of related failures can share one envelope with their evidence links.
-
-**Offer pending mail at the next supported opportunity.** Qualify the receiving adapter for each host and build. Start with an operator-initiated turn, then try delivery during an active turn, at turn end and after the chat is idle. Enable each behavior only after observing it in the intended chat. Where idle wake is unavailable, mail stays pending for the recipient’s next turn.
-
-A hook must establish that it is running for the bound recipient before reading mail. A child hook sharing the project directory cannot assume its parent’s seat. An empty inbox produces no injected text. For a busy inbox, offer a bounded batch with sender, ID, receipt and body, and indicate when more is pending. Repeated hook calls within one turn should offer a receipt once. Reading or presenting mail leaves it pending until the responsible recipient explicitly acknowledges handling it. An interrupted turn can therefore recover it.
+For mail, keep the recipient’s inbox identity scoped to that watch. Report each newly observed receipt once during the watch and leave it pending until the recipient handles it. For other sources, report meaningful changes and keep the cursor on a failed read. The [portable-kit proposal](../formation/references/portable.md) describes fingerprinting repeat observations. CI is one available source for that technique.
 
 ## Verification
 
-1. Validate the offline roster on Linux and macOS. Missing seats, duplicate captains and unknown route endpoints fail before contacting a host.
-2. Exercise the watcher with a first CI failure, repeated identical observations, a failed source read, a confirmed recovery and a recurrence. Expect two failure envelopes, one for each occurrence. Interrupt the send after storage but before the watcher records success. Restart it and verify the retry returns the same receipt. Repeat with the recipient initially offline.
-3. Bind two headless test seats and approve one route. Deliver once, restart the relay and replay the same ID. Check the recipient turn, stable receipt and absence of an implied reverse route. Revoke a queued grant and expire a shift before delivery. If the host stops after submission, reconcile its receipt before any retry.
-4. In disposable desktop chats, send a unique marker at each of the four opportunities above, first Claude chief to Codex captain, then in reverse. Record the host build, chat ID, mail receipt and receiving turn ID. A next-prompt delivery succeeds when that prompt’s turn contains the marker. Idle wake requires a new turn in the already-idle chat before any human input. A busy chat must finish its current work uninterrupted.
-5. Exercise the hook with an empty inbox, an oversized backlog, repeated calls in one turn and a call from a child. Check silence, bounded output, per-turn deduplication and seat isolation respectively. Interrupt the parent turn before acknowledgment and verify its mail is still readable.
-6. In the operator trial, a real CI failure reaches the captain and a linked reply returns to the chief. Record which delivery opportunity each host supported and whether Daniel had to prompt either chat.
+1. Start with a cross-provider order and reply. Record both seats, provider builds, watchers, permission to send each way and where the watchers will report. Use the existing local room and authorized seats. Each receiving sentry begins its bounded wait before the sender submits a fresh marker.
+2. For each leg record the sender’s receipt, the envelope the watcher read and what reached the intended conversation. Verify handling and acknowledgment by the named recipient. Retry the same send and check for the original receipt and a single envelope. An offline new recipient or unavailable reporting route is a recorded delivery gap.
+3. Repeat with the receiving principal busy and then idle, in both directions. Record the receiving chat and turn IDs and any human prompt. A child report or inbox receipt proves only that step. Idle wake succeeds when the host starts a new turn in the original idle chat before human input. Where the host offers mail only at the next turn, qualify that behavior explicitly.
+4. Give a busy lieutenant a second, independent watch while the cross-provider mailbox watch is active. Deliver its result to the assigned reader, stop that watch and verify that a subsequent mailbox message still reaches its watcher. CI, a review queue or a job can supply this second signal.
+5. For future host adapters, test empty and bounded inbox delivery, interruptions before acknowledgment, grant revocation, expiry and recipient isolation. Reconcile uncertain host submission before retrying.
 
 ## Integration evidence and open questions
 

@@ -16,6 +16,8 @@ First, once: join the day's scribe group with `scribe group join {group_id} --as
 --author <your model name> --role lieutenant`. If it is refused, say so in your next message
 to the captain and go on. Do not join again after a refresh.
 
+When your order needs repeated checking, ask the captain for a sentry watch. Name the source, change you need, reporting route and end condition. Keep working on your order while the sentry watches.
+
 Order: {order}. Task: `{task_id}` — {task_title}. Done means: {done_criteria}.
 
 1. Before you start, put yourself on the task on the workspace owner: a comment naming the order,

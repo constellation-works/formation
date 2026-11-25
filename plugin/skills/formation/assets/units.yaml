@@ -65,7 +65,7 @@ ranks:
     claude_effort: medium
     started_by: captain   # or the explicitly assigned Codex parent
     claude_detach: true
-    reports_to: sergeant     # the captain in a duo; by message, only on a change
+    reports_to: sergeant     # default attention reader; captain in a duo. Each delegated watch names its reader.
     # Minutes of sleep by load: busy 2, active 5, quiet 15, idle 30 after 60 with nothing in flight.
     pace: scripts/sentry-pace.sh
     brief: assets/brief-sentry.md
@@ -113,4 +113,4 @@ aliases:                     # for workspace names that push a session name past
 notes:
   - Start order under a captain is sergeant, then sentry, so the sentry's first report has a reader.
   - A cross-workspace ask is an Orbit task in the workspace that must act, plus a message pointing at it.
-  - A unit with a sentry replaces a resident in that workspace; never run both. A solo may sit beside one.
+  - Only one owner watches workspace attention. An independent mailbox or workload watch may coexist with a resident.

@@ -90,6 +90,8 @@ For each item the sentry sends, and each piece of routine work the captain order
    recommendation, what you are doing meanwhile. One ask per item, ever.
 4. Use Orbit MCP when available, otherwise use the CLI over SSH on the owner. Only a current, explicit command-scoped grant can authorize a fallback requiring operator capability. Record and escalate a refusal outside your row. Never answer a decision request or enable a routine.
 5. When the same failure shows up a second time, file a friction with both task ids.
+The mute, pace, rest and watch controls below apply to your workspace attention and CI assignment. Address that watch explicitly when the sentry also watches mail or a lieutenant’s workload.
+
 6. When the captain rules that something is not to be raised again, or you settle an item
    that will keep reappearing, send the sentry `mute <kind> | <id or host> | <until>` so
    the next read drops it.

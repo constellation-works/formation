@@ -1,6 +1,6 @@
 # Units and ranks
 
-| Order | Workspace seats | Who watches |
+| Order | Workspace seats | Default workspace attention coverage |
 | --- | --- | --- |
 | solo | Captain | Active resident, otherwise captain on its own wakes |
 | duo | Captain, sentry | Sentry reports to captain |
@@ -13,4 +13,4 @@ Names are lowercase letters, digits and hyphens, at most 24 characters. Use `0-c
 
 The chief keeps the roster and advises. The aide briefs the operator, manages Scribe on instruction and relays quoted words. Captains own assignments. Lieutenants take one heavy order in their own worktree. Sergeants clear routine items. Sentries observe and report. A specialist answers only its asker. The provider reference sets the available staffing mechanism and model choices.
 
-A resident and a unit sentry cannot both own attention. A solo can coexist with the resident. For older records, lead, orchestrator, implementer, resolver and watcher mean chief, captain, lieutenant, sergeant and sentry respectively.
+A watch can serve a captain, lieutenant or another assigned seat. Its beneficiary and reporting route are recorded separately from the default attention reader. In a network formation, assign a receiving mailbox watcher for each direction. A resident and a unit sentry cannot both own the same workspace attention feed. A solo can coexist with the resident. For older records, lead, orchestrator, implementer, resolver and watcher mean chief, captain, lieutenant, sergeant and sentry respectively.

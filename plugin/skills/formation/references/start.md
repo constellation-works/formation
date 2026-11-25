@@ -1,7 +1,9 @@
 # Start the shift
 
 1. Read the operator’s unit/workspace pairs and named specialists. Discover the actual owners with `orbit.workspace.list` and retain their host-qualified selectors. Read the previous formation with `scribe group list` and `scribe group show <id>`, then the handoffs and Orbit records it names. For a still-open group use seat handoffs and report the open group. With no group, read the latest closed orchestration assignment per workspace.
-2. Read `orbit.attention` with `limit: 1` for counts and degraded sources, then each resident checkpoint, deadline and open warn notices. Captains read the items. Hold staffing of a unit with a sentry until its resident is paused by the operator or expired. If a resident starts during the shift, stand down the sentry before transferring attention.
+2. Read `orbit.attention` with `limit: 1` for counts and degraded sources, then each resident checkpoint, deadline and open warn notices. Captains read the items. Hold a sentry’s workspace attention assignment until its resident is paused by the operator or expired. If a resident starts during the shift, stand down that attention watch before transferring it. Independently assigned mailbox or workload watches can continue.
+
+   For a network formation, confirm each receiving seat, watcher, local room and reporting route before sending.
 3. In the host-qualified coordination workspace (Constellation uses ws_constellation), open the chief’s assignment titled `[orchestration]: formation <units> - <family>` with orchestration, formation-day and no-drain tags. File one proposed captain assignment per workspace tagged orchestration, no-drain and the workspace. Include complexity. The captain claims it with its plan and in-progress status together.
 
    Use the installed orchestration-session and orchestration-manager procedures for those records.
