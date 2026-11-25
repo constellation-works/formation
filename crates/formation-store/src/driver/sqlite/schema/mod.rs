@@ -6,6 +6,8 @@ mod message;
 
 mod seat;
 
+mod watch;
+
 pub(crate) const SESSION_SCHEMA_VERSION: u32 = 4;
 
 pub(crate) const SENT_SCHEMA_VERSION: u32 = 5;
@@ -19,4 +21,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::SESSION_BINDING,
     message::SENT,
     message::DELIVERED,
+    watch::CREATE,
 ];

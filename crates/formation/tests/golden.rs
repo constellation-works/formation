@@ -20,7 +20,9 @@ fn run(args: &[&str], input: &[u8]) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    if !args.iter().any(|arg| matches!(*arg, "-h" | "--help")) {
+        child.stdin.take().unwrap().write_all(input).unwrap();
+    }
     child.wait_with_output().unwrap()
 }
 
@@ -39,6 +41,7 @@ fn help_and_roster_output() {
         ("help/hook.txt", vec!["hook", "--help"]),
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
+        ("help/watch.txt", vec!["watch", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {

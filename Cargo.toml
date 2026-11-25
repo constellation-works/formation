@@ -27,6 +27,7 @@ formation-store = { path = "crates/formation-store" }
 formation-core = { path = "crates/formation-core" }
 # text everywhere, which also keeps the help goldens byte-stable.
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

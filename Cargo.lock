@@ -176,6 +176,7 @@ dependencies = [
  "clap",
  "cw-testkit",
  "formation-core",
+ "libc",
  "proc-macro2",
  "serde_json",
  "syn 2.0.119",

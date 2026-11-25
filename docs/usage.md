@@ -49,3 +49,26 @@ The host pipes its event JSON to the command on stdin (up to 1 MiB). Use the pai
 The hook looks up the mailbox from the event's `session_id`. Unjoined sessions and events carrying `agent_id` exit silently. UserPromptSubmit adds context to the current turn. With mail waiting, Claude Stop emits mail on stderr and exits 2 for an `asyncRewake` hook. Codex Stop emits a block decision whose reason contains the mail. Set the host timeout longer than the Stop hold. The shipped plugin configures `--hold 540` with `timeout` 600 on Claude Stop (`asyncRewake: true`), `--hold 1800` with `timeout` 1860 on Codex Stop, `timeout` 60 on `UserPromptSubmit`, and exits 0 silently when `formation` is absent from PATH. The CLI default hold is zero seconds. An expired hold exits 0 with empty output. Errors exit 1 with one diagnostic line on stderr.
 
 Hooks deliver whole envelopes in receipt order within the host's character budget (9,000 for Claude, 8,000 for Codex). If mail remains, the last line gives the waiting count. Use `mail inbox` to read an envelope too large for the hook. Hook delivery leaves the envelope in the inbox until `mail ack`. The delivered time records the command's handoff and remains set if the host fails to consume the output.
+
+## Watching
+
+`formation watch` polls one or more caller-supplied probes on an interval and passes on only what is new:
+
+```sh
+formation watch \
+  --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
+  --to captain --every 120 --room trial --as sentry
+```
+
+Each `--probe <name>=<command>` names a probe (1 to 32 lowercase ASCII letters, digits or hyphens) and a command run through `sh -c` in the caller's working directory with the caller's environment. Every probe runs immediately and then every `--every` seconds (default 120, minimum 10). A probe run that passes 60 seconds is killed with its process group and reported as a failed read, and any surviving child is terminated when `watch` exits.
+
+Probe stdout is treated as data under a one-line-per-item contract: `<fingerprint><TAB><text>`, where `<fingerprint>` is 1 to 200 characters with no tab and `<text>` past 400 characters is cut to end in `…`. Handed fingerprints are stored in the room per `(seat, probe)` (using `--to` when given, else the caller's seat), so restarted or concurrent watchers never hand over the same fingerprint twice. A non-zero exit, killed run or malformed line is a failed read: it is reported once with its first line and stays silent until that probe completes a successful read.
+
+- **With `--to <seat>`:** `--to` must be a joined seat. New items are mailed from the caller's seat as `<probe> | <text>` (and failed reads as `<probe> | read failed: <error>`), up to 20 lines per envelope, with handed fingerprints committed in the same transaction that stores each envelope. The command runs until `--timeout` (no default) or a termination signal (`SIGTERM` or `SIGINT`) and exits 0.
+- **Without `--to`:** The command returns at the first poll with new items or failures as `{"items":[{"probe":...,"fingerprint":...,"text":...}],"failed":[{"probe":...,"error":...}],"remaining":<n>,"expired":false}`, handing over at most 20 items per call and leaving any remainder for the next call. At `--timeout` (default 300 seconds) with nothing to report, it returns empty lists with `"expired":true` and exits 0:
+
+```sh
+formation watch \
+  --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
+  --timeout 300 --room trial --as sentry
+```

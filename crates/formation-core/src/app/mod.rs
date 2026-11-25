@@ -5,3 +5,5 @@ pub mod hook;
 pub mod mail;
 
 pub mod roster;
+
+pub mod watch;
