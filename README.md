@@ -16,4 +16,4 @@ cargo run --locked -p formation -- roster check --json < examples/roster.json
 
 The example returns `{"version":1,"seats":4,"routes":5}`. It checks names, ownership and the direction of each proposed route. A successful check grants no permissions and starts no sessions.
 
-[Initial design and delivery criteria](docs/design/formation/1_scope.md) · [Inbox quick start](docs/usage.md#local-inbox) · [Roster format and plugin use](docs/usage.md) · [Crate boundaries](ARCHITECTURE.md) · [Development](docs/development.md) · [Feature board](docs/design/FEATURES.md) · [MIT license](LICENSE)
+[Formation overview](docs/design/formation/1_overview.md) · [Shift messaging and delivery criteria](docs/design/shift-messaging/1_scope.md) · [Inbox quick start](docs/usage.md#local-inbox) · [Roster format and plugin use](docs/usage.md) · [Crate boundaries](ARCHITECTURE.md) · [Development](docs/development.md) · [Feature board](docs/design/FEATURES.md) · [MIT license](LICENSE)

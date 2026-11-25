@@ -11,8 +11,7 @@ UPDATE ?=
 # `STANDARDS_STRICT=1` makes a missing docs/standards/ a failure (CI sets it).
 STANDARDS_STRICT ?=
 # GitHub Actions sets CI=true. There a missing gate tool fails the gate;
-# locally it warns and skips or falls back (STD-04 R10, decision in
-# docs/design/formation/4_decisions.md).
+# locally it warns and skips or falls back (see docs/development.md).
 CI ?=
 
 # $(call missing_tool,<tool>,<what it provides>): fail under CI, else warn.

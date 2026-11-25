@@ -1,9 +1,10 @@
 ---
 title: Formation — Shift messaging
 owner: codex
-last_updated: 2026-11-24
+created_date: 2026-11-24
+updated_date: 2026-11-24
 status: Draft
-feature: formation
+feature: shift-messaging
 doc_role: scope
 summary: A standalone plugin for directed, operator-approved messages between desktop and headless sessions.
 stage: building
