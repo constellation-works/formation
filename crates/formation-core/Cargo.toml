@@ -7,9 +7,15 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+cw-base.workspace = true
+time.workspace = true
+tracing.workspace = true
 formation-store.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+cw-testkit.workspace = true

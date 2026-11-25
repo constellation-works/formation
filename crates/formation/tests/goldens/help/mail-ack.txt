@@ -1,6 +1,6 @@
 Mark a receipt in this seat's inbox as handled
 
-Usage: formation mail --room <ROOM> --identity <IDENTITY> ack <RECEIPT>
+Usage: formation mail ack <RECEIPT>
 
 Arguments:
   <RECEIPT>  Numeric receipt from the inbox

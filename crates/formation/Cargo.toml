@@ -7,8 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-tempfile.workspace = true
-sha2.workspace = true
+tracing-subscriber.workspace = true
 formation-core.workspace = true
 clap.workspace = true
 serde_json.workspace = true

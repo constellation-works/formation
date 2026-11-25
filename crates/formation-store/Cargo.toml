@@ -7,10 +7,18 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-rusqlite.workspace = true
+cw-base.workspace = true
+cw-fs.workspace = true
+cw-sqlite.workspace = true
+getrandom.workspace = true
+sha2.workspace = true
+time.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+cw-testkit.workspace = true

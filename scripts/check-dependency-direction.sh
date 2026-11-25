@@ -35,28 +35,27 @@ policy() {
   case "$1" in
     formation-store)
       ALLOWED=""
-      # The one error type (cw-base) and file access for the data directory
-      # (cw-fs). The store is the only crate that names cw-fs.
-      KIT="cw-base cw-fs"
+      # The one error type (cw-base), file access for the data directory and
+      # the audit log (cw-fs), and the inbox database (cw-sqlite). The store
+      # is the only crate that names cw-fs or cw-sqlite.
+      KIT="cw-base cw-fs cw-sqlite"
       # Test isolation, for its unit tests' private temp roots.
       KIT_DEV="cw-testkit"
       # Persistence never parses arguments, draws on a terminal or installs a
       # log subscriber: those belong to surfaces. It reaches files only
-      # through cw-fs, so it needs no file crate.
-      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
+      # through cw-fs and the database only through cw-sqlite, which
+      # re-exports rusqlite, so it names no file or SQLite crate itself.
+      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys"
       ;;
     formation-core)
       ALLOWED="formation-store"
       # The one error type only: the apps reach files through the store.
       KIT="cw-base"
-      # Its integration tests match the kit's file error behind a store
-      # failure (`cw_fs::Error::Locked`), so cw-fs is a dev edge only; its
-      # sources never name it (module rules below).
-      # cw-testkit: test isolation, for its tests' private temp roots.
-      KIT_DEV="cw-fs cw-testkit"
+      # Test isolation, for its tests' private temp roots.
+      KIT_DEV="cw-testkit"
       # The apps reach files only through the store, so they need no file or
       # process crate either.
-      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
+      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys"
       ;;
     formation)
       # The binary names only the core; the core re-exports the record shapes
@@ -65,7 +64,8 @@ policy() {
       KIT=""
       # Test isolation: the temp root, the isolated child and goldens.
       KIT_DEV="cw-testkit"
-      BANNED=""
+      # SQLite belongs to the store alone.
+      BANNED="rusqlite libsqlite3-sys"
       ;;
     *) return 1 ;;
   esac
@@ -215,13 +215,125 @@ ban_import() {
 
 STORE=crates/formation-store/src
 CORE=crates/formation-core/src
-# The store decodes bytes and the core validates the draft. Host I/O lives in
-# the CLI. Check grouped imports as well as fully qualified names.
-for layer in "$STORE" "$CORE"; do
-  ban "$layer" 'std::(fs|net|process|env)|tempfile::|rustix::|cw_fs\b' "roster libraries must remain independent of host I/O"
-  ban_import "$layer" 'std' 'fs|net|process|env' "roster libraries must remain independent of host I/O"
+CLI=crates/formation/src
+
+# Store: no code here names a file, process or network primitive; it reaches
+# private seat credentials through the kit's cw-fs and the inbox
+# database through the kit's cw-sqlite. driver/ sets each mechanism up and
+# returns its handle; repository/ holds each record's use of it (its SQL and
+# row mapping); audit events are another kind of stored record;
+# contracts are shapes that know nothing of how they are stored and hold no
+# rule (R4).
+ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
+ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
+ban "$STORE/contracts/audit.rs" 'cw_fs::|cw_sqlite\b'                           "audit contracts must not do I/O"
+ban "$STORE/contracts" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contracts are record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
+ban_import "$STORE/contracts" 'crate' 'db|driver|repository|store|Store'    "contracts are record shapes; they must not import db, the driver, repository or the store"
+ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
+[[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access is the kit's cw-fs"
+[[ -e "$STORE/driver/fs" || -e "$STORE/driver/fs.rs" ]] && err "store/driver/fs: there is no file driver; a file record's repository uses cw_fs directly"
+# rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
+# never as a crate of its own.
+ban "$STORE"         '(^|[^:[:alnum:]_])rusqlite::|extern crate rusqlite'  "the store names rusqlite only through cw_sqlite's re-export"
+# A statement that changes the schema appears only in driver/sqlite/schema/:
+# one module per table and the one ordered list of steps.
+schema_hits=$(grep -rnHiE --include='*.rs' --exclude-dir=tests \
+    '\b(create|alter|drop)[[:space:]]+(table|index|view|trigger)\b|pragma[[:space:]]+user_version|Step::(sql|function)' \
+    "$STORE" 2>/dev/null | grep -v "^$STORE/driver/sqlite/schema/" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+if [[ -n "$schema_hits" ]]; then
+  echo "$schema_hits" >&2
+  err "a statement that changes the schema belongs in driver/sqlite/schema/"
+fi
+# A table's module exports named steps; only schema/mod.rs lists them, one by
+# one, so a later step for an earlier table goes at the end (STD-03 R23).
+list_hits=$(grep -rnHE --include='*.rs' '&\[(cw_sqlite::)?Step\]|\[(cw_sqlite::)?Step;' \
+    "$STORE/driver/sqlite/schema" 2>/dev/null | grep -v "^$STORE/driver/sqlite/schema/mod.rs:" || true)
+if [[ -n "$list_hits" ]]; then
+  echo "$list_hits" >&2
+  err "a table's schema module exports named steps; only driver/sqlite/schema/mod.rs lists them"
+fi
+[[ -e "$STORE/driver/sqlite/schema/mod.rs" ]] || err "store/driver/sqlite/schema/mod.rs: the one ordered list of schema steps is missing"
+# No mechanism in the store's public surface: a public item names no
+# rusqlite or cw_sqlite type. (A pub(crate) item may.)
+ban "$STORE"         '^[[:space:]]*pub[[:space:]]+(fn|struct|enum|type|use|const|static|trait)[^;{]*(rusqlite|cw_sqlite|Connection|Transaction|Reader|\bDb\b)' "the store's public surface names no rusqlite or cw_sqlite type"
+# The store receives a resolved root (R3).
+ban "$STORE"         'std::env\b|home_dir|current_dir'                      "the store crate must not read the environment or discover paths"
+ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
+
+# Core: apps, runtime and composition. Nothing in the core touches a file or
+# a process; it reaches the data directory through the store (R5).
+ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|cw_fs\b|cw_sqlite\b|rusqlite\b'  "the core reaches files only through formation-store"
+# The record-access seam: the core reaches a record only through
+# snapshot.<record>() and tx.<record>(), never a repository by its path.
+ban "$CORE"          'formation_store::repository\b'                       "the core reaches a record through snapshot.<record>() or tx.<record>(), never formation_store::repository"
+ban_import "$CORE"   'formation_store' 'repository'                         "the core reaches a record through snapshot.<record>() or tx.<record>(), never formation_store::repository"
+ban_import "$CORE"   'std' 'fs|net|process'                                "the core reaches files only through formation-store"
+# Only composition reads the host: environment variables and paths (R3).
+for path in "$CORE"/*; do
+  name=$(basename "$path")
+  case "$name" in composition.rs | tests) continue ;; esac
+  ban "$path" 'std::env\b|home_dir|current_dir'                             "core/$name: only composition.rs reads the environment or discovers paths"
+  ban_import "$path" 'std' 'env'                                           "core/$name: only composition.rs reads the environment or discovers paths"
 done
-ban crates 'cw_testkit' "cw-testkit is restricted to test code"
+# The runtime sits below the apps; apps depend on it, never the reverse (R1).
+ban "$CORE/runtime"  'crate::apps'                                         "runtime must not import an app"
+ban_import "$CORE/runtime" 'crate' 'apps'                                  "runtime must not import an app"
+# One chokepoint (R24): only runtime/exec.rs starts the runtime and the audit
+# guard. An app's exec forwards to it and supplies its parts through `App`.
+ban "$CORE/apps"     'AuditGuard|Runtime::start'                           "an app runs through runtime::exec; it must not start the runtime or the audit guard"
+for app in "$CORE"/apps/*/mod.rs; do
+  [[ -e "$app" ]] || continue
+  grep -q 'runtime::exec::<' "$app" || err "${app#"$CORE"/}: exec must forward to runtime::exec"
+done
+# There is no shared app: code two apps need goes to the lower app or the runtime.
+for shared in common shared util; do
+  [[ -e "$CORE/apps/$shared" || -e "$CORE/apps/$shared.rs" ]] && err "core/apps/$shared: put shared code in the lower app or in runtime/"
+done
+# An app's rules are pure: no store, no runtime, no composition (R5).
+for rules in "$CORE"/apps/*/rules.rs "$CORE"/apps/*/rules; do
+  [[ -e "$rules" ]] || continue
+  ban "$rules" 'crate::(runtime|composition)|Store\b|Snapshot|Tx\b'      "${rules#"$CORE"/}: rules are pure functions over record shapes"
+  ban_import "$rules" 'crate' 'runtime|composition'                       "${rules#"$CORE"/}: rules are pure functions over record shapes"
+done
+
+# Binary: argument declarations, the mapping to an app, rendering (R2). It
+# names only the core, and its handlers open no store and read no environment.
+ban "crates/formation" 'formation_store|cw_(base|fs|sqlite)\b|rusqlite\b'    "the binary names only formation-core"
+ban "$CLI/commands"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
+ban_import "$CLI/commands" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
+# Rendering is derived from payloads only; it never reaches back up (R1).
+ban "$CLI/output"    'crate::(cli|commands)'                                "output must not import cli or commands"
+ban_import "$CLI/output" 'crate' 'cli|commands'                             "output must not import cli or commands"
+
+# rusqlite is named only inside formation-store, tests included: another
+# crate's test that needs hand-made store state uses the store's
+# `test-support` feature.
+sqlite_hits=$(grep -rnHE --include='*.rs' '\b(rusqlite|cw_sqlite)\b' crates 2>/dev/null \
+    | grep -v '^crates/formation-store/' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+if [[ -n "$sqlite_hits" ]]; then
+  echo "$sqlite_hits" >&2
+  err "rusqlite and cw_sqlite are named only inside formation-store"
+fi
+
+for retired_path in "$STORE/db" "$STORE/driver/sqlite/db"; do
+  [[ ! -e "$retired_path" ]] || err "retired database layout: $retired_path"
+done
+# The kit's test isolation is for tests only: no non-test source names it.
+ban crates 'cw_testkit'                                                  "cw-testkit is a dev-dependency: only test code names it"
+
+# Persisted shapes never fabricate a timestamp on read (R16).
+ban crates 'serde\(default *= *"[A-Za-z_:]*(now|now_utc)"'    "a persisted timestamp must not default to the current time"
+
+# A flat replacement can otherwise pass the edge rules by removing the
+# modules the rules inspect. Keep the working template frame in each app.
+for app in "$CORE/apps/roster" "$CORE/apps/mail"; do
+  [[ -f "$app/mod.rs" ]] || err "missing application entry: $app/mod.rs"
+done
+for module in "$CORE/composition.rs" "$CORE/runtime/exec.rs" "$CLI/cli.rs" "$CLI/commands/mod.rs" \
+              "$STORE/store.rs" "$STORE/repository/mod.rs" "$STORE/contracts/mod.rs" \
+              "$STORE/driver/sqlite/schema/mod.rs"; do
+  [[ -f "$module" ]] || err "missing template module: $module"
+done
 
 # Crate edges last: the module bans above run even where Cargo cannot.
 check_crate_edges

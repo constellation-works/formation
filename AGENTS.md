@@ -2,6 +2,10 @@
 
 Formation is a standalone plugin for coordinating desktop and headless agent sessions.
 
+## Starting from the template
+
+Keep the template architecture as Formation grows. The CLI maps arguments and outcomes, core apps own decisions, the runtime and composition supply their context, and the store owns record access. Following the same path for a small command gives the next command a working example and avoids the repeated refactors we encountered in Scribe and Orbit. Trace changes against [ARCHITECTURE.md](ARCHITECTURE.md) and run the dependency gate before committing.
+
 ## Rules
 
 - A roster check grants no routes. Qualify wake on the exact receiving host before exposing it as a capability.

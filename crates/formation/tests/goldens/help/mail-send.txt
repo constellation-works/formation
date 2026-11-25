@@ -1,6 +1,6 @@
 Send to an online seat. Reuse the ID when retrying
 
-Usage: formation mail --room <ROOM> --identity <IDENTITY> send --id <ID> --body <BODY> <TO>
+Usage: formation mail send --id <ID> --body <BODY> <TO>
 
 Arguments:
   <TO>  Online recipient seat name

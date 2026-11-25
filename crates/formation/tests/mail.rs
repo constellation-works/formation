@@ -1,21 +1,17 @@
 //! Local-room contracts through independent CLI processes.
 #![allow(clippy::unwrap_used, reason = "fixture failures should panic")]
 
+use cw_testkit::TempRoot;
 use serde_json::Value;
 use std::process::{Command, Output};
-use tempfile::TempDir;
 
-struct Room(TempDir);
+struct Room(TempRoot);
 impl Room {
     fn new() -> Self {
-        let root = tempfile::Builder::new()
-            .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o700))
-            .tempdir()
-            .unwrap();
-        Self(root)
+        Self(TempRoot::new("FORMATION").unwrap())
     }
     fn command(&self, seat: &str) -> Command {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_formation"));
+        let mut cmd = self.0.command(env!("CARGO_BIN_EXE_formation"));
         cmd.arg("mail")
             .arg("--room")
             .arg(self.0.path())

@@ -1,6 +1,6 @@
 Read unread messages or wait for up to 900 seconds
 
-Usage: formation mail --room <ROOM> --identity <IDENTITY> inbox [OPTIONS]
+Usage: formation mail inbox [OPTIONS]
 
 Options:
       --wait <WAIT>  Seconds to wait for the first unread message [default: 0]

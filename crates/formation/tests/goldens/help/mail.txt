@@ -1,6 +1,6 @@
 Exchange messages in a private local room
 
-Usage: formation mail --room <ROOM> --identity <IDENTITY> <COMMAND>
+Usage: formation mail [OPTIONS] <COMMAND>
 
 Commands:
   join   Register this seat or refresh its presence
@@ -11,6 +11,6 @@ Commands:
   help   Print this message or the help of the given subcommand(s)
 
 Options:
-      --room <ROOM>          Existing private directory shared by this shift (mode 0700) [env: FORMATION_ROOM=]
-      --identity <IDENTITY>  Private seat credential file. Join creates it if absent [env: FORMATION_IDENTITY=]
+      --room <ROOM>          Existing private directory shared by this shift (mode 0700; default: $FORMATION_ROOM)
+      --identity <IDENTITY>  Private seat credential file. Join creates it if absent (default: $FORMATION_IDENTITY)
   -h, --help                 Print help

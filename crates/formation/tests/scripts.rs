@@ -115,6 +115,6 @@ fn check_dependency_direction_catches_grouped_std_fs_import() {
     assert!(!out.status.success());
     assert!(
         String::from_utf8_lossy(&out.stderr)
-            .contains("roster libraries must remain independent of host I/O")
+            .contains("the core reaches files only through formation-store")
     );
 }
