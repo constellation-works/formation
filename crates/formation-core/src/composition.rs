@@ -195,6 +195,20 @@ pub(crate) fn compose_existing(env: &Env) -> Result<MailContext, Error> {
     Ok(MailContext { store, caller })
 }
 
+pub(crate) fn compose_hook(env: &Env, session: &str) -> Result<Option<MailContext>, Error> {
+    let session = SessionId::try_new(session).map_err(ComposeError::from)?;
+    let sessions_dir = formation_home(env)?.join("sessions");
+    let Some(recorded) = Store::session_room(&sessions_dir, &session)? else {
+        return Ok(None);
+    };
+    let room = parse_room_spec(env, &recorded)?;
+    let store = Store::open(&room.path)?;
+    Ok(Some(MailContext {
+        store,
+        caller: Caller::Session(session),
+    }))
+}
+
 fn resolve_session(env: &Env) -> Result<Option<SessionId>, Error> {
     let raw = env.claude_session.as_ref().or(env.codex_session.as_ref());
     let Some(raw) = raw else {

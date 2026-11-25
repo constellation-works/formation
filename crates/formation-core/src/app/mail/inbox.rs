@@ -1,9 +1,7 @@
-use super::{Ctx, Duration, Error, Outcome, SeatRef, Store, touch};
+use super::{
+    Ctx, Duration, Error, HEARTBEAT_INTERVAL, Outcome, POLL_INTERVAL, SeatRef, Store, touch,
+};
 use std::time::Instant;
-
-const POLL_INTERVAL: Duration = Duration::from_millis(500);
-
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 pub(super) fn run(
     ctx: &Ctx<'_>,

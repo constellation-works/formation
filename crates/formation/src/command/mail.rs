@@ -47,6 +47,15 @@ enum Action {
         #[arg(long, default_value_t=0, value_parser=clap::value_parser!(u64).range(0..=900))]
         wait: u64,
     },
+    /// List this seat's most recent sends and their delivery state.
+    Sent {
+        /// Maximum number of envelopes to list (positive).
+        #[arg(long, default_value_t = 32, value_parser = clap::value_parser!(i64).range(1..))]
+        limit: i64,
+        /// Print a JSON document.
+        #[arg(long)]
+        json: bool,
+    },
     /// Mark a receipt in this seat's inbox as handled.
     Ack {
         /// Numeric receipt from the inbox.
@@ -57,6 +66,11 @@ enum Action {
 pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
     let explicit_room = args.room.is_some();
     let mut env = env.with_mail_options(args.room, args.seat);
+    let format = if matches!(args.action, Action::Sent { json: true, .. }) {
+        output::HistoryFormat::Json
+    } else {
+        output::HistoryFormat::Auto
+    };
     let cmd = match args.action {
         Action::Join { name } => {
             let name = match name {
@@ -74,9 +88,13 @@ pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
         Action::Who => Command::Who,
         Action::Send { to, id, body } => Command::Send { to, id, body },
         Action::Inbox { wait } => Command::Inbox(Duration::from_secs(wait)),
+        Action::Sent { limit, json: _ } => Command::Sent(limit),
         Action::Ack { receipt } => Command::Ack(receipt),
     };
     mail::exec(&env, cmd, |result| match result {
+        Ok(mail::Outcome::SentHistory { messages, total }) => {
+            output::sent_history(&messages, total, format)
+        }
         Ok(out) => output::mail(&output::payload::mail(out)),
         Err(error) => output::error(&error),
     })

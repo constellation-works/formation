@@ -44,7 +44,7 @@ Out of scope: more than one machine, enforcing who may message whom, and any pro
 
 ### Built today
 
-An offline roster checker, and a local SQLite inbox with a key file per seat, presence, idempotent sends, a bounded inbox wait and explicit acknowledgment ([usage](../../usage.md#local-inbox)). A room admits cooperating seats under one OS account.
+An offline roster checker and a local SQLite inbox with session-bound seats, presence, idempotent sends, a bounded inbox wait and explicit acknowledgment. The `formation hook` command delivers mail from fixture host events, and `mail sent` reports the delivery state. The plugin hook files follow in a separate change. A room admits cooperating seats under one OS account. [Inbox usage](../../usage.md#local-inbox), [hook usage](../../usage.md#hooks)
 
 ### Mailbox
 

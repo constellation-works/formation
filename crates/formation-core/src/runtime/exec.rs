@@ -9,6 +9,7 @@ pub(crate) enum RoomAccess<'a> {
     None,
     Join(&'a str),
     Existing,
+    Hook(&'a str),
 }
 
 pub(crate) trait App {
@@ -47,6 +48,10 @@ pub(crate) fn exec<A: App, R>(
         },
         RoomAccess::Existing => match composition::compose_existing(env) {
             Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
+        RoomAccess::Hook(session) => match composition::compose_hook(env, session) {
+            Ok(ctx) => ctx,
             Err(error) => return finish(Err(error)),
         },
     };

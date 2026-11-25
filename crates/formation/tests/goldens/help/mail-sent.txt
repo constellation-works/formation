@@ -1,0 +1,10 @@
+List this seat's most recent sends and their delivery state
+
+Usage: formation mail sent [OPTIONS]
+
+Options:
+      --limit <LIMIT>     Maximum number of envelopes to list (positive) [default: 32]
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+      --json              Print a JSON document
+  -h, --help              Print help

@@ -4,7 +4,10 @@ pub(crate) mod payload;
 
 mod render;
 
-pub(crate) use render::{failure, mail, summary};
+pub(crate) use render::{
+    HistoryFormat, failure, hook_error, hook_json, hook_rewake, hook_usage, mail, sent_history,
+    summary,
+};
 
 pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
     render::mail_error(&payload::error(error))

@@ -15,3 +15,10 @@ pub(super) const CREATE: cw_sqlite::Step = cw_sqlite::Step::sql(
 
 pub(super) const SENT: cw_sqlite::Step =
     cw_sqlite::Step::sql("ALTER TABLE messages ADD COLUMN sent INTEGER;");
+
+pub(super) const DELIVERED: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE messages ADD COLUMN delivered INTEGER;
+     CREATE INDEX messages_undelivered ON messages(recipient, receipt)
+      WHERE ack = 0 AND delivered IS NULL;
+     CREATE INDEX messages_sent ON messages(sender, receipt);",
+);
