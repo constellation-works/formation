@@ -66,8 +66,8 @@ ranks:
     started_by: captain   # or the explicitly assigned Codex parent
     claude_detach: true
     reports_to: sergeant     # the captain in a duo; by message, only on a change
-    # Minutes of sleep by load: busy 2, active 5, quiet 15, idle 30 after 60 with nothing in flight.
-    pace: scripts/sentry-pace.sh
+    watch: "formation watch --timeout 3600"
+    probes: [scripts/attention-read.sh, scripts/ci-read.sh]
     brief: assets/brief-sentry.md
     record: none
 

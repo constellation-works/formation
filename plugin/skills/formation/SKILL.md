@@ -23,6 +23,6 @@ The operator talks to the chief, aide and captains. Keep one attention owner per
 - Use [handoff and replacement](references/continuity.md) when a seat approaches its context limit or changes hands.
 - Fill [aide](assets/brief-aide.md) for the opening briefing, Scribe upkeep and relays, and [captain](assets/brief-captain.md) for each workspace mandate.
 - Fill [lieutenant](assets/brief-lieutenant.md) for a heavy order, [sergeant](assets/brief-sergeant.md) for triage and mechanical fixes, [sentry](assets/brief-sentry.md) for monitoring, or [specialist](assets/brief-specialist.md) for standing subject advice.
-- Use [the CI reader](scripts/ci-read.sh) for base-branch and PR checks and [the pace helper](scripts/sentry-pace.sh) after an attention wake. Set `formation_skill` to the absolute directory containing this installed SKILL.md when filling shell commands.
+- Use [the attention reader](scripts/attention-read.sh) and [the CI reader](scripts/ci-read.sh) as probes for `formation watch`. Set `formation_skill` to the absolute directory containing this installed SKILL.md when filling shell commands.
 - Use [roster checks](references/roster.md) for offline validation, [seat mail](references/mail.md) for joining, sending, reading or acknowledging mail, and [sentry boundaries](references/sentry.md) for sentry mail rules and wake claims.
 - Use [evaluation cases](evals/cases.md) when changing routing, staffing, permissions or lifecycle behavior.
