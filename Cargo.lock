@@ -191,6 +191,7 @@ dependencies = [
  "cw-testkit",
  "formation-store",
  "serde",
+ "serde_json",
  "thiserror",
  "time",
  "tracing",

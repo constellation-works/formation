@@ -408,3 +408,65 @@ fn second_session_rebinds_taken_seat_and_evicts_first() {
     );
     assert_eq!(active["messages"], serde_json::json!([]));
 }
+
+#[cfg(unix)]
+#[test]
+fn join_resolves_scribe_seats_and_refuses_missing_or_ambiguous_results() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = TempRoot::new("FORMATION").unwrap();
+    let home = root.path().join("formation-home");
+    let bin = root.path().join("scribe-bin");
+    std::fs::create_dir(&bin).unwrap();
+    let scribe = bin.join("scribe");
+    let fixture = |body: &str| {
+        std::fs::write(&scribe, format!("#!/bin/sh\nprintf '%s' '{body}'\n")).unwrap();
+        std::fs::set_permissions(&scribe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    let join = || {
+        let mut cmd = formation_with_home(&root, &home);
+        cmd.env("PATH", &bin)
+            .env("CLAUDE_CODE_SESSION_ID", "session-one")
+            .args(["mail", "join"]);
+        cmd
+    };
+    fixture(
+        r#"{"items":[{"id":"closed","closed":"yesterday","seats":[{"name":"old","transcripts":["session-one"]}]},{"id":"shift","closed":null,"seats":[{"name":"captain","transcripts":["session-one"]}]}]}"#,
+    );
+    assert_eq!(run_ok(&mut join())["seat"], "captain");
+    assert!(home.join("rooms/shift/inbox.sqlite3").exists());
+    fixture(
+        r#"{"items":[{"id":"closed","closed":"yesterday","seats":[{"name":"old","transcripts":["session-one"]}]}]}"#,
+    );
+    expect_refusal(
+        &join().output().unwrap(),
+        "no_scribe_seat",
+        Some("join the scribe group"),
+    );
+    fixture(
+        r#"{"items":[{"id":"one","closed":null,"seats":[{"name":"chief","transcripts":["session-one"]}]},{"id":"two","closed":null,"seats":[{"name":"captain","transcripts":["session-one"]}]}]}"#,
+    );
+    let ambiguous = join().output().unwrap();
+    expect_refusal(&ambiguous, "ambiguous_scribe_seat", Some("one/chief"));
+    expect_refusal(&ambiguous, "ambiguous_scribe_seat", Some("two/captain"));
+    std::fs::write(&scribe, "#!/bin/sh\nprintf 'failed\\nmore' >&2\nexit 1\n").unwrap();
+    let failed = join().output().unwrap();
+    expect_refusal(
+        &failed,
+        "scribe_unavailable",
+        Some("formation mail join <seat> --room <room>"),
+    );
+    std::fs::remove_file(&scribe).unwrap();
+    expect_refusal(
+        &join().output().unwrap(),
+        "scribe_unavailable",
+        Some("formation mail join <seat> --room <room>"),
+    );
+    assert_eq!(
+        run_ok(
+            formation_with_home(&root, &home)
+                .env("PATH", &bin)
+                .args(["mail", "join", "captain", "--room", "trial"])
+        )["seat"],
+        "captain"
+    );
+}
