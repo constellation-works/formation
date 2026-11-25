@@ -1,9 +1,9 @@
 Register this seat, or rebind it to this session
 
-Usage: formation mail join [OPTIONS] <NAME>
+Usage: formation mail join [OPTIONS] [NAME]
 
 Arguments:
-  <NAME>  Seat name to register or rebind
+  [NAME]  Seat name to register or rebind
 
 Options:
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)

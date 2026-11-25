@@ -50,6 +50,23 @@ impl Env {
         }
     }
 
+    /// Resolve an unnamed join from the caller's open Scribe group.
+    ///
+    /// # Errors
+    /// Refuses when the session or a unique Scribe seat cannot be resolved.
+    pub fn scribe_join(
+        mut self,
+        explicit_room: bool,
+        run: impl FnOnce() -> Result<Vec<u8>, String>,
+    ) -> Result<(Self, String), Error> {
+        let session = resolve_session(&self)?.ok_or(ComposeError::SeatRequired)?;
+        let (group, seat) = lookup_scribe_seat(session.as_str(), run)?;
+        if !explicit_room {
+            self.room = Some(group.into());
+        }
+        Ok((self, seat))
+    }
+
     /// Apply explicit command-line mail options over the captured environment.
     pub fn with_mail_options(mut self, room: Option<String>, seat: Option<String>) -> Self {
         if let Some(room) = room {
@@ -88,6 +105,12 @@ enum ComposeError {
     RoomRequired,
     #[error("seat required: pass --as <seat> or join this room from your session")]
     SeatRequired,
+    #[error("no scribe seat found; join the scribe group first or pass the seat")]
+    NoScribeSeat,
+    #[error("multiple scribe seats found: {0}")]
+    AmbiguousScribeSeat(String),
+    #[error("scribe unavailable: {0}; use formation mail join <seat> --room <room>")]
+    ScribeUnavailable(String),
     #[error("invalid room name (use 1-96 letters, digits, hyphens or underscores, or a path)")]
     InvalidRoom,
     #[error("unsupported tilde path; use ~/ or an explicit path")]
@@ -109,6 +132,9 @@ enum ComposeError {
 impl From<ComposeError> for Error {
     fn from(error: ComposeError) -> Self {
         let (kind, code) = match &error {
+            ComposeError::NoScribeSeat => (Kind::Refused, "no_scribe_seat"),
+            ComposeError::AmbiguousScribeSeat(_) => (Kind::Refused, "ambiguous_scribe_seat"),
+            ComposeError::ScribeUnavailable(_) => (Kind::Refused, "scribe_unavailable"),
             ComposeError::RoomRequired => (Kind::Refused, "room_required"),
             ComposeError::SeatRequired => (Kind::Refused, "seat_required"),
             ComposeError::InvalidRoom | ComposeError::UnsupportedTilde => {
@@ -270,5 +296,60 @@ fn validate_identifier(value: &str, error: ComposeError) -> Result<(), Error> {
         Ok(())
     } else {
         Err(error.into())
+    }
+}
+
+fn lookup_scribe_seat(
+    session: &str,
+    run: impl FnOnce() -> Result<Vec<u8>, String>,
+) -> Result<(String, String), Error> {
+    #[derive(serde::Deserialize)]
+    struct List {
+        items: Vec<Group>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Group {
+        id: String,
+        closed: Option<serde_json::Value>,
+        seats: Vec<Seat>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Seat {
+        name: String,
+        transcripts: Vec<String>,
+    }
+
+    let unavailable = |message: String| -> Error {
+        ComposeError::ScribeUnavailable(
+            message.lines().next().unwrap_or("unknown error").to_owned(),
+        )
+        .into()
+    };
+    let output = run().map_err(&unavailable)?;
+    let list: List =
+        serde_json::from_slice(&output).map_err(|error| unavailable(error.to_string()))?;
+    let mut matches = Vec::new();
+    for group in list
+        .items
+        .into_iter()
+        .filter(|group| group.closed.is_none())
+    {
+        for seat in group.seats {
+            if seat.transcripts.iter().any(|id| id == session) {
+                matches.push((group.id.clone(), seat.name));
+            }
+        }
+    }
+    match matches.len() {
+        0 => Err(ComposeError::NoScribeSeat.into()),
+        1 => Ok(matches.remove(0)),
+        _ => Err(ComposeError::AmbiguousScribeSeat(
+            matches
+                .iter()
+                .map(|(group, seat)| format!("{group}/{seat}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+        .into()),
     }
 }
