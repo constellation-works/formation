@@ -2,64 +2,145 @@
 title: Formation — Shift messaging
 owner: codex
 created_date: 2026-11-24
-updated_date: 2026-11-24
+updated_date: 2026-11-25
 status: Draft
 feature: shift-messaging
 doc_role: scope
-summary: A standalone plugin for directed, operator-approved messages between desktop and headless sessions.
+summary: Durable seat mail between Claude and Codex sessions, handed over by a Stop hook, with one watch command for everything that is not mail.
 stage: building
-next: Qualify parent wake independently of inbox delivery on each desktop host.
+next: Review the mailbox and Stop-hook proposal, then trial the hook on each desktop host.
 ---
 
 # Formation — Shift messaging
 
+This revision of 2026-11-25 is a proposal for Daniel's review. [Built today](#built-today) is in the repository. Nothing else under [Shape](#shape) is approved to build.
+
 ## Problem
 
-Daniel talks mainly to a chief and an aide, and occasionally directly to the captain of a workspace. Each chat carries context worth preserving. Today a sentry can notice failed CI and leave a task comment while the captain’s idle desktop chat waits for its next prompt. Daniel becomes the messenger exactly when an exception needs a decision.
+Daniel talks mainly to a chief and an aide, and at times to the captain of a workspace. Claude sessions reach each other through the app's session messages, and a Codex parent reaches its children through the collaboration tools. Nothing crosses the two.
+
+The formation of 2026-11-25 ran one Codex captain among Claude sessions on one Mac, and showed three costs:
+
+1. **Chief to Codex captain.** The chief wrote a comment that began `FOR <seat>` on the captain's task record, and the captain found it when it next read the record. Two sessions on one machine talked through a tracker on another, and the record filled with routing notes.
+2. **Codex captain to chief.** Nothing woke the chief. It read the captain's record at a fallback check twice an hour, so an answer could wait 40 minutes.
+3. **The sentry polls in a model.** Each read is a turn even when nothing changed, which is why a pace script rations them ([Formation design](../formation/2_design.md#ranks)).
+
+Daniel, 2026-11-25, in the chief's chat: "I think we can keep this every simple, with mailbox for each unit that requires it, and a subagent can poll the mailbox along with other things that requires watch (mostly for codex crew for our use-case - but can be used for ci/PR/etc). for the sender address, for formation, we can use active scribe group's unit name." And, since a Codex child cannot wake its parent: "then hook is the best option?"
 
 ## Goal
 
-A headless sentry reports a failed check to its captain. The Codex captain can ask a Claude chief for a decision and receive the answer in the same conversation. Daniel authorizes those directed routes for one shift. Each receiving session retains its original identity, history and tool permissions. A fresh alert can wake an idle recipient without a chat polling for mail.
+A Claude chief and a Codex captain on one machine exchange an ask and its answer without Daniel carrying it, without a task record carrying it, and without either session polling in a model. A CI failure reaches a captain the same way.
 
-The first implementation provides an offline roster checker and a local SQLite inbox with seat credentials, presence, idempotent sends, bounded sentry waits and explicit acknowledgments. A room admits cooperating seats under one OS account. Directed route grants, binding to a provider session and host-managed wake remain proposals. Existing Formation role briefs still govern the team's work. Orbit may supply a task link or CI event through an adapter. Formation can operate independently of an Orbit installation.
+Out of scope: more than one machine, enforcing who may message whom, and any provider other than Claude and Codex.
 
 ## Shape
 
-**Seats and routes.** A shift gives names such as chief, aide, orbit-captain and orbit-sentry a common lifetime. The chief and aide are normally desktop sessions. Each workspace has one captain, who can also be a direct contact. Supporting roles may be headless. A roster proposes directed pairs. An authenticated human approves the final seat-to-session bindings, permitted routes and expiry. Rebinding a seat to a new session invalidates grants to the old binding. The aide can relay an attributed instruction; quoting Daniel in a message gives it no additional authority.
-
-**Future plugin and host boundary.** Claude and Codex load a thin plugin over the same Rust core. The proposed local relay persists messages, checks grants, and pushes a notification to the receiver’s authenticated adapter. Only the owning host can start a turn, queue a follow-up or confirm an existing turn consumed a message. The desktop surface stays open to Daniel while workers can use host-controlled CLI/SDK sessions. The relay never edits provider transcript files. A receiver without a verified wake capability offers an inbox or notification and reports that limitation to the sender.
-
-**Delivery example.** The sentry submits a check URL and a unique message ID on its approved route. The relay records the envelope before acknowledging acceptance. A busy captain queues the alert behind its active turn. When ready, the adapter checks the binding and grant again and submits with agent authorship. The chief receives an escalation only on a separately approved captain-to-chief route. A reply names the original message and requires a valid return route.
-
-| Receipt | What the sender can infer |
+| Part | What it is |
 | --- | --- |
-| Accepted | The envelope is durable in the relay. |
-| Queued | The host has queued it behind current work. |
-| Started | The owning host provided evidence of a turn for this message. |
-| Acknowledged | The recipient explicitly confirmed handling. |
-| Expired or revoked | The pending message can no longer start a turn. |
-| Outcome unknown | Submission may have succeeded. Reconcile the host receipt before retrying. |
+| Mailbox | One for each seat that needs it, in one room per formation. Mail waits for a reader who is away |
+| Address | The seat's name in the open scribe group. The room is named by the group's id |
+| Delivery | Two hooks shipped in the plugin hand unread mail to the seat's own session. The Stop hook also holds the wait while the seat is idle |
+| Watch | One command that blocks on any number of probes (CI, pull requests, attention) and mails what is new to a seat |
 
-**Storage and failure handling.** Start with one local relay per operator and transactional SQLite storage for shift bindings, grants, envelopes and receipts. Key sends by shift, sender binding and caller-generated message ID. Replays with the same body return the stored receipt; a conflicting body is an error. Preserve per-recipient order across relay restarts. Dispatch rechecks expiry and revocation, including queued work. The owning adapter must serialize admission with a human stop or grant change. If it cannot do so, expose its weaker capability and keep autonomous wake disabled. After a crash between host submission and receipt storage, leave the outcome unknown until the adapter can reconcile it. Keep message bodies local and out of routine logs. Transport authentication establishes the sending seat; fields supplied by a sender cannot confer another seat’s identity.
+### Built today
 
-**Candidate interfaces.** An operator binds a seat, grants a route and ends a shift. An agent can send on its own approved route, inspect a receipt, or acknowledge delivery to its own seat. The adapter offers a capability handshake for the exact host, session and build. Task administration, filesystem grants and model credentials remain with their current owners. Cross-machine transport and message retention after shift close need separate decisions before wider rollout.
+An offline roster checker, and a local SQLite inbox with a key file per seat, presence, idempotent sends, a bounded inbox wait and explicit acknowledgment ([usage](../../usage.md#local-inbox)). A room admits cooperating seats under one OS account.
+
+### Mailbox
+
+A seat needs a mailbox when one of its edges has no native channel. The app's session messages and the Codex collaboration tools stay in use where they exist, because they already wake the receiver and stamp the sender.
+
+| Edge | Channel |
+| --- | --- |
+| Claude chief to Claude captain | Session message, as today |
+| Codex captain to its Codex sergeant | Collaboration tools, as today |
+| Claude chief to Codex captain, and back | Mail |
+| A sentry or a script to its captain, on either provider | Mail |
+
+One room per formation lives at `~/.formation/rooms/<room>/`. `mail join` opens the caller's mailbox once, beside its `scribe group join`. `mail send` stores an envelope for any open mailbox and refuses an address nobody opened, with the list of open ones. `mail inbox` and `mail who` read.
+
+### Address
+
+`mail join` with no name asks scribe which seat the calling session holds in the open group. The group's id becomes the room and the seat's name becomes the address. Formation records the session's id beside the seat, so every later call and every hook finds the seat from the session id alone. Scribe is consulted at the join and nowhere else, and `--room` with `--as` replaces it outside a formation.
+
+- **Checked on 2026-11-25:** in the chief's Claude desktop session, `CLAUDE_CODE_SESSION_ID` held the id that scribe lists for the `0-chief` seat. Hook input carries a `session_id` on both providers; trials 1 and 2 confirm it is the same id.
+- **The name is a label, not proof.** Any process under the account can pass `--as`. A message stays a request and never approval ([session network](../formation/references/network.md#rules), rules 1 and 2).
+
+### Delivery
+
+The plugin ships two hooks for each provider. Each is one line that calls `formation hook`, so the logic stays in the binary and the hook file seldom changes.
+
+| Hook | What it does |
+| --- | --- |
+| On the user's message | Adds the seat's unread mail to the turn |
+| On stop, mail waiting | Continues the turn with the mail as its next input |
+| On stop, no mail | Holds the wait. When mail arrives, the session takes a turn on it |
+
+The hook marks what it hands over as delivered, which is the receipt the sender can read. The envelope is then in the session's transcript. A seat with no hook, such as a headless worker, still uses `mail inbox` and `mail ack`.
+
+The hold differs by provider, because only Claude documents a wake for an idle session:
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| How the hold works | The Stop hook runs in the background with `asyncRewake`. The session is idle and Daniel can type. Mail makes the hook exit with code 2, which wakes the session with the mail as a system reminder | The Stop hook blocks, and returns `decision: block` with the mail as the reason, which continues the turn. The turn has not ended while it holds |
+| How long | The hook's `timeout`: 600 seconds by default, set per hook, maximum not documented | The same |
+| After the hold runs out | The session is idle with no watcher. Mail waits for the next turn | The same |
+| Limit on continuing a turn | Eight blocks in a row, reset when a tool is called | Not documented |
+
+This replaces the child that polls a mailbox. On Codex the seat still stays in its turn while it waits, as it would waiting on a child, but the app runs the wait, no model step is spent, and the seat cannot forget to start it. A hook does not fire for mail inside a subagent: the hook stays silent when its input names an agent.
+
+### Watch
+
+`formation watch --to <seat>` is for everything that is not mail. A probe is any command that prints one line per item as `<fingerprint><TAB><text>`, the shape the skill's `ci-read.sh` already has. `watch` runs each probe on an interval and mails the seat every fingerprint it has not sent before. The fingerprints live in the room, so two watchers never send the same item, and a restarted one sends nothing twice. A probe that fails is mailed once as `read failed`, and again only after a read has succeeded.
+
+`watch` needs no model. A captain starts it as a background command, or a sentry subagent runs it where the read needs judgment before it is passed on. The binary knows nothing about GitHub or Orbit: a new thing to watch is a new script. Without `--to`, `watch` returns the new items to its caller, for use outside a formation.
+
+### What changes in the first build
+
+| First build | Proposal | Why |
+| --- | --- | --- |
+| A seat is proven by a key file, named on every call | A seat is a name, found from the session id | The room serves sessions under one OS account, and any of them can read the keys. The key only prevents a slip, and the session id prevents the same slip with no file to pass |
+| `send` refuses a recipient not seen for 90 seconds | `send` stores it, and the reply says whether a hold is waiting on that mailbox | A captain between two turns is the usual case, and its mail must wait for it |
+| A sentry child waits on the inbox for its parent | The Stop hook waits | The trial below: an idle Codex parent started no turn on its child's report |
+| An envelope has no time | An envelope carries when it was sent | Mail can wait for hours, and its reader needs its age |
+
+Idempotent sends, the body limit and the audit of join and send stay as built.
+
+### Set aside
+
+The first version of this scope proposed a relay, route grants, session bindings, a receipt ladder and host wake adapters. None was built and no observed need asks for them, so they are dropped from the scope. They remain in this file's history.
 
 ## Verification
 
-1. The offline example validates on Linux and macOS. A missing seat, duplicate captain or unknown route endpoint fails before any host is contacted.
-2. First live slice: bind two test seats to headless hosts, approve one route, deliver once, restart the relay and replay the same ID. Verify one recipient turn, a stable receipt and no implied reverse route.
-3. For each desktop adapter, use a disposable existing chat. Deliver while idle and while busy; verify the exact background chat gets one new turn, the active turn finishes uninterrupted, and sender identity appears in its transcript. Repeat in both directions with a real chief/captain pair. Store the host versions and receipts.
-4. Revoke a queued grant, expire a shift, restart after host submission and stop a recipient manually. Verify no unauthorized wake or blind retry and an accurate sender-visible result. If only notification works, report notification in the capability matrix.
-5. Run the first operator trial with a CI alert and a linked reply. Success means Daniel sees the full exchange in the two original chats without forwarding a message or setting up a chat polling loop.
+Each trial is run on the exact desktop build and recorded here before the capability is claimed.
 
-## Integration evidence and open questions
+1. **Claude, idle wake.** A Stop hook with `asyncRewake` waits on the installed `mail inbox --wait`. The chief goes idle and a second seat sends. Pass: one new turn in the same chat, carrying the mail. This also settles whether the Stop event accepts `asyncRewake`.
+2. **Codex, hold and continue.** The same with a blocking Stop hook in a Codex desktop captain. Pass: the turn continues with the mail. Record what happens when Daniel types during the hold, and the longest `timeout` the app accepts.
+3. **Codex, if the hold fails.** Try the two undocumented or untested wakes named under [Evidence](#evidence), in that order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
+4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
 
-Claude Code channels can push events into an open Claude Code session. Codex app-server supports starting turns in sessions managed by its client. Each native desktop receiver still needs independent verification for existing user-owned chats, busy queuing, sender provenance and revocation. Registration alone proves only that a host can load the plugin.
+| Measure | 2026-11-25 | Target |
+| --- | --- | --- |
+| Routing comments on a captain's task record | Every message between the chief and the Codex captain | None |
+| Longest wait for the chief to learn of the Codex captain's answer | 40 minutes | Under a minute while a hold is waiting |
+| Sentry turns in an hour with nothing new | One per read | None |
 
-- [Claude Code channels](https://code.claude.com/docs/en/channels)
-- [Codex app-server](https://developers.openai.com/blog/codex-as-a-platform)
-- [Desktop external-wake request](https://github.com/openai/codex/issues/61773)
-- [Formation's native Codex chat request](https://github.com/openai/codex/issues/63220)
+## Questions for Daniel
+
+1. **Drop the key files** and let a seat be a name? Recommended: yes.
+2. **Deliver by the two hooks?** Recommended: yes. The cost is one review of the plugin's hooks in Codex, repeated whenever the hook file changes.
+3. **Hold length.** Recommended: as long as trial 2 allows on Codex, since a seat with no hold receives mail only at its next turn.
+4. **Drop the relay, grants and wake adapters** from this scope? Recommended: yes.
+
+## Evidence
+
+Read from the providers' documentation on 2026-11-25 through a summarising fetcher. Nothing in this list has been run.
+
+- **Claude Code hooks.** `asyncRewake` runs a command hook in the background and wakes the session on exit code 2. A Stop hook continues the turn with `decision: block`. Hooks also run inside subagents, where the input carries `agent_id`. Added context is capped at 10,000 characters. Plugins ship hooks. Which events accept `asyncRewake` is not documented. [Hooks reference](https://code.claude.com/docs/en/hooks)
+- **Codex hooks.** On by default, with Stop, UserPromptSubmit and subagent events. A Stop hook continues the turn the same way. An async hook's output waits for the next user turn, and finishing a hook starts none. Added context is capped near 2,500 tokens. Plugin hooks are reviewed and trusted once per content hash. [Hooks](https://learn.chatgpt.com/docs/hooks)
+- **Codex, no idle wake.** No documented way starts a turn in an idle chat that the desktop app owns. Two leads for trial 3: a user reports that an undocumented `wake_on_agent_messages` feature flag woke an idle parent for its own children ([report](https://github.com/openai/codex/issues/61901)), and `codex queue --thread` queues text for an existing session without saying whether it starts a turn ([CLI reference](https://learn.chatgpt.com/docs/cli/reference)).
+- **Claude Code channels** can also push an event into an open session. They need a running server, so the hook is tried first. [Channels](https://code.claude.com/docs/en/channels)
+- **Open requests:** a [desktop external-wake API](https://github.com/openai/codex/issues/61773) and [idle chats waking on agent messages](https://github.com/openai/codex/issues/63220). Neither has a maintainer reply.
 
 ### Local sentry trial, 2026-11-24
 

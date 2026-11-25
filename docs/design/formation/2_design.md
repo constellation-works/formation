@@ -21,9 +21,7 @@ messages and the measures in [1_overview.md](1_overview.md) carry over unchanged
 replaces its Roles, Authority columns and The formations sections. Where it leads, units
 that a trigger starts and that regulate themselves, is in [3_vision.md](3_vision.md). A
 proposal to run formations outside the Claude desktop app and without Orbit is in
-[references/portable.md](references/portable.md); Daniel parked it on 2026-11-19. A proposal
-to reach Codex seats with a mailbox per seat and one watch command is in
-[references/mail-and-watch.md](references/mail-and-watch.md); it awaits his review.
+[references/portable.md](references/portable.md); Daniel parked it on 2026-11-19.
 
 ## Why change
 
