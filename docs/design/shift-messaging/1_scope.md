@@ -8,12 +8,12 @@ feature: shift-messaging
 doc_role: scope
 summary: Durable seat mail between Claude and Codex sessions, handed over by a Stop hook, with one watch command for everything that is not mail.
 stage: building
-next: Review the mailbox and Stop-hook proposal, then trial the hook on each desktop host.
+next: Trial the Stop hook on Codex and Claude desktop, then build the mailbox changes.
 ---
 
 # Formation — Shift messaging
 
-This revision of 2026-11-25 is a proposal for Daniel's review. [Built today](#built-today) is in the repository. Nothing else under [Shape](#shape) is approved to build.
+Daniel approved this shape on 2026-11-25 ([Decided](#decided)). [Built today](#built-today) is in the repository. The rest is filed as tasks tagged `shift-messaging`, with the two hook trials first.
 
 ## Problem
 
@@ -125,12 +125,16 @@ Each trial is run on the exact desktop build and recorded here before the capabi
 | Longest wait for the chief to learn of the Codex captain's answer | 40 minutes | Under a minute while a hold is waiting |
 | Sentry turns in an hour with nothing new | One per read | None |
 
-## Questions for Daniel
+## Decided
 
-1. **Drop the key files** and let a seat be a name? Recommended: yes.
-2. **Deliver by the two hooks?** Recommended: yes. The cost is one review of the plugin's hooks in Codex, repeated whenever the hook file changes.
-3. **Hold length.** Recommended: as long as trial 2 allows on Codex, since a seat with no hold receives mail only at its next turn.
-4. **Drop the relay, grants and wake adapters** from this scope? Recommended: yes.
+Daniel, 2026-11-25, in the chief's chat, to the four questions this scope asked: "yes to all."
+
+1. **A seat is a name.** The key files go ([decision](4_decisions.md#a-seat-is-a-name-not-a-credential)).
+2. **Mail is delivered by the two hooks.** The cost is one review of the plugin's hooks in Codex, repeated whenever the hook file changes.
+3. **The hold is as long as trial 2 allows on Codex,** since a seat with no hold receives mail only at its next turn.
+4. **The relay, grants and wake adapters are dropped** from this scope.
+
+He also said who runs the Codex side: "I will have astra execute them and figure out if things are working for codex."
 
 ## Evidence
 
