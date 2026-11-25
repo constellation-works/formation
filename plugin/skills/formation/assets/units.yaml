@@ -1,0 +1,116 @@
+# Ranks fix a session's model and effort, not its duty. A unit is one workspace's line-up.
+# Claude-specific defaults are labeled. Codex uses the operator’s assigned models and actual host capacity.
+talks_to_daniel: [chief, aide, captain]
+
+once:                        # staffed once, whatever the units
+  chief:
+    name: 0-chief            # the session Daniel opens
+    claude_model: its own           # Fable or Opus
+    claude_effort: high             # a child's effort is clamped to this
+    record: "[orchestration]: formation <units> - <family>, tags orchestration, formation-day, no-drain"
+  aide:
+    name: 0-aide
+    claude_model: haiku
+    claude_effort: high
+    started_by: chief
+    claude_detach: true
+    brief: assets/brief-aide.md
+    relays_to: [captain]     # Daniel's quoted words, to the owner; it holds no authority
+    record: none             # agent notes under its own author name
+  specialist:                # one per subject Daniel names; none by default
+    name: "1-spec-{subject}"
+    claude_model: sonnet            # unless Daniel names another
+    claude_effort: medium
+    started_by: chief
+    claude_detach: true             # it reports to nobody; it answers the session that asked
+    asked_by: [chief, captain, lieutenant]   # a lieutenant only when its captain passed it the id
+    brief: assets/brief-specialist.md
+    record: "none; a comment on the task an ask names"
+
+ranks:
+  captain:
+    name: "{ws}-0-capt"
+    claude_model: opus
+    claude_effort: high
+    started_by: chief
+    claude_detach: true             # Daniel drives it; without the detach every turn would wake the chief
+    reports_to: chief        # questions, blockers and results; Daniel directly when he is in its chat
+    peers: [captain]         # other captains, for cross-workspace asks
+    brief: assets/brief-captain.md
+    record: "[orchestration]: {ws} - {actual_model}"   # filed by the chief before the start; its id goes in the brief
+    scribe_on: no            # Daniel, 2026-11-22: captains are not switched on; /scribe on is his, per session
+  lieutenant:
+    name: "{ws}-1-lt"        # a reinforcement is {ws}-1-lt2
+    claude_model: opus
+    claude_effort: medium
+    started_by: captain
+    claude_detach: false            # its turn end is the result the captain waits for
+    reports_to: captain
+    on_demand: true          # started when the first heavy piece is ordered, then kept
+    worktree: true           # its own worktree in its repo
+    brief: assets/brief-lieutenant.md
+    record: "the Orbit task it claims or is ordered onto"
+  sergeant:
+    name: "{ws}-1-sgt"
+    claude_model: sonnet
+    claude_effort: medium
+    started_by: captain
+    claude_detach: true
+    reports_to: captain      # by message, only for a decision or input
+    brief: assets/brief-sergeant.md
+    record: "a comment on each task it touches"
+  sentry:
+    name: "{ws}-1-sentry"
+    claude_model: haiku             # always (Daniel, 2026-11-23); Sonnet named in a duo means a sergeant
+    claude_effort: medium
+    started_by: captain   # or the explicitly assigned Codex parent
+    claude_detach: true
+    reports_to: sergeant     # the captain in a duo; by message, only on a change
+    # Minutes of sleep by load: busy 2, active 5, quiet 15, idle 30 after 60 with nothing in flight.
+    pace: scripts/sentry-pace.sh
+    brief: assets/brief-sentry.md
+    record: none
+
+units:                       # each has exactly one captain
+  solo: [captain]                               # a quiet workspace, or one with a resident
+  duo: [captain, sentry]                        # needs watching, little clearing
+  trio: [captain, sergeant, sentry]             # steady traffic
+  squad: [captain, lieutenant, sergeant, sentry]   # the most demanding work
+
+reinforcements:              # a captain asks the chief for a rank, never for a second unit
+  chief_approves: the squad line-up plus one more lieutenant, per workspace
+  beyond_that: Daniel
+
+resident:                    # close-out step 4: one per workspace that still has pending tasks
+  defaults:                  # Daniel, 2026-11-16: "resident duration should be 16 hours, 1 hour wake, same
+    deadline_hours: 16       #   instructions and goals as always. I will decide the crew for the night."
+    cadence: {heartbeat_minutes: 60, floor_minutes: 60}   # one cycle an hour, "no more no less"
+    goal_and_instructions: the last mandate in that workspace
+    rights: [dispatch, promote, merge, plugin_upgrade]    # requested, never assumed
+    crew: ask Daniel         # his choice each night; do not copy the last mandate's crew
+  procedure:
+    - File the mandate as the orbit skill's Manager reference describes (an [orchestration]
+      task tagged resident with resident/mandate.json), with the defaults above unless Daniel
+      named something else. Write the artifact from a file under the checkout's `.orbit/tmp/`
+      with `orbit.task.artifact` action `put` and `sourcePath`.
+    - Request the grant with `orbit resident grant`, quoting Daniel's words. It raises a
+      decision that only Daniel answers.
+    - Give Daniel the one command that enables the cycle routine. An agent session is refused
+      there, and that refusal is not worked around.
+    - Offer him the dashboard's Tasks dock > Residents > Start dialog as the one-act
+      alternative to file, grant and enable (not yet used by a formation).
+    - Confirm the first cycle wrote a checkpoint before reporting the resident as running.
+  morning:
+    - Read each resident's handoff checkpoint and open warn notices before staffing the day.
+    - A unit with a sentry waits until the workspace's resident is paused or past its deadline.
+  notes:
+    - A cloud session is not a substitute; it cannot report back.
+aliases:                     # for workspace names that push a session name past 24 characters
+  constellation: const
+  orbit-decision-mail: odm
+  constellation-site: site
+
+notes:
+  - Start order under a captain is sergeant, then sentry, so the sentry's first report has a reader.
+  - A cross-workspace ask is an Orbit task in the workspace that must act, plus a message pointing at it.
+  - A unit with a sentry replaces a resident in that workspace; never run both. A solo may sit beside one.

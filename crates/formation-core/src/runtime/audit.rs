@@ -1,15 +1,17 @@
 //! Fail-open audit guard owned by the runtime.
+
 use super::Ctx;
-use formation_store::{
-    Store,
-    contracts::{AuditEvent, AuditStatus},
-};
+use formation_store::Store;
+use formation_store::contract::AuditEvent;
+use formation_store::contract::AuditStatus;
 use std::time::Instant;
+
 pub(super) struct AuditGuard<'a> {
     store: &'a Store,
     event: AuditEvent,
     start: Instant,
 }
+
 impl<'a> AuditGuard<'a> {
     pub(super) fn new(store: &'a Store, command: &str, ctx: &Ctx<'_>) -> Self {
         Self {
@@ -26,6 +28,7 @@ impl<'a> AuditGuard<'a> {
             },
         }
     }
+
     pub(super) fn record(&mut self, result: Result<Option<String>, &str>) {
         match result {
             Ok(target) => {
@@ -36,6 +39,7 @@ impl<'a> AuditGuard<'a> {
         }
     }
 }
+
 impl Drop for AuditGuard<'_> {
     fn drop(&mut self) {
         self.event.duration_ms =

@@ -1,6 +1,8 @@
 //! Wire payloads preserved independently of the application's outcome types.
-use formation_core::apps::mail::Outcome;
+
+use formation_core::app::mail::Outcome;
 use serde_json::{Value, json};
+
 pub(crate) fn mail(out: Outcome) -> Value {
     match out {
         Outcome::Joined(seat) => json!({"seat":seat}),

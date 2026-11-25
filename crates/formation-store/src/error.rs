@@ -1,4 +1,5 @@
 //! Typed storage failures translated at the store boundary.
+
 use cw_base::{Error, Kind};
 
 #[derive(Debug, thiserror::Error)]
@@ -18,21 +19,22 @@ pub(crate) enum Failure {
     #[error("cannot encode audit event: {0}")]
     Encode(#[from] serde_json::Error),
 }
+
 impl From<Failure> for Error {
-    fn from(e: Failure) -> Self {
-        let (kind, code) = match &e {
-            Failure::File(x) => (x.kind(), "mail_file"),
-            Failure::Database(x) => (x.kind(), "mail_database"),
+    fn from(error: Failure) -> Self {
+        let (kind, code) = match &error {
+            Failure::File(source) => (source.kind(), "mail_file"),
+            Failure::Database(source) => (source.kind(), "mail_database"),
             Failure::Query(_) => (Kind::Io, "mail_query"),
             Failure::InvalidKey => (Kind::Config, "mail_identity"),
             Failure::MissingRoom => (Kind::Config, "mail_room"),
             Failure::Entropy(_) => (Kind::Io, "mail_entropy"),
             Failure::Encode(_) => (Kind::Internal, "audit_encode"),
         };
-        Self::new(kind, code, e)
+        Self::new(kind, code, error)
     }
 }
 
-pub(crate) fn sql(e: cw_sqlite::rusqlite::Error) -> Error {
-    Failure::from(e).into()
+pub(crate) fn sql(error: cw_sqlite::rusqlite::Error) -> Error {
+    Failure::from(error).into()
 }

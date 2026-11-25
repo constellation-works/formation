@@ -13,8 +13,19 @@ clap.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 cw-testkit.workspace = true
 tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# Preserve the public cargo test selectors while keeping source filenames singular.
+[[test]]
+name = "goldens"
+path = "tests/golden.rs"
+
+[[test]]
+name = "scripts"
+path = "tests/script.rs"

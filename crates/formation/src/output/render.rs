@@ -37,7 +37,7 @@ pub(crate) fn mail(value: &serde_json::Value) -> ExitCode {
         .and_then(|()| writeln!(out))
     {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(e) => failure(&e),
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+        Err(error) => failure(&error),
     }
 }

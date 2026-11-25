@@ -1,6 +1,8 @@
 //! Root command declaration.
-use crate::commands::Command;
+
+use crate::command::Command;
 use clap::Parser;
+
 /// Coordinate local agent inboxes and check proposed shift rosters.
 #[derive(Parser)]
 #[command(version)]

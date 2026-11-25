@@ -8,7 +8,7 @@ Each route has a `from` and a `to` seat. Add the reverse pair explicitly when re
 
 ## Plugin package
 
-Run `make update-plugins` from the checkout with Cargo, Codex and Claude Code on PATH. It installs the Formation CLI into `~/.cargo/bin` and installs the [Formation skill](../plugin/skills/formation/SKILL.md) in both clients from this checkout. Keep the checkout in place and the binary directory on PATH. Rerun the target after pulling changes, then open a new session in each client.
+Run `make update-plugins` from the checkout with Cargo, Codex and Claude Code on PATH. It installs the Formation CLI into `~/.cargo/bin` and installs the [Formation skill](../plugin/skills/formation/SKILL.md) in both clients from this checkout. The skill handles shift staffing, role briefs, escalation and close-out. It selects the receiving provider’s session tools for each seat. Keep the checkout in place and the binary directory on PATH. Rerun the target after pulling changes, then open a new session in each client.
 
 For CLI-only use, run `make install`. Checking a roster works offline without a provider account, Orbit or a broker. To try the plugin in a disposable Claude Code session, launch `claude --plugin-dir ./plugin` from the checkout.
 
