@@ -8,11 +8,14 @@ mod seat;
 
 pub(crate) mod session;
 
+mod watch;
+
 use crate::driver::sqlite;
 pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
 pub use message::{Messages, MessagesMut, PriorDelivery};
 pub use seat::{Seats, SeatsRead};
+pub use watch::Watch;
 
 /// One committed version of the room.
 pub struct Snapshot {
@@ -57,5 +60,10 @@ impl Tx<'_> {
     /// Audit records in this transaction.
     pub fn audit(&self) -> Audit<'_> {
         Audit { conn: self.conn }
+    }
+
+    /// Watch deduplication and failure records in this transaction.
+    pub fn watch(&self) -> Watch<'_> {
+        Watch { conn: self.conn }
     }
 }

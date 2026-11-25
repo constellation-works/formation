@@ -39,6 +39,15 @@ impl SeatsRead<'_> {
             .map_err(error::sql)
     }
 
+    /// Whether `name` has joined this room.
+    pub fn exists(&self, name: &str) -> Result<bool, Error> {
+        self.conn
+            .query_row("SELECT 1 FROM seats WHERE name = ?1", [name], |_| Ok(()))
+            .optional()
+            .map(|row| row.is_some())
+            .map_err(error::sql)
+    }
+
     /// Return all seat names recorded in this room, ordered alphabetically.
     pub fn names(&self) -> Result<Vec<String>, Error> {
         let mut statement = self

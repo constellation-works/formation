@@ -29,5 +29,6 @@ pub fn run(env: formation_core::Env) -> ExitCode {
         Command::Roster(args) => command::roster::run(&env, args),
         Command::Mail(args) => command::mail::run(env, args),
         Command::Hook(args) => command::hook::run(&env, args),
+        Command::Watch(args) => command::watch::run(env, args),
     }
 }

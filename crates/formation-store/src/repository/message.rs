@@ -218,6 +218,17 @@ impl MessagesMut<'_> {
         Ok(self.conn.last_insert_rowid())
     }
 
+    /// Next monotonic receipt number within this write transaction.
+    pub fn next_receipt(&self) -> Result<i64, Error> {
+        self.conn
+            .query_row(
+                "SELECT COALESCE(MAX(receipt), 0) + 1 FROM messages",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(error::sql)
+    }
+
     /// Record acknowledgement by the addressed seat.
     pub fn ack(&self, seat: &str, receipt: i64) -> Result<bool, Error> {
         self.conn
