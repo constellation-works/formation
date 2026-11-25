@@ -1,4 +1,4 @@
-.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board ci-fast ci-lint ci install clean
+.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board ci-fast ci-lint ci install update-plugins clean
 
 CARGO ?= cargo
 # Every build uses the committed Cargo.lock as is; a stale lock fails instead
@@ -35,6 +35,7 @@ help:
 	@echo "  make standards-check  Run the vendored standards check (docs/standards/check.sh)"
 	@echo "  make feature-board    Regenerate the design feature board"
 	@echo "  make ci               Everything above; what CI runs"
+	@echo "  make update-plugins   Install the Formation CLI and refresh its Codex and Claude plugins"
 	@echo "  make build | fmt | install | clean"
 
 build:
@@ -142,8 +143,13 @@ ci: ci-fast ci-lint test goldens
 
 install:
 	$(CARGO) build --release --bin $(BINARY) $(LOCKED)
-	install -d $(INSTALL_BIN_DIR)
-	install -m 755 target/release/$(BINARY) $(INSTALL_BIN_DIR)/$(BINARY)
+	install -d "$(INSTALL_BIN_DIR)"
+	install -m 755 target/release/$(BINARY) "$(INSTALL_BIN_DIR)/$(BINARY)"
+
+update-plugins: install
+	codex plugin marketplace add "$$PWD"
+	codex plugin add formation@formation-local
+	claude plugin install formation --marketplace "$$PWD" --scope user
 
 clean:
 	$(CARGO) clean

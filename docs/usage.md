@@ -8,7 +8,9 @@ Each route has a `from` and a `to` seat. Add the reverse pair explicitly when re
 
 ## Plugin package
 
-Build the binary with `cargo install --locked --path crates/formation` to put it on PATH. The local Claude and Codex marketplace manifests point to the same [plugin directory](../plugin/) and [Formation skill](../plugin/skills/formation/SKILL.md), with references for roster checks, seat mail and sentry waits. For a disposable Claude Code session, launch `claude --plugin-dir ./plugin` from the checkout. For Codex, run `codex plugin marketplace add "$PWD"` from the repo root, followed by `codex plugin add formation@formation-local`. The skill invokes the installed binary. Checking a roster works without either host, a provider account, Orbit, a broker, or network access at runtime.
+Run `make update-plugins` from the checkout with Cargo, Codex and Claude Code on PATH. It installs the Formation CLI into `~/.cargo/bin` and installs the [Formation skill](../plugin/skills/formation/SKILL.md) in both clients from this checkout. Keep the checkout in place and the binary directory on PATH. Rerun the target after pulling changes, then open a new session in each client.
+
+For CLI-only use, run `make install`. Checking a roster works offline without a provider account, Orbit or a broker. To try the plugin in a disposable Claude Code session, launch `claude --plugin-dir ./plugin` from the checkout.
 
 ## Local inbox
 
