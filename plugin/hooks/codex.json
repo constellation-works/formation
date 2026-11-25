@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider codex --event user-prompt",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider codex --event stop --hold 1800",
+            "timeout": 1860
+          }
+        ]
+      }
+    ]
+  }
+}

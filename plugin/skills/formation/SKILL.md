@@ -1,6 +1,6 @@
 ---
 name: formation
-description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats and sentry inbox watches. A lookup of recorded group sessions belongs exclusively to the Scribe skill. Orbit owns task execution and resident mandates.
+description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats and seat mail. A lookup of recorded group sessions belongs exclusively to the Scribe skill. Orbit owns task execution and resident mandates.
 ---
 
 # Formation
@@ -24,5 +24,5 @@ The operator talks to the chief, aide and captains. Keep one attention owner per
 - Fill [aide](assets/brief-aide.md) for the opening briefing, Scribe upkeep and relays, and [captain](assets/brief-captain.md) for each workspace mandate.
 - Fill [lieutenant](assets/brief-lieutenant.md) for a heavy order, [sergeant](assets/brief-sergeant.md) for triage and mechanical fixes, [sentry](assets/brief-sentry.md) for monitoring, or [specialist](assets/brief-specialist.md) for standing subject advice.
 - Use [the CI reader](scripts/ci-read.sh) for base-branch and PR checks and [the pace helper](scripts/sentry-pace.sh) after an attention wake. Set `formation_skill` to the absolute directory containing this installed SKILL.md when filling shell commands.
-- Use [roster checks](references/roster.md) for offline validation, [seat mail](references/mail.md) for local presence, send, read or acknowledgement, and [sentry inbox waits](references/sentry.md) for a delegated mail watch or a wake claim.
+- Use [roster checks](references/roster.md) for offline validation, [seat mail](references/mail.md) for joining, sending, reading or acknowledging mail, and [sentry boundaries](references/sentry.md) for sentry mail rules and wake claims.
 - Use [evaluation cases](evals/cases.md) when changing routing, staffing, permissions or lifecycle behavior.

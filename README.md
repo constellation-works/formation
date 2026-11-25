@@ -4,7 +4,7 @@
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Scaffold version 0.1.0"></a>
 </div>
 
-Formation is a standalone plugin in development. The chief and aide are the operator’s main contacts. Each captain owns a workspace and can work with headless sentries and workers. Seats can join a private local room, see who has joined, send durable messages and check their inbox. A sentry can wait for mail on behalf of its parent.
+Formation is a standalone plugin in development. The chief and aide are the operator’s main contacts. Each captain owns a workspace and can work with headless sentries and workers. Seats can join a private local room, see who has joined, send durable messages and check their inbox. Plugin hooks deliver mail to joined Claude and Codex sessions.
 
 ## Quick start
 

@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider claude --event user-prompt",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider claude --event stop --hold 540",
+            "asyncRewake": true,
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
