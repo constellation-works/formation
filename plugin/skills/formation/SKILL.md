@@ -1,11 +1,13 @@
 ---
 name: formation
-description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats and sentry inbox watches. Scribe handles recorded group history. Orbit owns task execution and resident mandates.
+description: Staffs and runs a shift of Claude or Codex sessions and exchanges local seat mail. Use for formation solo, duo, trio or squad, adding a specialist or reinforcement, changing a unit, formation-complete, roster validation, online seats and sentry inbox watches. A lookup of recorded group sessions belongs exclusively to the Scribe skill. Orbit owns task execution and resident mandates.
 ---
 
 # Formation
 
 The session receiving the operator’s formation order is chief. A shift has one aide and one captain per named workspace. A request to inspect a roster or an inbox runs only that operation.
+
+For a request solely about previously recorded group sessions, select the Scribe skill directly.
 
 1. Parse the order using [units and ranks](references/units.md). For a shift, read [startup](references/start.md) and [authority](references/authority.md). For an existing shift, resolve seats from its roster record.
 2. Select [Claude mechanics](references/provider-claude.md) or [Codex mechanics](references/provider-codex.md) for each seat’s actual host. Record the real model, effort, host ID, parent, allowed recipients and assignment. A role name never grants tools or permissions.
