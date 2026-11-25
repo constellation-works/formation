@@ -4,9 +4,10 @@ use clap::{Args, Parser, Subcommand};
 use std::io::{self, Read};
 use std::process::ExitCode;
 
+mod mail;
 mod output;
 
-/// Check a proposed roster for desktop and headless agent sessions.
+/// Coordinate local agent inboxes and check proposed shift rosters.
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
@@ -18,6 +19,8 @@ struct Cli {
 enum Command {
     /// Inspect a shift roster.
     Roster(Roster),
+    /// Exchange messages in a private local room.
+    Mail(mail::Mail),
 }
 
 #[derive(Args)]
@@ -40,9 +43,17 @@ enum RosterAction {
 const MAX_BYTES: u64 = 256 * 1024;
 
 fn main() -> ExitCode {
-    let Command::Roster(Roster {
-        action: RosterAction::Check { json },
-    }) = Cli::parse().command;
+    let json = match Cli::parse().command {
+        Command::Roster(Roster {
+            action: RosterAction::Check { json },
+        }) => json,
+        Command::Mail(args) => {
+            return match args.run() {
+                Ok(value) => output::mail(&value),
+                Err(error) => output::failure(&error),
+            };
+        }
+    };
     let mut bytes = Vec::new();
     if let Err(error) = io::stdin()
         .lock()

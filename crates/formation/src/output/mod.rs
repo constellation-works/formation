@@ -29,3 +29,15 @@ pub(super) fn summary(summary: &Summary, json: bool) -> ExitCode {
         Err(error) => failure(&error),
     }
 }
+
+pub(super) fn mail(value: &serde_json::Value) -> ExitCode {
+    let mut out = io::stdout().lock();
+    match serde_json::to_writer(&mut out, value)
+        .map_err(io::Error::from)
+        .and_then(|()| writeln!(out))
+    {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+        Err(e) => failure(&e),
+    }
+}

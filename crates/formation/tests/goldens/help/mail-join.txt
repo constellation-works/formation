@@ -1,0 +1,9 @@
+Register this seat or refresh its presence
+
+Usage: formation mail --room <ROOM> --identity <IDENTITY> join <NAME>
+
+Arguments:
+  <NAME>  Unique seat name for this identity
+
+Options:
+  -h, --help  Print help

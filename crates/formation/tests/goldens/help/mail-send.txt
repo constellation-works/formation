@@ -1,0 +1,11 @@
+Send to an online seat. Reuse the ID when retrying
+
+Usage: formation mail --room <ROOM> --identity <IDENTITY> send --id <ID> --body <BODY> <TO>
+
+Arguments:
+  <TO>  Online recipient seat name
+
+Options:
+      --id <ID>      Caller-generated message identifier
+      --body <BODY>  Message text (up to 8192 bytes)
+  -h, --help         Print help

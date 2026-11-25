@@ -29,6 +29,12 @@ fn help_and_roster_output() {
     let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
     for (name, args) in [
         ("help/root.txt", vec!["--help"]),
+        ("help/mail.txt", vec!["mail", "--help"]),
+        ("help/mail-join.txt", vec!["mail", "join", "--help"]),
+        ("help/mail-who.txt", vec!["mail", "who", "--help"]),
+        ("help/mail-send.txt", vec!["mail", "send", "--help"]),
+        ("help/mail-inbox.txt", vec!["mail", "inbox", "--help"]),
+        ("help/mail-ack.txt", vec!["mail", "ack", "--help"]),
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),

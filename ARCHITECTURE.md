@@ -4,8 +4,8 @@ Formation starts from the [Constellation Rust CLI template at b8ea03c](https://g
 
 | Layer | Current responsibility |
 | --- | --- |
-| `formation` | Parse the command, read bounded stdin, call core, render the result and exit status. |
-| `formation-core` | Check seat uniqueness, workspace captain ownership and the endpoints of proposed routes. |
-| `formation-store` | Decode the versioned roster document and define its exchange types. |
+| `formation` | Parse the command, read bounded stdin and private seat identity files, call core, render the result and exit status. |
+| `formation-core` | Check seat and message identifiers, validate rosters and coordinate bounded inbox waits. |
+| `formation-store` | Decode the roster, store seat bindings and presence, and transact message sends and acknowledgments in SQLite. |
 
-The executable depends on core, which depends on store. The template's [dependency gate](scripts/check-dependency-direction.sh) enforces the direction. The store currently works on bytes in memory. The plugin package exposes one shared roster-checking skill to its host. The [initial design](docs/design/formation/1_scope.md) describes the proposed persistence and adapter boundaries for messaging.
+The executable depends on core, which depends on store. The template's [dependency gate](scripts/check-dependency-direction.sh) enforces the direction. Each room has its own local SQLite database. The CLI supplies a digest of the private identity to the store. Both host packages expose the roster and inbox skills.

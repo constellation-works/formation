@@ -1,5 +1,7 @@
 //! Versioned wire types for proposed shift rosters.
 
+pub mod mailbox;
+
 use serde::Deserialize;
 
 /// The decoder preserves JSON diagnostics, including line and column.

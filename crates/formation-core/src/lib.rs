@@ -1,5 +1,7 @@
 //! Offline validation of a proposed Formation roster.
 
+pub mod mail;
+
 use formation_store::Role;
 use serde::Serialize;
 use std::collections::HashSet;

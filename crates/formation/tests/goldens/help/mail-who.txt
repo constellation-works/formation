@@ -1,0 +1,6 @@
+List seats seen in the last 90 seconds
+
+Usage: formation mail --room <ROOM> --identity <IDENTITY> who
+
+Options:
+  -h, --help  Print help
