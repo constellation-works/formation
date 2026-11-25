@@ -12,3 +12,6 @@ pub(super) const CREATE: cw_sqlite::Step = cw_sqlite::Step::sql(
             );
             CREATE INDEX IF NOT EXISTS unread ON messages(recipient,ack,receipt);",
 );
+
+pub(super) const SENT: cw_sqlite::Step =
+    cw_sqlite::Step::sql("ALTER TABLE messages ADD COLUMN sent INTEGER;");

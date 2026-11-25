@@ -7,7 +7,7 @@ mod message;
 pub mod roster;
 
 pub use audit::{AuditEvent, AuditStatus};
-pub use message::Message;
+pub use message::{Mailbox, Message, rfc3339};
 use std::fmt;
 
 /// Invalid caller session identifier.

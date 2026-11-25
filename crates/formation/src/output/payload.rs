@@ -13,8 +13,18 @@ pub(crate) fn mail(out: Outcome) -> Value {
             "rebound": replaced_session.is_some(),
             "replaced_session": replaced_session,
         }),
-        Outcome::Online(seats) => json!({"online": seats}),
-        Outcome::Sent(id, receipt) => json!({"id": id, "receipt": receipt}),
+        Outcome::Seats(seats) => json!({"seats": seats
+            .into_iter()
+            .map(|seat| json!({
+                "name": seat.name,
+                "unread": seat.unread,
+                "held": seat.held,
+                "seen": seat.seen,
+            }))
+            .collect::<Vec<_>>()}),
+        Outcome::Sent { id, receipt, held } => {
+            json!({"id": id, "receipt": receipt, "held": held})
+        }
         Outcome::Inbox(messages) => json!({"messages": messages}),
         Outcome::Ack(receipt) => json!({"acknowledged": receipt}),
     }

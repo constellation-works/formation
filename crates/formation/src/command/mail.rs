@@ -22,16 +22,16 @@ pub(crate) struct Mail {
 
 #[derive(Subcommand)]
 enum Action {
-    /// Register this seat or refresh its presence.
+    /// Register this seat, or rebind it to this session.
     Join {
         /// Seat name to register or rebind.
         name: String,
     },
-    /// List seats seen in the last 90 seconds.
+    /// List every joined seat, not only those seen lately: unread, held, seen.
     Who,
-    /// Send to an online seat. Reuse the ID when retrying.
+    /// Send to a joined seat, present or not. Reuse the ID when retrying.
     Send {
-        /// Online recipient seat name.
+        /// Joined recipient seat name.
         to: String,
         /// Caller-generated message identifier.
         #[arg(long)]

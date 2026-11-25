@@ -1,5 +1,8 @@
 use super::{Error, Outcome, SeatRef, Store, refused, rule, touch};
 
+/// Joined seats named in an `unknown_recipient` refusal.
+const LISTED_SEATS: usize = 32;
+
 pub(super) fn run(
     store: &Store,
     caller: SeatRef<'_>,
@@ -15,9 +18,18 @@ pub(super) fn run(
     store.write(|tx| {
         let sender = touch(tx, caller, now)?;
 
+        let Some(seen) = tx.seats().seen(to)? else {
+            return Err(unknown_recipient(tx.seats().names(LISTED_SEATS + 1)?, to));
+        };
+        let held = rule::held(seen, now);
+
         if let Some(prior) = tx.messages().prior_delivery(&sender, &id)? {
             if prior.recipient == to && prior.body == body {
-                return Ok(Outcome::Sent(id, prior.receipt));
+                return Ok(Outcome::Sent {
+                    id,
+                    receipt: prior.receipt,
+                    held,
+                });
             }
             return Err(refused(
                 "message_conflict",
@@ -25,14 +37,20 @@ pub(super) fn run(
             ));
         }
 
-        if !tx.seats().present(to, now - rule::PRESENCE_SECONDS)? {
-            return Err(refused(
-                "recipient_offline",
-                "recipient is offline or unknown",
-            ));
-        }
-
-        let receipt = tx.messages().insert(&sender, to, &id, body)?;
-        Ok(Outcome::Sent(id, receipt))
+        let receipt = tx.messages().insert(&sender, to, &id, body, now)?;
+        Ok(Outcome::Sent { id, receipt, held })
     })
+}
+
+fn unknown_recipient(mut joined: Vec<String>, to: &str) -> Error {
+    let more = joined.len() > LISTED_SEATS;
+    joined.truncate(LISTED_SEATS);
+    let more = if more { " and more" } else { "" };
+    refused(
+        "unknown_recipient",
+        format!(
+            "{to} has not joined this room; joined seats: {}{more}",
+            joined.join(", ")
+        ),
+    )
 }

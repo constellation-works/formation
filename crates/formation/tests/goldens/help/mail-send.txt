@@ -1,9 +1,9 @@
-Send to an online seat. Reuse the ID when retrying
+Send to a joined seat, present or not. Reuse the ID when retrying
 
 Usage: formation mail send [OPTIONS] --id <ID> --body <BODY> <TO>
 
 Arguments:
-  <TO>  Online recipient seat name
+  <TO>  Joined recipient seat name
 
 Options:
       --id <ID>           Caller-generated message identifier

@@ -3,9 +3,9 @@ Exchange messages in a private local room
 Usage: formation mail [OPTIONS] <COMMAND>
 
 Commands:
-  join   Register this seat or refresh its presence
-  who    List seats seen in the last 90 seconds
-  send   Send to an online seat. Reuse the ID when retrying
+  join   Register this seat, or rebind it to this session
+  who    List every joined seat, not only those seen lately: unread, held, seen
+  send   Send to a joined seat, present or not. Reuse the ID when retrying
   inbox  Read unread messages or wait for up to 900 seconds
   ack    Mark a receipt in this seat's inbox as handled
   help   Print this message or the help of the given subcommand(s)

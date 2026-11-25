@@ -76,10 +76,13 @@ fn recipient_owns_ack_and_retries_preserve_receipts() {
     let room = Room::new();
     room.ok("chief", &["join", "chief"]);
     room.ok("captain", &["join", "captain"]);
-    assert_eq!(
-        room.ok("chief", &["who"])["online"],
-        serde_json::json!(["captain", "chief"])
-    );
+    let names: Vec<Value> = room.ok("chief", &["who"])["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|seat| seat["name"].clone())
+        .collect();
+    assert_eq!(names, ["captain", "chief"]);
     let send = ["send", "captain", "--id", "alert-1", "--body", "a probe"];
     let receipt = room.ok("chief", &send);
     assert_eq!(room.ok("chief", &send), receipt);
@@ -108,11 +111,107 @@ fn recipient_owns_ack_and_retries_preserve_receipts() {
     assert_eq!(read, room.ok("captain", &["inbox"]));
     room.ok("captain", &["ack", &id]);
     room.ok("captain", &["ack", &id]);
-    assert_eq!(room.ok("chief", &send), receipt);
+    assert_eq!(room.ok("chief", &send)["receipt"], receipt["receipt"]);
     assert_eq!(
         room.ok("captain", &["inbox"])["messages"],
         serde_json::json!([])
     );
+}
+
+#[test]
+fn mail_waits_for_an_absent_seat_and_reports_whether_it_is_held() {
+    use std::process::Stdio;
+    let room = Room::new();
+    room.ok("chief", &["join", "chief"]);
+    room.ok("captain", &["join", "captain"]);
+
+    let absent = room.ok(
+        "chief",
+        &["send", "captain", "--id", "m-1", "--body", "while away"],
+    );
+    assert_eq!(absent["held"], false);
+    let inbox = room.ok("captain", &["inbox"]);
+    assert_eq!(inbox["messages"][0]["body"], "while away");
+    let sent = inbox["messages"][0]["sent"].as_str().unwrap();
+    assert!(is_rfc3339_utc(sent), "sent is not RFC 3339 UTC: {sent}");
+    room.ok("captain", &["ack", &absent["receipt"].to_string()]);
+
+    let waiter = room
+        .command("captain")
+        .args(["inbox", "--wait", "10"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let start = std::time::Instant::now();
+    while !held(&room.ok("chief", &["who"]), "captain") {
+        assert!(start.elapsed().as_secs() < 8, "waiter never held its seat");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let waiting = room.ok(
+        "chief",
+        &["send", "captain", "--id", "m-2", "--body", "while waiting"],
+    );
+    assert_eq!(waiting["held"], true);
+    let read: Value = {
+        let out = waiter.wait_with_output().unwrap();
+        assert!(out.status.success());
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+    assert_eq!(read["messages"][0]["id"], "m-2");
+}
+
+fn is_rfc3339_utc(text: &str) -> bool {
+    let shape = b"dddd-dd-ddTdd:dd:ddZ";
+    text.len() == shape.len()
+        && text.bytes().zip(shape).all(|(got, want)| match want {
+            b'd' => got.is_ascii_digit(),
+            _ => got == *want,
+        })
+}
+
+fn held(who: &Value, name: &str) -> bool {
+    who["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|seat| seat["name"] == name)
+        .unwrap()["held"]
+        == true
+}
+
+#[test]
+fn send_to_a_name_nobody_joined_lists_the_joined_seats() {
+    let room = Room::new();
+    room.ok("chief", &["join", "chief"]);
+    room.ok("captain", &["join", "captain"]);
+    let out = room.run(
+        "chief",
+        &["send", "ghost", "--id", "g-1", "--body", "anyone there"],
+    );
+    expect_refusal(&out, "unknown_recipient", Some("captain, chief"));
+}
+
+#[test]
+fn who_lists_every_joined_seat_with_unread_held_and_seen() {
+    let room = Room::new();
+    room.ok("chief", &["join", "chief"]);
+    room.ok("captain", &["join", "captain"]);
+    room.ok(
+        "chief",
+        &["send", "captain", "--id", "w-1", "--body", "pending"],
+    );
+
+    let who = room.ok("chief", &["who"]);
+    let seats = who["seats"].as_array().unwrap();
+    assert_eq!(seats.len(), 2);
+    assert_eq!(seats[0]["name"], "captain");
+    assert_eq!(seats[0]["unread"], 1);
+    assert_eq!(seats[0]["held"], false);
+    assert_eq!(seats[0]["seen"], Value::Null);
+    assert_eq!(seats[1]["name"], "chief");
+    assert_eq!(seats[1]["unread"], 0);
+    assert_eq!(seats[1]["held"], true);
+    assert!(is_rfc3339_utc(seats[1]["seen"].as_str().unwrap()));
 }
 
 #[test]

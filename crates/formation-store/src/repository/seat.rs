@@ -1,6 +1,6 @@
 //! Seat bindings and last-seen timestamps.
 
-use crate::contract::SessionId;
+use crate::contract::{Mailbox, SessionId};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension, params};
@@ -49,12 +49,9 @@ pub struct Seats<'a> {
 
 impl Seats<'_> {
     /// Bind or rebind a seat to an optional session, returning any replaced session id.
-    pub fn bind(
-        &self,
-        name: &str,
-        session: Option<&SessionId>,
-        now: i64,
-    ) -> Result<Option<String>, Error> {
+    ///
+    /// Joining does not renew presence: a new seat reads as never seen.
+    pub fn bind(&self, name: &str, session: Option<&SessionId>) -> Result<Option<String>, Error> {
         let prior: Option<String> = self
             .conn
             .query_row(
@@ -78,11 +75,9 @@ impl Seats<'_> {
 
         self.conn
             .execute(
-                "INSERT INTO seats (name, session_id, seen) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(name) DO UPDATE
-                   SET session_id = excluded.session_id,
-                       seen = excluded.seen",
-                params![name, session_str, now],
+                "INSERT INTO seats (name, session_id, seen) VALUES (?1, ?2, 0)
+                 ON CONFLICT(name) DO UPDATE SET session_id = excluded.session_id",
+                params![name, session_str],
             )
             .map_err(error::sql)?;
 
@@ -119,27 +114,50 @@ impl Seats<'_> {
             .map_err(error::sql)
     }
 
-    /// Return seats seen after the given cutoff.
-    pub fn since(&self, cutoff: i64) -> Result<Vec<String>, Error> {
+    /// Unix seconds when a seat last renewed its presence (0 for never), or `None` if not joined.
+    pub fn seen(&self, name: &str) -> Result<Option<i64>, Error> {
+        self.conn
+            .query_row("SELECT seen FROM seats WHERE name = ?", [name], |row| {
+                row.get(0)
+            })
+            .optional()
+            .map_err(error::sql)
+    }
+
+    /// Up to `limit` joined seat names, ordered alphabetically.
+    pub fn names(&self, limit: usize) -> Result<Vec<String>, Error> {
         let mut statement = self
             .conn
-            .prepare("SELECT name FROM seats WHERE seen > ? ORDER BY name")
+            .prepare("SELECT name FROM seats ORDER BY name LIMIT ?")
             .map_err(error::sql)?;
         statement
-            .query_map([cutoff], |row| row.get(0))
+            .query_map([i64::try_from(limit).unwrap_or(i64::MAX)], |row| row.get(0))
             .map_err(error::sql)?
             .collect::<Result<_, _>>()
             .map_err(error::sql)
     }
 
-    /// Whether a named seat was seen after the cutoff.
-    pub fn present(&self, name: &str, cutoff: i64) -> Result<bool, Error> {
-        self.conn
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM seats WHERE name = ? AND seen > ?)",
-                params![name, cutoff],
-                |row| row.get(0),
+    /// Every joined seat with its unread count, ordered alphabetically.
+    pub fn mailboxes(&self) -> Result<Vec<Mailbox>, Error> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT name, seen,
+                        (SELECT count(*) FROM messages
+                          WHERE recipient = seats.name AND ack = 0)
+                   FROM seats ORDER BY name",
             )
+            .map_err(error::sql)?;
+        statement
+            .query_map([], |row| {
+                Ok(Mailbox {
+                    name: row.get(0)?,
+                    seen: row.get(1)?,
+                    unread: row.get(2)?,
+                })
+            })
+            .map_err(error::sql)?
+            .collect::<Result<_, _>>()
             .map_err(error::sql)
     }
 }
