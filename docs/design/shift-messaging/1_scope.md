@@ -13,7 +13,7 @@ next: Trial the Stop hook on Codex and Claude desktop, then build the mailbox ch
 
 # Formation — Shift messaging
 
-Daniel approved this shape on 2026-11-25 ([Decided](#decided)). [Built today](#built-today) is in the repository. The rest is filed as tasks tagged `shift-messaging`, with the two hook trials first.
+Daniel approved this shape on 2026-11-25 ([Decided](#decided)). [Built today](#built-today) is in the repository. The rest is filed as tasks tagged `shift-messaging`, with the two hook trials first. The Codex hold passed on the tested build. The Claude idle-wake trial is next.
 
 ## Problem
 
@@ -82,10 +82,10 @@ The hold differs by provider, because only Claude documents a wake for an idle s
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| How the hold works | The Stop hook runs in the background with `asyncRewake`. The session is idle and Daniel can type. Mail makes the hook exit with code 2, which wakes the session with the mail as a system reminder | The Stop hook blocks, and returns `decision: block` with the mail as the reason, which continues the turn. The turn has not ended while it holds |
-| How long | The hook's `timeout`: 600 seconds by default, set per hook, maximum not documented | The same |
+| How the hold works | The Stop hook runs in the background with `asyncRewake`. The session is idle and Daniel can type. Mail makes the hook exit with code 2, which wakes the session with the mail as a system reminder | Verified on desktop build 26.1120.41243. The Stop hook waits within the turn. Returning `decision: block` with an envelope as its reason delivered the envelope to the same chat |
+| How long | The hook's `timeout`: 600 seconds by default, set per hook, maximum not documented | Tested with `timeout: 1900` seconds. One hold delivered mail after 30 min 10.7 s. The upper bound is unknown |
 | After the hold runs out | The session is idle with no watcher. Mail waits for the next turn | The same |
-| Limit on continuing a turn | Eight blocks in a row, reset when a tool is called | Not documented |
+| Limit on continuing a turn | Eight blocks in a row, reset when a tool is called | Four deliveries observed, with tool calls between them. The cap on uninterrupted continues is unknown |
 
 This replaces the child that polls a mailbox. On Codex the seat still stays in its turn while it waits, as it would waiting on a child, but the app runs the wait, no model step is spent, and the seat cannot forget to start it. A hook does not fire for mail inside a subagent: the hook stays silent when its input names an agent.
 
@@ -115,8 +115,8 @@ The first version of this scope proposed a relay, route grants, session bindings
 Each trial is run on the exact desktop build and recorded here before the capability is claimed.
 
 1. **Claude, idle wake.** A Stop hook with `asyncRewake` waits on the installed `mail inbox --wait`. The chief goes idle and a second seat sends. Pass: one new turn in the same chat, carrying the mail. This also settles whether the Stop event accepts `asyncRewake`.
-2. **Codex, hold and continue.** The same with a blocking Stop hook in a Codex desktop captain. Pass: the turn continues with the mail. Record what happens when Daniel types during the hold, and the longest `timeout` the app accepts.
-3. **Codex, if the hold fails.** Try the two undocumented or untested wakes named under [Evidence](#evidence), in that order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
+2. **Codex, hold and continue.** Passed on desktop build 26.1120.41243. The same chat received three scheduled envelopes and a fourth after a half-hour hold. See the [trial record](#codex-stop-hook-trial-2026-11-25) for typed input and timeout observations.
+3. **Codex, if the hold fails.** The hold passed on the tested build, so the fallback trial is unnecessary there. If another build fails the hold, try the two leads under [Evidence](#evidence) in order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
 4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
 
 | Measure | 2026-11-25 | Target |
@@ -138,7 +138,7 @@ He also said who runs the Codex side: "I will have astra execute them and figure
 
 ## Evidence
 
-Read from the providers' documentation on 2026-11-25 through a summarising fetcher. Nothing in this list has been run.
+Read from the providers' documentation on 2026-11-25 through a summarising fetcher. The live trials below record what was observed on each build.
 
 - **Claude Code hooks.** `asyncRewake` runs a command hook in the background and wakes the session on exit code 2. A Stop hook continues the turn with `decision: block`. Hooks also run inside subagents, where the input carries `agent_id`. Added context is capped at 10,000 characters. Plugins ship hooks. Which events accept `asyncRewake` is not documented. [Hooks reference](https://code.claude.com/docs/en/hooks)
 - **Codex hooks.** On by default, with Stop, UserPromptSubmit and subagent events. A Stop hook continues the turn the same way. An async hook's output waits for the next user turn, and finishing a hook starts none. Added context is capped near 2,500 tokens. Plugin hooks are reviewed and trusted once per content hash. [Hooks](https://learn.chatgpt.com/docs/hooks)
@@ -153,3 +153,39 @@ On macOS, a Claude Desktop Code chief (Claude Desktop 6.28899.6) sent a fresh me
 A second control isolated explicit child-to-parent messaging. The same captain spawned another sentry and went idle. Only then did the investigator release the sentry to read the original unread envelope. The child explicitly sent the receipt, ID and body to its parent through the Codex collaboration tool and finished. At the readback 41 seconds after child completion, the captain still showed its second setup turn as the latest turn and receipt 1 remained unread.
 
 These observations qualify the inbox and the Codex child's ability to receive. Both parent-wake attempts remained unconfirmed on this build. A live parent waiting on its child, a CLI queue send, and a follow-up typed into the parent are different experiments. The reverse direction was deferred after the operator narrowed this trial to Codex.
+
+### Codex Stop-hook trial, 2026-11-25
+
+A shell sender and a captain in Codex Desktop shared a throwaway Formation 0.1.0 room on macOS. Daniel confirmed, “I reviewed and trusted it and will type during the hold”.
+
+1. **Build and configuration.** Desktop 26.1120.41243, bundled Codex CLI 0.171.0-alpha.13.2. The trusted project’s temporary `.codex/hooks.json` was:
+
+   ```json
+   {
+     "description": "Temporary Formation mailbox trial for one Codex chat",
+     "hooks": {
+       "Stop": [
+         {
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/usr/bin/python3 -I /private/tmp/formation-stop-trial.0Jf8DVXH/stop.py",
+               "timeout": 1900
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+
+   The command read the Stop event from stdin. For the armed captain it waited on `formation mail inbox --wait` in intervals of up to 900 seconds and returned the first unread envelope as the reason for a block. The captain acknowledged each receipt after seeing the body in this chat.
+
+2. **Scheduled deliveries.** The shell sent `trial-1`, `trial-2` and `trial-3` at 30, 300 and 600 seconds after arming. Each arrived as a hook prompt in the same chat with the sender’s exact body. Their distinct body suffixes were `565c872788`, `43b8c70245` and `fbf0c381b0`; the captain acknowledged receipts 1, 2 and 3 respectively.
+3. **Typed input.** Daniel typed “hold probe”. The second hook invocation returned receipt 2 after 240 seconds. The chat showed its envelope followed by Daniel’s message before the captain replied. Daniel reported, “It appeared immediately in the chat”. The captain received it, and the hook log shows that the mailbox receipt released the hold.
+4. **Long hold.** The largest timeout tried and accepted was 1,900 seconds. A single Stop invocation held for 1,810.7 seconds across multiple CLI waits, then delivered `long-hold` with the body `Formation long-hold check afd3398470`. The captain acknowledged receipt 4. The maximum accepted timeout remains undetermined.
+5. **Session identity.** All four deliveries passed the hook’s exact comparison between stdin’s `session_id` and the value read from `CODEX_THREAD_ID` in the captain’s shell.
+6. **Child Stop events.** A child completed its assigned turn. Its recorded lifecycle and the trial log did not establish whether its own Stop ran or included `agent_id`. The hook filtered on the captain’s session ID before it logged events, so a child with its own ID would leave no entry there.
+7. **Continue limit.** The first Stop event had `stop_hook_active: false` and the next three had `true`. The captain called tools between deliveries. No limit was reached in this sequence; the maximum without intervening tool calls remains undetermined.
+
+hold works
