@@ -1,0 +1,19 @@
+[package]
+name = "formation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+formation-core.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+cw-testkit.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

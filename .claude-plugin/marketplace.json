@@ -1,0 +1,13 @@
+{
+  "name": "formation-local",
+  "owner": {
+    "name": "Constellation Works"
+  },
+  "plugins": [
+    {
+      "name": "formation",
+      "source": "./plugin"
+    }
+  ],
+  "description": "Local distribution of the Formation roster-checking plugin."
+}

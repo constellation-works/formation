@@ -1,0 +1,9 @@
+Validate one version-1 JSON roster on stdin (maximum 256 KiB)
+
+Usage: formation roster check [OPTIONS]
+
+Options:
+      --json  Print the result as JSON
+  -h, --help  Print help
+
+Example: formation roster check --json < examples/roster.json

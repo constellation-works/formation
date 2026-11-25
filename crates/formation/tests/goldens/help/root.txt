@@ -1,0 +1,11 @@
+Check a proposed roster for desktop and headless agent sessions
+
+Usage: formation <COMMAND>
+
+Commands:
+  roster  Inspect a shift roster
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version

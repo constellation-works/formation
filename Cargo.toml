@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+# Crate boundaries are documented in ARCHITECTURE.md.
+members = [
+    "crates/formation-store",
+    "crates/formation-core",
+    "crates/formation",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/constellation-works/formation"
+
+[workspace.dependencies]
+# Test isolation (a private temp root, an isolated child, goldens): a
+# dev-dependency only (scripts/check-dependency-direction.sh).
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b" }
+formation-store = { path = "crates/formation-store" }
+formation-core = { path = "crates/formation-core" }
+# text everywhere, which also keeps the help goldens byte-stable.
+clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+
+[profile.release]
+strip = true
+
+# STD-02 lint baseline, verbatim from the standard. Do not trim it; add to it.
+# Workspace-wide lint config. Each crate opts in via `[lints] workspace = true`.
+# Keep this list short — only rules that are mechanically true everywhere.
+[workspace.lints.clippy]
+await_holding_lock = "deny"
+dbg_macro = "deny"
+expect_used = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+unwrap_used = "warn"
+
+# Adoptable additions beyond the baseline (STD-02 "Adoptable additions").
+# STD-02 R27: no wildcard arm on an enum match; a foreign enum that needs one
+# gets a scoped #[allow] with its reason.
+wildcard_enum_match_arm = "warn"
+match_wildcard_for_single_variants = "warn"
+# STD-02 R28: narrowing `as` casts must be checked conversions.
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+
+[workspace.lints.rust]
+missing_docs = "warn"

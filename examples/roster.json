@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "seats": [
+    {"name": "chief", "role": "chief", "host": "claude-desktop"},
+    {"name": "aide", "role": "aide", "host": "claude-desktop"},
+    {"name": "orbit-captain", "role": "captain", "workspace": "orbit", "host": "codex-desktop"},
+    {"name": "orbit-sentry", "role": "sentry", "workspace": "orbit", "host": "headless"}
+  ],
+  "routes": [
+    {"from": "chief", "to": "aide"},
+    {"from": "aide", "to": "chief"},
+    {"from": "chief", "to": "orbit-captain"},
+    {"from": "orbit-captain", "to": "chief"},
+    {"from": "orbit-sentry", "to": "orbit-captain"}
+  ]
+}
