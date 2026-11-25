@@ -93,6 +93,8 @@ can delegate the work to \"implementer\"."
   "captains should be pause sentries when there is no work expected". The cost is the one
   named above: a paused sentry sees nothing, so a drain started unannounced goes unwatched
   until someone sends `watch`. The chief passes a drain Daniel mentions to its captain. A failed probe counts as work in flight, since a failed read is not all-clear.
+
+  Since this change, the sentry waits in `formation watch` (`scripts/attention-read.sh` and `scripts/ci-read.sh`, `--timeout 3600`), and the tiers above are history.
 - In a squad, red CI on the base branch is fixed by the unit and not left to Orbit's scheduled
   sweep (Daniel, 2026-11-19: "squad mode == high throughput mode"). The sergeant re-runs a
   flake and opens the fix when it is mechanical; a failure that needs diagnosis, or whose

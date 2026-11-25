@@ -87,21 +87,15 @@ Values for the placeholders:
     sessions. The resident owns attention in `{ws}`: read its checkpoint and notices, work
     none of its items, and start no sentry."
   - duo: "you and a sentry". "Start `{sentry_name}` with the sentry brief, its reader
-    being you, send it your id, then apply the provider’s reporting mode. You clear what it reports. It paces
-    itself by load. Pause it with `rest` whenever no work is expected (no drain running,
-    no order out, no run's pull request waiting on checks), and send `watch` when a
-    drain or an order starts: a paused sentry reads nothing. A task or pull request
-    somebody works by hand is not load; where you judge one needs the sentry, send
-    `watch <minutes>`. No other sessions."
+    being you, send it your id, then apply the provider’s reporting mode. You clear what it reports. It watches with `formation watch`. Pause it with `rest` whenever no work is expected (no drain running, no order out, no run's pull request waiting on checks), and send `watch` when a drain, order or watched pull request starts: a paused sentry reads nothing. No other sessions."
   - duo with a sergeant specified instead of a sentry: staff the sergeant alone. It reads attention on its own wakes.
   - trio: "you, a sergeant and a sentry". "Start `{sgt_name}`, then `{sentry_name}`, with
     the briefs in the installed skill’s role briefs, the sentry's reader being the
     sergeant. Send each the ids it may message, then apply their provider’s reporting mode. Record each id on your
-    assignment. The sentry paces itself by load. Have it paused with `rest` whenever no
+    assignment. The sentry watches with `formation watch`. Have it paused with `rest` whenever no
     work is expected (no drain running, no order out, no run's pull request waiting on
-    checks), and sent `watch` when a drain or an order starts: a paused sentry reads
-    nothing. A task or pull request somebody works by hand is not load; where you judge
-    one needs the sentry, have it sent `watch <minutes>`. No other sessions."
+    checks), and sent `watch` when a drain, order or watched pull request starts: a paused sentry reads
+    nothing. No other sessions."
   - squad: "you, a lieutenant, a sergeant and a sentry". The trio line, then: "Start
     `{lt_name}` when the first order for it comes up, and keep it."
 - `{authority_rows}`: "rows two and three" with a sergeant; "rows one, two and three"

@@ -93,12 +93,10 @@ For each item the sentry sends, and each piece of routine work the captain order
 6. When the captain rules that something is not to be raised again, or you settle an item
    that will keep reappearing, send the sentry `mute <kind> | <id or host> | <until>` so
    the next read drops it.
-7. The sentry paces itself by load and goes idle after an hour with nothing in flight (it
-   tells you once, and still reads every 30 minutes). When you learn work is starting, a
-   drain or an order, send it `watch`. When the captain says no work is expected, or the
-   sentry reports `idle` and you know of none, send it `rest`: it pauses, with no timer,
-   until the next `watch`. Hands-on work is not load for it; `watch <minutes>` is for a
-   hands-on pull request the captain wants watched.
+7. The sentry runs `formation watch` (`--timeout 3600`) and wakes hourly for its digest.
+   When you learn work is starting (a drain, an order, or a pull request the captain wants
+   watched), send it `watch`. When the captain says no work is expected, send it `rest`:
+   it stops the command and reads nothing until the next `watch`.
 
 You may message `{capt_name}`, and the sentry only with a `mute`, `watch` or `rest` line or
 to say a line was unreadable. Send no acknowledgements and no progress notes: an answer from
