@@ -226,10 +226,10 @@ CLI=crates/formation/src
 # rule (R4).
 ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
 ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
-ban "$STORE/contracts/audit.rs" 'cw_fs::|cw_sqlite\b'                           "audit contracts must not do I/O"
-ban "$STORE/contracts" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contracts are record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
-ban_import "$STORE/contracts" 'crate' 'db|driver|repository|store|Store'    "contracts are record shapes; they must not import db, the driver, repository or the store"
-ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
+ban "$STORE/contract/audit.rs" 'cw_fs::|cw_sqlite\b'                           "audit contracts must not do I/O"
+ban "$STORE/contract" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contracts are record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
+ban_import "$STORE/contract" 'crate' 'db|driver|repository|store|Store'    "contracts are record shapes; they must not import db, the driver, repository or the store"
+ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
 [[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access is the kit's cw-fs"
 [[ -e "$STORE/driver/fs" || -e "$STORE/driver/fs.rs" ]] && err "store/driver/fs: there is no file driver; a file record's repository uses cw_fs directly"
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
@@ -276,21 +276,21 @@ for path in "$CORE"/*; do
   ban_import "$path" 'std' 'env'                                           "core/$name: only composition.rs reads the environment or discovers paths"
 done
 # The runtime sits below the apps; apps depend on it, never the reverse (R1).
-ban "$CORE/runtime"  'crate::apps'                                         "runtime must not import an app"
-ban_import "$CORE/runtime" 'crate' 'apps'                                  "runtime must not import an app"
+ban "$CORE/runtime"  'crate::app'                                         "runtime must not import an app"
+ban_import "$CORE/runtime" 'crate' 'apps?'                                  "runtime must not import an app"
 # One chokepoint (R24): only runtime/exec.rs starts the runtime and the audit
 # guard. An app's exec forwards to it and supplies its parts through `App`.
-ban "$CORE/apps"     'AuditGuard|Runtime::start'                           "an app runs through runtime::exec; it must not start the runtime or the audit guard"
-for app in "$CORE"/apps/*/mod.rs; do
+ban "$CORE/app"     'AuditGuard|Runtime::start'                           "an app runs through runtime::exec; it must not start the runtime or the audit guard"
+for app in "$CORE"/app/*/mod.rs; do
   [[ -e "$app" ]] || continue
   grep -q 'runtime::exec::<' "$app" || err "${app#"$CORE"/}: exec must forward to runtime::exec"
 done
 # There is no shared app: code two apps need goes to the lower app or the runtime.
 for shared in common shared util; do
-  [[ -e "$CORE/apps/$shared" || -e "$CORE/apps/$shared.rs" ]] && err "core/apps/$shared: put shared code in the lower app or in runtime/"
+  [[ -e "$CORE/app/$shared" || -e "$CORE/app/$shared.rs" ]] && err "core/app/$shared: put shared code in the lower app or in runtime/"
 done
 # An app's rules are pure: no store, no runtime, no composition (R5).
-for rules in "$CORE"/apps/*/rules.rs "$CORE"/apps/*/rules; do
+for rules in "$CORE"/app/*/rule.rs "$CORE"/app/*/rules; do
   [[ -e "$rules" ]] || continue
   ban "$rules" 'crate::(runtime|composition)|Store\b|Snapshot|Tx\b'      "${rules#"$CORE"/}: rules are pure functions over record shapes"
   ban_import "$rules" 'crate' 'runtime|composition'                       "${rules#"$CORE"/}: rules are pure functions over record shapes"
@@ -299,11 +299,11 @@ done
 # Binary: argument declarations, the mapping to an app, rendering (R2). It
 # names only the core, and its handlers open no store and read no environment.
 ban "crates/formation" 'formation_store|cw_(base|fs|sqlite)\b|rusqlite\b'    "the binary names only formation-core"
-ban "$CLI/commands"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
-ban_import "$CLI/commands" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
+ban "$CLI/command"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
+ban_import "$CLI/command" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
 # Rendering is derived from payloads only; it never reaches back up (R1).
-ban "$CLI/output"    'crate::(cli|commands)'                                "output must not import cli or commands"
-ban_import "$CLI/output" 'crate' 'cli|commands'                             "output must not import cli or commands"
+ban "$CLI/output"    'crate::(cli|command)'                                "output must not import cli or commands"
+ban_import "$CLI/output" 'crate' 'cli|command'                             "output must not import cli or commands"
 
 # rusqlite is named only inside formation-store, tests included: another
 # crate's test that needs hand-made store state uses the store's
@@ -326,11 +326,11 @@ ban crates 'serde\(default *= *"[A-Za-z_:]*(now|now_utc)"'    "a persisted times
 
 # A flat replacement can otherwise pass the edge rules by removing the
 # modules the rules inspect. Keep the working template frame in each app.
-for app in "$CORE/apps/roster" "$CORE/apps/mail"; do
+for app in "$CORE/app/roster" "$CORE/app/mail"; do
   [[ -f "$app/mod.rs" ]] || err "missing application entry: $app/mod.rs"
 done
-for module in "$CORE/composition.rs" "$CORE/runtime/exec.rs" "$CLI/cli.rs" "$CLI/commands/mod.rs" \
-              "$STORE/store.rs" "$STORE/repository/mod.rs" "$STORE/contracts/mod.rs" \
+for module in "$CORE/composition.rs" "$CORE/runtime/exec.rs" "$CLI/cli.rs" "$CLI/command/mod.rs" \
+              "$STORE/store.rs" "$STORE/repository/mod.rs" "$STORE/contract/mod.rs" \
               "$STORE/driver/sqlite/schema/mod.rs"; do
   [[ -f "$module" ]] || err "missing template module: $module"
 done

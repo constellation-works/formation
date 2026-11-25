@@ -1,7 +1,9 @@
 //! Process environment captured once and composed per invocation.
+
 use cw_base::{Error, Kind};
 use formation_store::Store;
 use std::path::PathBuf;
+
 /// Host inputs for one invocation.
 #[derive(Default)]
 pub struct Env {
@@ -9,6 +11,7 @@ pub struct Env {
     identity: Option<PathBuf>,
     pub(crate) actor: Option<String>,
 }
+
 impl Env {
     /// Capture Formation's process inputs.
     pub fn from_process() -> Self {
@@ -20,6 +23,7 @@ impl Env {
                 .ok(),
         }
     }
+
     /// Apply explicit command-line paths over the captured environment.
     pub fn with_mail_paths(mut self, room: Option<PathBuf>, identity: Option<PathBuf>) -> Self {
         self.room = room.or(self.room);
@@ -27,9 +31,11 @@ impl Env {
         self
     }
 }
+
 #[derive(Debug, thiserror::Error)]
 #[error("mail requires --{0} or its FORMATION environment variable")]
 struct Missing(&'static str);
+
 pub(crate) fn compose(env: &Env) -> Result<(Store, PathBuf), Error> {
     let path = env
         .room

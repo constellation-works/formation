@@ -1,11 +1,14 @@
 //! Convert clap arguments to application commands.
+
 use crate::output;
 use clap::{Args, Subcommand};
-use formation_core::{
-    Env,
-    apps::mail::{self, Command},
-};
-use std::{path::PathBuf, process::ExitCode, time::Duration};
+use formation_core::Env;
+use formation_core::app::mail;
+use formation_core::app::mail::Command;
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::time::Duration;
+
 #[derive(Args)]
 pub(crate) struct Mail {
     /// Existing private directory shared by this shift (mode 0700; default: $FORMATION_ROOM).
@@ -62,6 +65,6 @@ pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
     };
     mail::exec(&env, cmd, |result| match result {
         Ok(out) => output::mail(&output::payload::mail(out)),
-        Err(e) => output::error(&e),
+        Err(error) => output::error(&error),
     })
 }

@@ -1,5 +1,7 @@
 //! A durable inbox envelope.
+
 use serde::Serialize;
+
 /// An unread envelope. Sequence numbers are scoped to one room.
 #[derive(Serialize)]
 pub struct Message {

@@ -1,9 +1,12 @@
 //! Read the bounded wire document and call the offline app.
+
 use crate::output;
 use clap::{Args, Subcommand};
-use formation_core::{Env, apps::roster};
+use formation_core::Env;
+use formation_core::app::roster;
 use std::io::{self, Read};
 use std::process::ExitCode;
+
 #[derive(Args)]
 pub(crate) struct Roster {
     #[command(subcommand)]
@@ -38,6 +41,6 @@ pub(crate) fn run(env: &Env, args: Roster) -> ExitCode {
     }
     roster::exec(env, roster::Command::Check(bytes), |result| match result {
         Ok(summary) => output::summary(&summary, json),
-        Err(e) => output::failure(&e),
+        Err(error) => output::failure(&error),
     })
 }

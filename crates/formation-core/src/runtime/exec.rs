@@ -1,17 +1,26 @@
 //! Every app enters through the same composition, dispatch and audit boundary.
-use super::{Ctx, audit::AuditGuard};
+
+use super::Ctx;
+use super::audit::AuditGuard;
 use crate::{Env, composition};
 use cw_base::Error;
+
 pub(crate) trait App {
     type Command;
+
     type Outcome;
+
     const NEEDS_ROOM: bool;
+
     fn audit(cmd: &Self::Command) -> Option<&'static str>;
+
     fn run(ctx: &Ctx<'_>, cmd: Self::Command) -> Result<Self::Outcome, Error>;
+
     fn target(_: &Self::Outcome) -> Option<String> {
         None
     }
 }
+
 pub(crate) fn exec<A: App, R>(
     env: &Env,
     cmd: A::Command,
@@ -20,7 +29,7 @@ pub(crate) fn exec<A: App, R>(
     let mail = if A::NEEDS_ROOM {
         match composition::compose(env) {
             Ok(ctx) => Some(ctx),
-            Err(e) => return finish(Err(e)),
+            Err(error) => return finish(Err(error)),
         }
     } else {
         None

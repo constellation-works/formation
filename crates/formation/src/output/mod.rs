@@ -1,15 +1,20 @@
 //! Single owner of Formation's stdout, stderr, and diagnostic rendering.
+
 pub(crate) mod payload;
+
 mod render;
+
 pub(crate) use render::{failure, mail, summary};
-pub(crate) fn error(e: &formation_core::Error) -> std::process::ExitCode {
-    let status = failure(e);
-    if matches!(e.code(), "room_required" | "identity_required") {
+
+pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
+    let status = failure(error);
+    if matches!(error.code(), "room_required" | "identity_required") {
         std::process::ExitCode::from(2)
     } else {
         status
     }
 }
+
 pub(crate) fn init_logging() {
     let _ = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)

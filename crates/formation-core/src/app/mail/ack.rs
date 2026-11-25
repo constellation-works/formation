@@ -1,4 +1,5 @@
 use super::{Error, Outcome, Store, refused, touch};
+
 pub(super) fn run(store: &Store, key: &[u8], now: i64, receipt: i64) -> Result<Outcome, Error> {
     store.write(|tx| {
         let seat = touch(tx, key, now)?;

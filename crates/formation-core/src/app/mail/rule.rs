@@ -1,8 +1,11 @@
 //! Pure mail validation and presence policy.
+
 use super::{Error, refused};
+
 pub(super) const PRESENCE_SECONDS: i64 = 90;
+
 pub(super) fn name(name: &str) -> Result<(), Error> {
-    if name.len() <= 96 && formation_store::contracts::identifier(name) {
+    if name.len() <= 96 && formation_store::contract::identifier(name) {
         Ok(())
     } else {
         Err(refused(
@@ -11,6 +14,7 @@ pub(super) fn name(name: &str) -> Result<(), Error> {
         ))
     }
 }
+
 pub(super) fn body(text: &str) -> Result<(), Error> {
     if text.trim().is_empty() || text.len() > 8192 {
         return Err(refused(

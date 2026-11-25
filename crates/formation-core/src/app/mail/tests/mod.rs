@@ -12,11 +12,13 @@ fn expiry_blocks_new_mail_and_preserves_replays() -> Result<(), Box<dyn std::err
     else {
         panic!("send outcome")
     };
-    assert!(matches!(who::run(&store,b"a",190)?,Outcome::Online(seats) if seats==["chief"]));
+    let online = who::run(&store, b"a", 190)?;
+    assert!(matches!(online, Outcome::Online(seats) if seats == ["chief"]));
     assert!(send::run(&store, b"a", 190, "captain", "second".into(), "more").is_err());
-    assert!(
-        matches!(send::run(&store,b"a",190,"captain","first".into(),"hello")?,Outcome::Sent(_,id) if id==receipt)
-    );
+
+    let replay = send::run(&store, b"a", 190, "captain", "first".into(), "hello")?;
+    assert!(matches!(replay, Outcome::Sent(_, id) if id == receipt));
+
     ack::run(&store, b"b", 190, receipt)?;
     assert!(store.read()?.messages().unread("captain")?.is_empty());
     Ok(())

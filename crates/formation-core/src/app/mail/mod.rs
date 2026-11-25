@@ -1,17 +1,27 @@
 //! Local seat and inbox operations.
+
 mod ack;
+
 mod inbox;
+
 mod join;
-mod rules;
+
+mod rule;
+
 mod send;
+
 mod who;
-use crate::{
-    Env,
-    runtime::{self, App, Ctx},
-};
+
+use crate::Env;
+use crate::runtime;
+use crate::runtime::App;
+use crate::runtime::Ctx;
 use cw_base::{Error, Kind};
-use formation_store::{Store, Tx, contracts::Message};
+use formation_store::Store;
+use formation_store::Tx;
+use formation_store::contract::Message;
 use std::time::Duration;
+
 /// A mail operation.
 pub enum Command {
     /// Register a seat.
@@ -32,6 +42,7 @@ pub enum Command {
     /// Acknowledge a receipt.
     Ack(i64),
 }
+
 /// Mail outcomes, independent of CLI presentation.
 pub enum Outcome {
     /// Registered seat.
@@ -45,22 +56,30 @@ pub enum Outcome {
     /// Handled receipt.
     Ack(i64),
 }
+
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 struct Refusal(&'static str);
+
 fn refused(code: &'static str, message: &'static str) -> Error {
     Error::new(Kind::Refused, code, Refusal(message))
 }
+
 fn touch(tx: &Tx<'_>, key: &[u8], now: i64) -> Result<String, Error> {
     tx.seats()
         .touch(key, now)?
         .ok_or_else(|| refused("unknown_identity", "join this room first"))
 }
+
 struct Mail;
+
 impl App for Mail {
     const NEEDS_ROOM: bool = true;
+
     type Command = Command;
+
     type Outcome = Outcome;
+
     fn audit(cmd: &Command) -> Option<&'static str> {
         match cmd {
             Command::Join(_) => Some("mail join"),
@@ -69,10 +88,11 @@ impl App for Mail {
             Command::Who | Command::Inbox(_) => None,
         }
     }
+
     fn run(ctx: &Ctx<'_>, cmd: Command) -> Result<Outcome, Error> {
         let (store, identity) = ctx.mail()?;
         if let Command::Join(name) = &cmd {
-            rules::name(name)?;
+            rule::name(name)?;
         }
         let key = store.identity(identity, matches!(cmd, Command::Join(_)))?;
         let now = (ctx.clock)().unix_timestamp();
@@ -84,14 +104,16 @@ impl App for Mail {
             Command::Ack(receipt) => ack::run(store, &key, now, receipt),
         }
     }
+
     fn target(out: &Outcome) -> Option<String> {
         match out {
-            Outcome::Joined(s) => Some(s.clone()),
-            Outcome::Sent(_, r) | Outcome::Ack(r) => Some(r.to_string()),
+            Outcome::Joined(seat) => Some(seat.clone()),
+            Outcome::Sent(_, receipt) | Outcome::Ack(receipt) => Some(receipt.to_string()),
             Outcome::Online(_) | Outcome::Inbox(_) => None,
         }
     }
 }
+
 /// Run one mail operation and hand its typed outcome to the surface.
 pub fn exec<R>(env: &Env, cmd: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
     runtime::exec::<Mail, R>(env, cmd, finish)

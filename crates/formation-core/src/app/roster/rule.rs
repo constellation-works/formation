@@ -1,6 +1,7 @@
 //! Offline validation of a proposed Formation roster.
 
-use formation_store::contracts::{identifier, roster::Role};
+use formation_store::contract;
+use formation_store::contract::roster::Role;
 use serde::Serialize;
 use std::collections::HashSet;
 use thiserror::Error;
@@ -42,10 +43,14 @@ pub fn check(bytes: &[u8]) -> Result<Summary, Error> {
     let mut seats = HashSet::new();
     let mut captains = HashSet::new();
     for seat in &roster.seats {
-        if !identifier(&seat.name) || !seats.insert(seat.name.as_str()) {
+        if !contract::identifier(&seat.name) || !seats.insert(seat.name.as_str()) {
             return Err(Error::Invalid("seat names must be unique identifiers"));
         }
-        if seat.workspace.as_deref().is_some_and(|w| !identifier(w)) {
+        if seat
+            .workspace
+            .as_deref()
+            .is_some_and(|workspace| !contract::identifier(workspace))
+        {
             return Err(Error::Invalid("invalid workspace identifier"));
         }
         if seat.role == Role::Captain {

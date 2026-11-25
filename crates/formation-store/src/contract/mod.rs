@@ -1,7 +1,11 @@
 //! Formation record shapes.
+
 mod audit;
+
 mod message;
+
 pub mod roster;
+
 pub use audit::{AuditEvent, AuditStatus};
 pub use message::Message;
 
@@ -10,5 +14,5 @@ pub fn identifier(name: &str) -> bool {
     !name.is_empty()
         && name
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
