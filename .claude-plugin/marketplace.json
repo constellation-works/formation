@@ -9,5 +9,5 @@
       "source": "./plugin"
     }
   ],
-  "description": "Local distribution of the Formation roster-checking plugin."
+  "description": "Local distribution of the Formation roster and inbox plugin."
 }
