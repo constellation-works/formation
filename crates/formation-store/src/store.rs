@@ -1,5 +1,6 @@
 //! The room facade. SQLite handles and file mechanics stay within this crate.
 
+use crate::contract::SessionId;
 use crate::driver::sqlite;
 use crate::error::Failure;
 use crate::repository::Snapshot;
@@ -13,19 +14,42 @@ pub struct Store {
 }
 
 impl Store {
-    /// Bind to an existing private room.
+    /// Bind to an existing private room without creating files.
     pub fn open(root: &Path) -> Result<Self, Error> {
         if !cw_fs::inspect_dir(root).map_err(Failure::from)? {
-            return Err(Failure::MissingRoom.into());
+            return Err(Failure::RoomNotFound(root.to_owned()).into());
+        }
+        if !cw_fs::inspect_file(&root.join("inbox.sqlite3")).map_err(Failure::from)? {
+            return Err(Failure::RoomNotFound(root.to_owned()).into());
         }
         Ok(Self {
             root: root.to_owned(),
         })
     }
 
-    /// Obtain this seat's credential digest. Only join may create the identity.
-    pub fn identity(&self, path: &Path, create: bool) -> Result<Vec<u8>, Error> {
-        crate::repository::identity::digest(path, create).map_err(Into::into)
+    /// Open an existing private room or create it with owner-only permissions.
+    pub fn create(root: &Path) -> Result<Self, Error> {
+        if !cw_fs::inspect_dir(root).map_err(Failure::from)? {
+            cw_fs::create_private_dir(root).map_err(Failure::from)?;
+            let _ = cw_fs::inspect_dir(root).map_err(Failure::from)?;
+        }
+        Ok(Self {
+            root: root.to_owned(),
+        })
+    }
+
+    /// Read the room recorded for `session`, if any.
+    pub fn session_room(sessions_dir: &Path, session: &SessionId) -> Result<Option<String>, Error> {
+        crate::repository::session::read(sessions_dir, session).map_err(Into::into)
+    }
+
+    /// Record the room for `session`, creating the sessions directory if absent.
+    pub fn record_session(
+        sessions_dir: &Path,
+        session: &SessionId,
+        room: &str,
+    ) -> Result<(), Error> {
+        crate::repository::session::write(sessions_dir, session, room).map_err(Into::into)
     }
 
     /// Open one committed snapshot.

@@ -1,8 +1,8 @@
-use super::{Error, Outcome, Store, refused, rule, touch};
+use super::{Error, Outcome, SeatRef, Store, refused, rule, touch};
 
 pub(super) fn run(
     store: &Store,
-    key: &[u8],
+    caller: SeatRef<'_>,
     now: i64,
     to: &str,
     id: String,
@@ -13,7 +13,7 @@ pub(super) fn run(
     rule::body(body)?;
 
     store.write(|tx| {
-        let sender = touch(tx, key, now)?;
+        let sender = touch(tx, caller, now)?;
 
         if let Some(prior) = tx.messages().prior_delivery(&sender, &id)? {
             if prior.recipient == to && prior.body == body {

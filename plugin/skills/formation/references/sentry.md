@@ -1,9 +1,9 @@
 # Wait for seat mail
 
-1. Use the room and seat identity assigned for this watch through `FORMATION_ROOM` and `FORMATION_IDENTITY`. Run a bounded wait for the requested window. This renews the assigned seat’s presence in the room.
+1. Use the assigned room and seat through `--room` / `FORMATION_ROOM` and `--as <seat>` (or the session recorded by `mail join`). Run a bounded wait for the requested window. This renews the assigned seat’s presence in the room.
 
    ```sh
-   formation mail inbox --wait 300
+   formation mail inbox --wait 300 --room "$room" --as "$seat"
    ```
 
 2. If the shell tool yields, resume the same command. An empty `messages` array means the wait expired. Start another wait only within the assigned watch.

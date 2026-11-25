@@ -29,3 +29,22 @@ The alternative was to keep a key per seat. It would have to stay private to one
 
 - A seat that needs proof of who wrote to it gets that from the record the mail points at, as [the session network](../formation/references/network.md#rules) already requires.
 - Cost: any process under the account can send as any seat and read any mailbox, and Formation cannot tell. A room must never be shared across accounts or machines on this design.
+
+## Remove `--identity` and `FORMATION_IDENTITY` without a deprecation window
+
+**Recorded:** 2026-11 · Chief's call on Daniel's approved design dropping key files; deviates from `STD-01@4 §R35`.
+
+### Context
+
+`STD-01@4 §R35` keeps a removed flag or configuration key accepted for one release as an ignored no-op that warns by name, and records the removal in the changelog. Dropping key files retires both `--identity` and `FORMATION_IDENTITY`. Formation has no release: no tag, no GitHub release, and `CHANGELOG.md` holds an empty Unreleased section. Its only callers are this repository's own skill references, which change in the same commit.
+
+### Decision
+
+Remove `--identity` and `FORMATION_IDENTITY` outright with no no-op release window. Record the removal in the pull request description rather than editing `CHANGELOG.md`, which `STD-09 §R20` compiles at release time from merged work.
+
+The alternative was to keep both spellings accepted as warning no-ops until a first release. That would keep dead credential-file surface before any release existed.
+
+### Consequences
+
+- No deprecated key-file flag or environment variable remains in the CLI, core composition, store or skill references.
+- Cost: afterwards `--identity` is rejected as a usage error by the argument parser (exit 2), and any `FORMATION_IDENTITY` left in an environment is ignored.

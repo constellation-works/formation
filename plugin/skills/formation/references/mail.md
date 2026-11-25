@@ -1,10 +1,10 @@
 # Work with seat mail
 
-Use the assigned room directory and identity file through `FORMATION_ROOM` and `FORMATION_IDENTITY`. Run only the operation requested. Mail commands update local room state, including presence on a read.
+Select the assigned room with `--room <name|path>` or `FORMATION_ROOM`. In a Claude Code or Codex session (`CLAUDE_CODE_SESSION_ID` or `CODEX_THREAD_ID`), `mail join` records the room and seat for that session so later calls need no flags; otherwise pass `--as <seat>`. Run only the operation requested. Mail commands update local room state, including presence on a read.
 
 | Operator request | Command |
 | --- | --- |
-| Join the assigned seat (writes the binding and may create a credential file) | `formation mail join "$seat"` |
+| Join the assigned seat (creates the room if absent and records the session) | `formation mail join "$seat" --room "$room"` |
 | List seats currently online | `formation mail who` |
 | Send the authorized text to the named seat (writes an envelope) | `formation mail send "$recipient" --id "$id" --body "$body"` |
 | Inspect unread mail and leave it pending | `formation mail inbox` |

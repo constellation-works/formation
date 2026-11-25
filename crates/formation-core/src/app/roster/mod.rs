@@ -6,6 +6,7 @@ use crate::Env;
 use crate::runtime;
 use crate::runtime::App;
 use crate::runtime::Ctx;
+use crate::runtime::RoomAccess;
 pub use rule::{Error, Summary, check};
 
 /// Offline roster commands.
@@ -20,11 +21,13 @@ pub type Outcome = Summary;
 struct Roster;
 
 impl App for Roster {
-    const NEEDS_ROOM: bool = false;
-
     type Command = Command;
 
     type Outcome = Outcome;
+
+    fn room_access(_: &Command) -> RoomAccess<'_> {
+        RoomAccess::None
+    }
 
     fn audit(_: &Command) -> Option<&'static str> {
         None

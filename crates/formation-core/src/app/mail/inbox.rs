@@ -1,4 +1,4 @@
-use super::{Ctx, Duration, Error, Outcome, Store, touch};
+use super::{Ctx, Duration, Error, Outcome, SeatRef, Store, touch};
 use std::time::Instant;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -8,11 +8,11 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 pub(super) fn run(
     ctx: &Ctx<'_>,
     store: &Store,
-    key: &[u8],
+    caller: SeatRef<'_>,
     timeout: Duration,
 ) -> Result<Outcome, Error> {
     let start = Instant::now();
-    let heartbeat = || store.write(|tx| touch(tx, key, (ctx.clock)().unix_timestamp()));
+    let heartbeat = || store.write(|tx| touch(tx, caller, (ctx.clock)().unix_timestamp()));
     let seat = heartbeat()?;
     let mut refresh = start;
 
