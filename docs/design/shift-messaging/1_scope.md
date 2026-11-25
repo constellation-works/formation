@@ -83,7 +83,7 @@ The hold differs by provider, because only Claude documents a wake for an idle s
 | | Claude Code | Codex |
 | --- | --- | --- |
 | How the hold works | The Stop hook runs in the background with `asyncRewake`. The session is idle and Daniel can type. Mail makes the hook exit with code 2, which wakes the session with the mail as a system reminder | Verified on desktop build 26.1120.41243. The Stop hook waits within the turn. Returning `decision: block` with an envelope as its reason delivered the envelope to the same chat |
-| How long | The hook's `timeout`: 600 seconds by default, set per hook, maximum not documented | Tested with `timeout: 1900` seconds. One hold delivered mail after 30 min 10.7 s. The upper bound is unknown |
+| How long | The hook's `timeout`: 600 seconds by default, set per hook. Tested with `timeout: 3600`. One hold delivered mail after 33 minutes. The upper bound is unknown | Tested with `timeout: 1900` seconds. One hold delivered mail after 30 min 10.7 s. The upper bound is unknown |
 | After the hold runs out | The session is idle with no watcher. Mail waits for the next turn | The same |
 | Limit on continuing a turn | Eight blocks in a row, reset when a tool is called | Four deliveries observed, with tool calls between them. The cap on uninterrupted continues is unknown |
 
@@ -114,7 +114,7 @@ The first version of this scope proposed a relay, route grants, session bindings
 
 Each trial is run on the exact desktop build and recorded here before the capability is claimed.
 
-1. **Claude, idle wake.** A Stop hook with `asyncRewake` waits on the installed `mail inbox --wait`. The chief goes idle and a second seat sends. Pass: one new turn in the same chat, carrying the mail. This also settles whether the Stop event accepts `asyncRewake`.
+1. **Claude, idle wake.** A Stop hook with `asyncRewake` waits on the installed `mail inbox --wait`. The chief goes idle and a second seat sends. Pass: one new turn in the same chat, carrying the mail. This also settles whether the Stop event accepts `asyncRewake`. Run on 2026-11-25: it passed, with the limits recorded under [Evidence](#claude-asyncrewake-trial-2026-11-25).
 2. **Codex, hold and continue.** Passed on desktop build 26.1120.41243. The same chat received three scheduled envelopes and a fourth after a half-hour hold. See the [trial record](#codex-stop-hook-trial-2026-11-25) for typed input and timeout observations.
 3. **Codex, if the hold fails.** The hold passed on the tested build, so the fallback trial is unnecessary there. If another build fails the hold, try the two leads under [Evidence](#evidence) in order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
 4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
@@ -189,3 +189,23 @@ A shell sender and a captain in Codex Desktop shared a throwaway Formation 0.1.0
 7. **Continue limit.** The first Stop event had `stop_hook_active: false` and the next three had `true`. The captain called tools between deliveries. No limit was reached in this sequence; the maximum without intervening tool calls remains undetermined.
 
 hold works
+
+### Claude asyncRewake trial, 2026-11-25
+
+Run in one Claude desktop Code session on macOS: Claude Code 2.1.332, desktop app 7.37095.0, formation 0.1.0. The session under trial was a formation captain. Daniel approved loading the hook and agreed to type during a wait ("Yes to both"), and approved the rerun after the first run was stopped ("Yes, rerun").
+
+1. **Configuration: observed.** A scratch plugin, installed at local scope, shipped one Stop hook: `{"type": "command", "command": "sh stop-hook.sh", "asyncRewake": true, "timeout": 3600}`. The script joined a scratch room as `seat` and looped on `formation mail inbox --wait 60`. On mail it acknowledged each receipt, printed the envelope to stderr and exited with code 2. With no mail after 3,300 seconds it exited with code 0. A second seat sent from a detached shell script.
+2. **Stop accepts `asyncRewake`: observed.** The session went idle while the hook ran, and took turns normally during the wait. Daniel typed twice during a 33-minute wait (`/compact`, then a question). The turn ran as usual and the waiting hook process survived it. Each turn that ended during a wait fired Stop again, which started a second hook process beside the first.
+3. **Idle wake: observed.** Four sends, four wakes. Each gave one new turn in the same chat. The envelope arrived as a task notification titled "Stop hook feedback", with the hook's stderr inside a system reminder that begins `Stop hook blocking error from command "Stop":`. The three short waits delivered 62 or 63 seconds after the hook started, which is the sender's delay.
+4. **Long hold: observed to 33 minutes. The ceiling is not determinable from this trial.** A hook process that had waited 1,982 seconds delivered a send within a second. Two other hook processes ran their full 3,300 seconds and exited on their own. `claude plugin validate` accepted `timeout` values of 86,400 and 999,999,999, but no wait longer than 55 minutes was run, so the timeout the app enforces above 3,600 seconds is unknown.
+5. **Session identity: observed.** The hook's stdin carries `session_id`, and it equals `CLAUDE_CODE_SESSION_ID` in the session's shell.
+6. **Subagents: observed.** Stop did not fire when a subagent finished. SubagentStop fired instead, with `agent_id` and `agent_type` in its input. Subagents the app starts on its own also fire SubagentStop, with an empty `agent_type`.
+
+Two limits showed up that the design did not expect:
+
+- **A plugin's scope is the project folder, not the session.** The first run was stopped because the hook also started in the other sessions open in the same folder. Each of them held a waiter on the trial seat, and one could have taken the mail. Disabling the plugin did not stop hook processes already running, and a session that had not reloaded kept running whatever script was on disk. The rerun's script exited at once unless stdin named the trial session.
+- **Stop fires on every turn end, not once per idle period.** Without a guard a seat gathers one waiter per turn. The rerun kept a pid file and exited at once while its waiter was alive.
+
+`wake works with limits:` the hook must check `session_id` against its seat, because the plugin loads in every session in the folder; it must keep one waiter per seat, because Stop fires again on each turn end during a wait; and a hold longer than 55 minutes is untested.
+
+Read against these limits, the shipped `formation hook` finds its seat from `session_id` and exits when the session holds none, which covers the first. It keeps no single-waiter guard: a seat can hold several waiters for up to its 540-second hold, and delivery runs in one write transaction, so only one of them hands the mail over.
