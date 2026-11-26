@@ -50,3 +50,21 @@ The [approved reader](1_scope.md#the-reader) uses the reader's environment and t
 The alternatives were per-command environment and directory allowlists and a redactor before writing probe output to room mail. The approved probe contract retains the reader's environment, saved directory and bounded probe text (`STD-05@1 §R6`, §R10, §R12, §R13 and §R14). This contract applies to commands supplied by cooperating seats in the private local room.
 
 Cost: a stored probe can access the reader's working environment and include sensitive text in room mail. Only add scripts you trust to run as the reader and to emit mail-safe text.
+
+## Pin the attention probe to its owner and its agent-readable kinds
+
+**Recorded:** 2026-11-26
+
+**Code anchors:** `plugin/skills/formation/scripts/attention-read.sh::owner_host`, `plugin/skills/formation/scripts/attention-read.sh::main`, `crates/formation/tests/script.rs::attention_read_pins_the_owner_so_an_unrelated_follower_is_never_read`
+
+The attention probe ran with a workspace-only selector, so Orbit fanned each read out to every in-scope host. An unrelated offline host then degraded the read, and the probe failed closed on every snapshot. Its queries also requested the Operator-only kinds `run_failed`, `run_stuck`, `claim_stale` and `host_unhealthy`. The probe runs as a shell, which holds no Operator capability (see the [overview](../formation/1_overview.md#what-the-app-gives-and-limits)), so Orbit answers those kinds with a `capability` degradation, and the fail-closed read kept that as a permanent failure. The shell's credentials are the boundary, so the fix does not widen them.
+
+The probe accepts only a host-qualified selector and pins both reads to its owner with the `host` filter. The fast read excludes the digest kinds and the four Operator-only kinds. The critical read requests the digest kinds with `severity: critical` only. Any other degraded entry, truncation or malformed counts still fails the read closed. The Operator-only kinds move to an authorized path: a live resident whose mandate covers the workspace, or an Operator session's own Orbit read. [The sentry reference](../../../plugin/skills/formation/references/sentry.md#coverage) states the boundary.
+
+The alternative was to give the probe the Operator capability. That widens an unprivileged process's credentials, which the change does not do. A workspace-only selector is not kept for compatibility: it names no owner to pin, so the probe refuses it.
+
+### Consequences
+
+- A watch must be added with the host-qualified selector from `orbit.workspace.list`. A workspace-only selector exits 2 before any Orbit call.
+- The background reader does not cover run failures, stuck runs, stale claims or host health. A resident or the operator reads them on the authorized path, and a captain reports a `capability` degradation to the operator.
+- The owner-pinned reads do not see an unrelated offline host. A selected owner that is unreachable still fails the read, because the owner's degradation is in scope.

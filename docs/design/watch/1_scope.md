@@ -68,7 +68,7 @@ The set lives in the room's store beside the mailboxes. A watch is identified by
 | last read, last result | Written by the reader after each read |
 
 ```sh
-formation watch add attention -- "$formation_skill/scripts/attention-read.sh" <workspace selector>
+formation watch add attention -- "$formation_skill/scripts/attention-read.sh" <hm_owner/ws_name selector>
 formation watch add ci --every 300 -- "$formation_skill/scripts/ci-read.sh" <owner/name> <base branch>
 formation watch add release --to <seat> --every 60 -- ./scripts/release-read.sh
 formation watch pause ci

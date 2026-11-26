@@ -148,14 +148,13 @@ query = json.loads(args[6])
 if query.get("severity") == "critical":
     items = [
         {{
-            "id": "att_host_1",
+            "id": "att_review_1",
             "fingerprint": "fp_crit_1",
-            "kind": "host_unhealthy",
+            "kind": "review_waiting",
             "severity": "critical",
-            "refs": {{}},
-            "host": {{"name": "build-box"}},
-            "reason": "build-box unreachable",
-            "next": {{"command": "orbit host show build-box"}},
+            "refs": {{"task_id": "TASK-7"}},
+            "reason": "critical review waiting",
+            "next": {{"command": "orbit task show TASK-7"}},
         }},
     ]
 else:
@@ -224,7 +223,7 @@ print(json.dumps({{"items": items}}))
             parts[3]
         );
     }
-    assert!(lines[0].starts_with("fp_crit_1\thost_unhealthy | critical | build-box | "));
+    assert!(lines[0].starts_with("fp_crit_1\treview_waiting | critical | TASK-7 | "));
     assert!(lines[1].starts_with("fp_high_1\tci_red | high | 98765 | "));
     assert!(lines[2].starts_with("fp_med_1\tpilot_warning | medium | TASK-12 | "));
 
@@ -283,12 +282,11 @@ if query.get("severity") == "critical":
         {{
             "id": "att_crit_1",
             "fingerprint": "fp_crit_1",
-            "kind": "host_unhealthy",
+            "kind": "friction_untriaged",
             "severity": "critical",
-            "refs": {{}},
-            "host": {{"name": "build-box"}},
-            "reason": "build-box unreachable",
-            "next": {{"command": "orbit host show build-box"}},
+            "refs": {{"friction_id": "F-7"}},
+            "reason": "critical friction waiting triage",
+            "next": {{"command": "orbit friction list"}},
         }},
         {{
             "id": "att_crit_2",
@@ -358,18 +356,26 @@ print(json.dumps({{
         .collect();
     assert_eq!(queries.len(), 2);
     assert_eq!(queries[0]["limit"], 500);
+    assert_eq!(queries[0]["host"], serde_json::json!(["hm_host"]));
     assert_eq!(
         queries[0]["exclude_kind"],
         serde_json::json!([
             "friction_untriaged",
-            "host_unhealthy",
             "notice_open",
             "review_waiting",
+            "run_failed",
+            "run_stuck",
+            "claim_stale",
+            "host_unhealthy",
         ])
     );
     assert_eq!(queries[1]["limit"], 500);
+    assert_eq!(queries[1]["host"], serde_json::json!(["hm_host"]));
     assert_eq!(queries[1]["severity"], "critical");
-    assert_eq!(queries[1]["kind"], queries[0]["exclude_kind"]);
+    assert_eq!(
+        queries[1]["kind"],
+        serde_json::json!(["friction_untriaged", "notice_open", "review_waiting"])
+    );
 
     let stdout = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
@@ -415,6 +421,22 @@ args = sys.argv[1:]
 query = json.loads(args[6])
 is_crit = query.get("severity") == "critical"
 
+if mode == "owner_unreachable":
+    print(json.dumps({{
+        "items": [],
+        "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+        "degraded": [{{
+            "scope": "host:hm_host",
+            "kind": "host_unhealthy",
+            "code": "unreachable_destination",
+            "message": "owner host did not answer",
+        }}],
+    }}))
+    sys.exit(0)
+if mode == "malformed_counts":
+    print(json.dumps({{"items": [], "counts": "none", "degraded": []}}))
+    sys.exit(0)
+
 def make_items(count):
     return [
         {{
@@ -455,7 +477,14 @@ if is_crit:
         }}))
     sys.exit(0)
 
-if mode == "complete_25":
+if mode in ("degraded_crit", "truncated_crit"):
+    # Only the critical read fails in these modes; the fast read must succeed first.
+    print(json.dumps({{
+        "items": [],
+        "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+        "degraded": [],
+    }}))
+elif mode == "complete_25":
     items = make_items(25)
     print(json.dumps({{
         "items": items,
@@ -520,6 +549,8 @@ else:
         ("degraded_fast", "degraded"),
         ("degraded_crit", "degraded"),
         ("truncated_crit", "truncated"),
+        ("owner_unreachable", "host_unhealthy"),
+        ("malformed_counts", "unexpected counts"),
     ] {
         fs::write(&mode_file, mode).unwrap();
         let out = Command::new(&script)
@@ -577,7 +608,8 @@ else:
     assert_eq!(second["items"].as_array().unwrap().len(), 5);
     assert_eq!(second["remaining"], 0);
 
-    // Two truncated reads and one degraded read omit items 11..=25 but must fail closed.
+    // Two truncated reads, a degraded read and an unreachable owner omit items 11..=25
+    // but must fail closed.
     fs::write(&mode_file, "truncated_flag").unwrap();
     let fail_one = wait_once();
     assert_eq!(fail_one["failed"].as_array().unwrap().len(), 1);
@@ -590,6 +622,12 @@ else:
     let fail_three = wait_once();
     assert_eq!(fail_three["expired"], true);
     assert_eq!(fail_three["failed"], serde_json::json!([]));
+
+    // An unreachable owner fails closed on the same path and forgets nothing either.
+    fs::write(&mode_file, "owner_unreachable").unwrap();
+    let fail_four = wait_once();
+    assert_eq!(fail_four["expired"], true);
+    assert_eq!(fail_four["failed"], serde_json::json!([]));
 
     // Returning to the complete 25-item snapshot must not re-report any unlisted item.
     fs::write(&mode_file, "complete_25").unwrap();
@@ -608,4 +646,159 @@ else:
     let items = returned["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["fingerprint"], "fp_item_25");
+}
+
+fn read_queries(path: &Path) -> Vec<serde_json::Value> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+#[test]
+fn attention_read_pins_the_owner_so_an_unrelated_follower_is_never_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let queries_file = dir.path().join("queries.jsonl");
+
+    // Any read without the owner pin fans out to an offline follower and degrades.
+    let orbit = bin.join("orbit");
+    let fixture = format!(
+        r#"#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+assert args[:5] == ["--workspace", "hm_host/ws_demo", "tool", "run", "orbit.attention"], args
+assert args[5] == "--input", args
+query = json.loads(args[6])
+with Path("{queries}").open("a") as fh:
+    fh.write(json.dumps(query) + "\n")
+
+if query.get("host") != ["hm_host"]:
+    print(json.dumps({{
+        "items": [],
+        "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+        "degraded": [{{
+            "scope": "host:hm_follower",
+            "kind": "host_unhealthy",
+            "code": "unreachable_destination",
+            "message": "follower did not answer",
+        }}],
+    }}))
+    sys.exit(0)
+
+if query.get("severity") == "critical":
+    items = [{{
+        "id": "att_review_1",
+        "fingerprint": "fp_review_1",
+        "kind": "review_waiting",
+        "severity": "critical",
+        "refs": {{"task_id": "TASK-7"}},
+        "reason": "critical review waiting",
+        "next": {{"command": "orbit task show TASK-7"}},
+    }}]
+else:
+    items = [{{
+        "id": "att_blocked_1",
+        "fingerprint": "fp_blocked_1",
+        "kind": "blocked",
+        "severity": "high",
+        "refs": {{"task_id": "TASK-3"}},
+        "reason": "waiting on a dependency",
+        "next": {{"command": "orbit task show TASK-3"}},
+    }}]
+
+print(json.dumps({{
+    "items": items,
+    "counts": {{"matching": len(items), "returned": len(items), "truncated": False}},
+    "degraded": [],
+}}))
+"#,
+        queries = queries_file.display(),
+    );
+    fs::write(&orbit, fixture).unwrap();
+    fs::set_permissions(&orbit, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let script = repo_root().join("plugin/skills/formation/scripts/attention-read.sh");
+    let out = Command::new(&script)
+        .arg("hm_host/ws_demo")
+        .env("PATH", prepend_path(&bin))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "expected the owner's two items: {stdout}");
+    assert!(lines[0].starts_with("fp_review_1\treview_waiting | critical | TASK-7 | "));
+    assert!(lines[1].starts_with("fp_blocked_1\tblocked | high | TASK-3 | "));
+
+    let queries = read_queries(&queries_file);
+    assert_eq!(queries.len(), 2);
+    for query in &queries {
+        assert_eq!(query["host"], serde_json::json!(["hm_host"]));
+    }
+    // The fast read names no kind, so every agent-readable kind it does not exclude is read.
+    assert!(queries[0].get("kind").is_none());
+    assert_eq!(
+        queries[0]["exclude_kind"],
+        serde_json::json!([
+            "friction_untriaged",
+            "notice_open",
+            "review_waiting",
+            "run_failed",
+            "run_stuck",
+            "claim_stale",
+            "host_unhealthy",
+        ])
+    );
+    // The critical read asks for the digest kinds only, never an Operator-only kind.
+    assert_eq!(queries[1]["severity"], "critical");
+    assert_eq!(
+        queries[1]["kind"],
+        serde_json::json!(["friction_untriaged", "notice_open", "review_waiting"])
+    );
+}
+
+#[test]
+fn attention_read_refuses_a_selector_that_names_no_owner_before_any_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let calls = dir.path().join("calls.log");
+
+    let orbit = bin.join("orbit");
+    let fixture = format!(
+        r#"#!/usr/bin/env python3
+from pathlib import Path
+
+Path("{calls}").write_text("called\n")
+"#,
+        calls = calls.display(),
+    );
+    fs::write(&orbit, fixture).unwrap();
+    fs::set_permissions(&orbit, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let script = repo_root().join("plugin/skills/formation/scripts/attention-read.sh");
+    let out = Command::new(&script)
+        .arg("ws_demo")
+        .env("PATH", prepend_path(&bin))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    assert!(stderr.contains("host-qualified"), "{stderr}");
+    assert!(
+        !calls.exists(),
+        "orbit was called for a selector with no owner"
+    );
 }
