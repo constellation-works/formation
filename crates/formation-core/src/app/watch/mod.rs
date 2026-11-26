@@ -1,5 +1,7 @@
 //! Watch set, leased reader and blocking probe wait.
 
+pub mod check;
+
 mod poll;
 
 pub mod reader;

@@ -1,0 +1,19 @@
+Run a watch command once and print its items without changing the room
+
+Usage: formation watch check [OPTIONS] -- <COMMAND>...
+
+Arguments:
+  <COMMAND>...  Command to run through `sh -c` from the current directory
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help
+
+Runs the command once through `sh -c` from the current directory, under the reader's 60-second
+limit. It prints the items as JSON and changes nothing: no watch is added, the reader's lease is
+not taken, no fingerprint is remembered and no mail is sent. A malformed line, a failed run and a
+run past the limit exit 1 with the reason on stderr.
+
+Examples:
+  formation watch check -- ./scripts/ci-read.sh owner/name main

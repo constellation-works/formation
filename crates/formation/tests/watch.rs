@@ -853,3 +853,209 @@ fn standby_takes_over_after_kill_and_stop_exits_all_invocations() {
             .success()
     );
 }
+
+/// Run `check` on a command that must fail: exit 1, nothing on stdout, and the error document.
+fn check_error(room: &Room, seat: &str, command: &str) -> Value {
+    let out = room.set_run(seat, &["check", "--", command]);
+    assert_eq!(out.status.code(), Some(1), "{command}");
+    assert!(out.stdout.is_empty());
+    serde_json::from_slice(&out.stderr).unwrap()
+}
+
+#[cfg(unix)]
+#[test]
+fn check_prints_parsed_items_and_the_first_real_read_sends_them_once() {
+    let room = Room::new();
+    room.join("sentry");
+    room.join("captain");
+    let runs = room.path().join("runs");
+    let script = room.script(
+        "probe.sh",
+        &format!(
+            "#!/bin/sh\necho run >> '{}'\n{}",
+            runs.display(),
+            concat!(
+                "printf 'fp-1\\tbuild red on main\\nfp-1\\tsame item again\\n",
+                "fp-2\\tlint failed\\n'\n",
+            ),
+        ),
+    );
+    let command = script.to_str().unwrap();
+
+    let checked = room.set_ok("sentry", &["check", "--", command]);
+    assert_eq!(
+        checked,
+        serde_json::json!({"items": [
+            {"fingerprint": "fp-1", "text": "build red on main"},
+            {"fingerprint": "fp-2", "text": "lint failed"},
+        ]})
+    );
+    assert_eq!(std::fs::read_to_string(&runs).unwrap(), "run\n");
+    // A dry run leaves the room as it was: no watch, no reader lease and no mail.
+    assert_eq!(room.listing("sentry")["watches"], serde_json::json!([]));
+    assert_eq!(room.listing("sentry")["reader"]["state"], "none");
+    assert_eq!(room.inbox("captain")["messages"], serde_json::json!([]));
+
+    room.set_ok("captain", &["add", "ci", "--every", "10", "--", command]);
+    let mut reader = room.start_reader("sentry");
+    let inbox = reader.until(Duration::from_secs(10), || {
+        let inbox = room.inbox("captain");
+        (inbox["messages"].as_array().unwrap().len() == 1).then_some(inbox)
+    });
+    assert_eq!(
+        inbox["messages"][0]["body"],
+        "ci | build red on main\nci | lint failed"
+    );
+
+    // The reader makes a second pass once the interval has passed. It mails nothing new.
+    let first_read = room.watches("captain")[0]["last_read"].clone();
+    reader.until(Duration::from_secs(15), || {
+        (room.watches("captain")[0]["last_read"] != first_read).then_some(())
+    });
+    assert_eq!(
+        room.inbox("captain")["messages"].as_array().unwrap().len(),
+        1
+    );
+    let watches = room.watches("captain");
+    assert_eq!(watches[0]["sent"], 2);
+    assert_eq!(watches[0]["last_result"], "ok, 2 items");
+
+    room.set_ok("captain", &["stop"]);
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+}
+
+#[cfg(unix)]
+#[test]
+fn check_reports_an_empty_result_as_success() {
+    let room = Room::new();
+    room.join("sentry");
+    let script = room.script("quiet.sh", "#!/bin/sh\nexit 0\n");
+
+    let out = room.set_run("sentry", &["check", "--", script.to_str().unwrap()]);
+    assert!(out.status.success(), "{:?}", out.stderr);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap(),
+        serde_json::json!({"items": []})
+    );
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "No items: the command printed nothing.\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn check_points_at_the_line_that_breaks_the_contract() {
+    let room = Room::new();
+    room.join("sentry");
+    let no_tab = room.script(
+        "no-tab.sh",
+        "#!/bin/sh\nprintf 'fp-1\\tfine\\nbare text\\n'\n",
+    );
+    let no_fingerprint = room.script(
+        "no-fingerprint.sh",
+        "#!/bin/sh\nprintf 'fp-1\\tfine\\n\\tno fingerprint\\n'\n",
+    );
+
+    assert_eq!(
+        check_error(&room, "sentry", no_tab.to_str().unwrap()),
+        serde_json::json!({
+            "code": "probe_contract",
+            "error": "probe output breaks the contract: line 2: expected <fingerprint><TAB><text>",
+        })
+    );
+    assert_eq!(
+        check_error(&room, "sentry", no_fingerprint.to_str().unwrap()),
+        serde_json::json!({
+            "code": "probe_contract",
+            "error": concat!(
+                "probe output breaks the contract: ",
+                "line 2: fingerprint must be 1 to 200 characters",
+            ),
+        })
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn check_reports_a_failed_run_with_its_first_diagnostic_line() {
+    let room = Room::new();
+    room.join("sentry");
+    let script = room.script(
+        "broken.sh",
+        "#!/bin/sh\necho 'upstream unavailable' >&2\nexit 3\n",
+    );
+
+    assert_eq!(
+        check_error(&room, "sentry", script.to_str().unwrap()),
+        serde_json::json!({"code": "probe_failed", "error": "upstream unavailable"})
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn check_reports_a_run_past_the_reader_limit() {
+    let room = Room::new();
+    room.join("sentry");
+    let script = room.script("stuck.sh", "#!/bin/sh\nsleep 300\n");
+
+    let started = Instant::now();
+    let error = check_error(&room, "sentry", script.to_str().unwrap());
+    assert!(
+        started.elapsed() >= Duration::from_secs(59),
+        "run ended too early: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        error,
+        serde_json::json!({"code": "probe_failed", "error": "probe timed out after 60 seconds"})
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn check_runs_the_command_from_the_callers_directory() {
+    let room = Room::new();
+    room.join("sentry");
+    let dir = room.path().join("work");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("input"), "from-work").unwrap();
+
+    let out = room
+        .watch_cmd("sentry")
+        .current_dir(&dir)
+        .args(["check", "--", "printf 'fp\\t%s\\n' \"$(cat input)\""])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{:?}", out.stderr);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap(),
+        serde_json::json!({"items": [{"fingerprint": "fp", "text": "from-work"}]})
+    );
+}
+
+#[test]
+fn check_requires_a_command_after_double_dash() {
+    let room = Room::new();
+    room.join("sentry");
+
+    let out = room.set_run("sentry", &["check"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn check_refuses_a_seat_that_has_not_joined() {
+    let room = Room::new();
+    room.join("sentry");
+    let script = room.script("probe.sh", "#!/bin/sh\nprintf 'fp\\tfine\\n'\n");
+
+    assert_eq!(
+        check_error(&room, "stranger", script.to_str().unwrap()),
+        serde_json::json!({
+            "code": "unknown_seat",
+            "error": "seat has not joined this room; run `formation mail join` first",
+        })
+    );
+}

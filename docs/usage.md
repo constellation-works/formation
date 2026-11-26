@@ -78,6 +78,14 @@ formation watch stop
 
 A probe prints one `<fingerprint><TAB><text>` per item. Fingerprints use 1 to 200 characters with no tab. Text past 400 characters is cut to end in `…`. The reader mails new items as `<probe> | <text>`, up to 20 lines per envelope. A failed read is mailed once with its first diagnostic line and can be reported again after a successful read. The room stores handover state per recipient and watch, so a standby reuses it when it takes over.
 
+### Checking a probe
+
+`watch check -- <command>` runs a probe once from your current directory under the reader's 60-second limit and prints its items as `{"items":[{"fingerprint":...,"text":...}]}`. It changes nothing: no watch is added, the reader's lease is not taken, no fingerprint is remembered and no mail is sent, so the first real read still sends every item. It needs a joined seat, as `list` does. A malformed line, a failed run and a run past the limit exit 1 with a JSON error on stderr. The error gives the reason: the line number for a malformed line, and the first diagnostic line for a failed run. An empty result exits 0 with `{"items":[]}`.
+
+```sh
+formation watch check -- plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main
+```
+
 ### Blocking wait
 
 `watch wait` runs caller-supplied probes from your current directory and returns new items or failures as JSON. It uses the calling seat's handover state, returns at most 20 items per call and reports any remainder. It polls every 120 seconds by default. After `--timeout` seconds (default 300) with nothing to report, it returns empty lists with `"expired":true`. Use `--timeout 0` for a single pass.

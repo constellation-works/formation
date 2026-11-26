@@ -53,6 +53,7 @@ fn help_and_roster_output() {
         ("help/watch-list.txt", vec!["watch", "list", "--help"]),
         ("help/watch-run.txt", vec!["watch", "run", "--help"]),
         ("help/watch-stop.txt", vec!["watch", "stop", "--help"]),
+        ("help/watch-check.txt", vec!["watch", "check", "--help"]),
         ("help/watch-wait.txt", vec!["watch", "wait", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
