@@ -22,3 +22,10 @@ pub(super) const DELIVERED: cw_sqlite::Step = cw_sqlite::Step::sql(
       WHERE ack = 0 AND delivered IS NULL;
      CREATE INDEX messages_sent ON messages(sender, receipt);",
 );
+
+/// Trusted producer metadata and per-seat stopped-reader receipts.
+pub(super) const WATCH_MAIL: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE messages ADD COLUMN watch_name TEXT;
+     ALTER TABLE messages ADD COLUMN watch_added_by TEXT;
+     CREATE TABLE watch_notice (seat TEXT PRIMARY KEY) STRICT;",
+);

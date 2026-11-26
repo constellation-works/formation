@@ -178,3 +178,34 @@ fn in_flight_reads_cannot_update_edited_watches() -> Result<(), Box<dyn std::err
     assert_eq!(current.last_result.as_deref(), Some("ok, 0 items"));
     Ok(())
 }
+
+#[test]
+fn stopped_notice_resets_when_a_new_reader_claims_the_lease()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        tx.watch().put(&NewWatch {
+            recipient: "alpha",
+            name: "ci",
+            command: "true",
+            cwd: "/",
+            every: 120,
+            added_by: "beta",
+            added_at: 10,
+        })?;
+        let lease = tx.watch_reader();
+        assert!(lease.claim_stopped_notice("alpha", 11)?.is_some());
+        assert!(lease.claim_stopped_notice("alpha", 11)?.is_none());
+        let (_, role) = lease.register("beta", 1, 12, 20)?;
+        assert!(matches!(role, WatchRole::Reader));
+        assert!(lease.claim_stopped_notice("alpha", 19)?.is_none());
+        assert!(lease.claim_stopped_notice("alpha", 20)?.is_some());
+        assert!(lease.claim_stopped_notice("beta", 20)?.is_some());
+        assert!(lease.claim_stopped_notice("other", 20)?.is_none());
+        lease.stop(21)?;
+        assert!(lease.claim_stopped_notice("alpha", 21)?.is_none());
+        Ok(())
+    })?;
+    Ok(())
+}
