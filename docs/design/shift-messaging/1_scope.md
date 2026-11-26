@@ -114,7 +114,7 @@ A shorter hold only moves the delay. With a hold of H seconds, a typed message w
 2. **The hooks record whether the seat is in a turn.** The prompt hook marks the seat busy. The Stop hook marks it idle, and only then makes its last check for mail.
 3. **`mail send` wakes an idle Codex seat.** It stores the envelope first and reads the mark second. For a busy seat it does nothing more, and the Stop hook delivers at the end of the turn. For an idle Codex seat it runs the queue command, and the prompt hook of the turn that starts adds the mail as it does today. Because each side writes before it reads, a send that crosses a turn end costs at most one wake with no mail in it, and never loses one.
 4. **The wake line is fixed text.** For example: "Formation: mail is waiting for this seat. Formation queued this line. The operator did not type it." It never carries a mail body. Queued text enters the chat as user input, and a seat must not take it for the operator's words ([rule 1](../formation/references/network.md#rules)).
-5. **`watch --to` needs no change,** because it sends mail.
+5. **`watch --to` needs no change,** because it sends mail. The [watch set](../watch/1_scope.md#the-reader) later superseded this form.
 
 Costs: Formation runs another program's command line, so one of the wake adapters this scope [set aside](#set-aside) returns for one provider. The call behind `codex queue` is marked experimental in the Codex source and can change without notice. The hook file changes, so the operator reviews it in Codex once more. The Claude hold stays as it is.
 
@@ -130,11 +130,9 @@ Daniel is asked three things:
 
 ### Watch
 
-`formation watch --to <seat>` is for everything that is not mail. A probe is any command that prints one line per item as `<fingerprint><TAB><text>`, the shape the skill's `ci-read.sh` already has. `watch` runs each probe on an interval and mails the seat every fingerprint it has not sent before. The fingerprints live in the room, so two watchers never send the same item, and a restarted one sends nothing twice. A probe that fails is mailed once as `read failed`, and again only after a read has succeeded.
+`formation watch add` stores a probe, its recipient and schedule in the room. `formation watch run` reads the set with a single leased reader and standby takeover. A probe is a command that prints one line per item as `<fingerprint><TAB><text>`, the shape the skill's `ci-read.sh` uses. The reader mails each new fingerprint. Handover state lives in the room across reader changes. A failed read is mailed once and becomes reportable again after a successful read.
 
-`watch` needs no model. A captain starts it as a background command, or a sentry subagent runs it where the read needs judgment before it is passed on. The binary knows nothing about GitHub or Orbit: a new thing to watch is a new script. Without `--to`, `watch` returns the new items to its caller, for use outside a formation.
-
-The [watch set scope](../watch/1_scope.md) keeps the watches in the room, so that seats change them while a reader runs and one command lists them. Daniel approved it on 2026-11-26.
+The binary runs probes without a model. New sources use new scripts. A caller that needs the result in its own turn uses `formation watch wait` to block for new items. The [watch set scope](../watch/1_scope.md) describes how seats change the set while a reader runs and how to list the reader and each watch's last result.
 
 ### What changes in the first build
 

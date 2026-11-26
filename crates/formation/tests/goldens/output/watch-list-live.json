@@ -1,0 +1,1 @@
+{"reader":{"active":{"last_beat":"<timestamp>","pid":1,"seat":"alpha"},"since":null,"standbys":[{"last_beat":"<timestamp>","pid":2,"seat":"beta"}],"state":"live"},"watches":[{"added_at":"<timestamp>","added_by":"alpha","command":"true","cwd":"<cwd>","every_seconds":120,"last_read":"<timestamp>","last_result":"ok, 0 items","name":"sample","sent":0,"state":"on","to":"alpha"}]}

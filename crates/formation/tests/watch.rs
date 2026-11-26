@@ -1,12 +1,15 @@
 //! Integration tests for `formation watch` through the built executable.
 #![allow(clippy::unwrap_used, reason = "fixture failures should panic")]
 
+mod support;
+
 use cw_testkit::TempRoot;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Command, Output};
 use std::time::{Duration, Instant};
+use support::SpawnedChild;
 
 struct Room(TempRoot);
 
@@ -68,6 +71,14 @@ impl Room {
         serde_json::from_slice(&out.stdout).unwrap()
     }
 
+    fn start_reader(&self, seat: &str) -> SpawnedChild {
+        SpawnedChild::spawn(self.watch_cmd(seat).arg("run"))
+    }
+
+    fn listing(&self, seat: &str) -> Value {
+        self.set_ok(seat, &["list", "--json"])
+    }
+
     fn set_run(&self, seat: &str, args: &[&str]) -> Output {
         self.watch_cmd(seat).args(args).output().unwrap()
     }
@@ -107,45 +118,6 @@ impl Room {
     }
 }
 
-struct SpawnedChild(Option<Child>);
-
-impl SpawnedChild {
-    fn spawn(cmd: &mut Command) -> Self {
-        let child = cmd
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        Self(Some(child))
-    }
-
-    fn wait_within(mut self, timeout: Duration) -> Output {
-        let mut child = self.0.take().unwrap();
-        let start = Instant::now();
-        loop {
-            if child.try_wait().unwrap().is_some() {
-                return child.wait_with_output().unwrap();
-            }
-            if start.elapsed() >= timeout {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!("child did not exit within {timeout:?}");
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-    }
-}
-
-impl Drop for SpawnedChild {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.0.take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-}
-
 #[cfg(unix)]
 #[test]
 fn item_is_returned_once_and_second_run_expires() {
@@ -157,7 +129,7 @@ fn item_is_returned_once_and_second_run_expires() {
     );
     let probe = format!("ci={}", script.display());
 
-    let first = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let first = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(first["expired"], false);
     assert_eq!(first["remaining"], 0);
     assert_eq!(first["failed"], serde_json::json!([]));
@@ -170,7 +142,7 @@ fn item_is_returned_once_and_second_run_expires() {
         }])
     );
 
-    let second = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let second = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(second["expired"], true);
     assert_eq!(second["remaining"], 0);
     assert_eq!(second["items"], serde_json::json!([]));
@@ -193,7 +165,7 @@ fn failed_probe_reported_once_until_successful_read() {
     );
     let probe = format!("ci={}", script.display());
 
-    let first_fail = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let first_fail = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(first_fail["expired"], false);
     assert_eq!(first_fail["items"], serde_json::json!([]));
     assert_eq!(
@@ -201,18 +173,18 @@ fn failed_probe_reported_once_until_successful_read() {
         serde_json::json!([{"probe": "ci", "error": "upstream down"}])
     );
 
-    let repeat_fail = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let repeat_fail = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(repeat_fail["expired"], true);
     assert_eq!(repeat_fail["items"], serde_json::json!([]));
     assert_eq!(repeat_fail["failed"], serde_json::json!([]));
 
     std::fs::write(&mode_file, "ok").unwrap();
-    let recovered = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let recovered = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(recovered["expired"], true);
     assert_eq!(recovered["failed"], serde_json::json!([]));
 
     std::fs::write(&mode_file, "fail").unwrap();
-    let fail_again = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let fail_again = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(fail_again["expired"], false);
     assert_eq!(
         fail_again["failed"],
@@ -231,7 +203,7 @@ fn line_without_tab_is_reported_as_failed_read_with_line_number() {
     );
     let probe = format!("ci={}", script.display());
 
-    let out = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let out = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(out["expired"], false);
     assert_eq!(out["items"], serde_json::json!([]));
     let failed = out["failed"].as_array().unwrap();
@@ -246,7 +218,7 @@ fn line_without_tab_is_reported_as_failed_read_with_line_number() {
 
 #[cfg(unix)]
 #[test]
-fn to_mails_lines_and_chunks_25_items_into_20_and_5() {
+fn reader_mails_lines_and_chunks_25_items_into_20_and_5() {
     let room = Room::new();
     room.join("sentry");
     room.join("captain");
@@ -254,14 +226,15 @@ fn to_mails_lines_and_chunks_25_items_into_20_and_5() {
         "twenty-five.sh",
         "#!/bin/sh\nidx=1\nwhile [ \"$idx\" -le 25 ]; do\n  printf 'fp-%02d\\titem %02d\\n' \"$idx\" \"$idx\"\n  idx=$((idx + 1))\ndone\n",
     );
-    let probe = format!("ci={}", script.display());
+    room.set_ok("captain", &["add", "ci", "--", script.to_str().unwrap()]);
+    let mut reader = room.start_reader("sentry");
+    let inbox = reader.until(Duration::from_secs(10), || {
+        let inbox = room.inbox("captain");
+        (inbox["messages"].as_array().unwrap().len() == 2).then_some(inbox)
+    });
+    room.set_ok("captain", &["stop"]);
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
 
-    room.watch_ok(
-        "sentry",
-        &["--probe", &probe, "--to", "captain", "--timeout", "0"],
-    );
-
-    let inbox = room.inbox("captain");
     let messages = inbox["messages"].as_array().unwrap();
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[0]["sender"], "sentry");
@@ -279,7 +252,7 @@ fn to_mails_lines_and_chunks_25_items_into_20_and_5() {
 
 #[cfg(unix)]
 #[test]
-fn two_watchers_hand_over_each_fingerprint_once_between_them() {
+fn concurrent_waits_hand_over_each_fingerprint_once_between_them() {
     let room = Room::new();
     room.join("sentry");
     let script = room.script(
@@ -289,9 +262,9 @@ fn two_watchers_hand_over_each_fingerprint_once_between_them() {
     let probe = format!("ci={}", script.display());
 
     let mut cmd_a = room.watch_cmd("sentry");
-    cmd_a.args(["--probe", &probe, "--timeout", "0"]);
+    cmd_a.args(["wait", "--probe", &probe, "--timeout", "0"]);
     let mut cmd_b = room.watch_cmd("sentry");
-    cmd_b.args(["--probe", &probe, "--timeout", "0"]);
+    cmd_b.args(["wait", "--probe", &probe, "--timeout", "0"]);
 
     let child_a = SpawnedChild::spawn(&mut cmd_a);
     let child_b = SpawnedChild::spawn(&mut cmd_b);
@@ -329,7 +302,7 @@ fn two_watchers_hand_over_each_fingerprint_once_between_them() {
 
 #[cfg(unix)]
 #[test]
-fn without_to_returns_20_with_remaining_5_then_other_5() {
+fn wait_returns_20_with_remaining_5_then_other_5() {
     let room = Room::new();
     room.join("sentry");
     let script = room.script(
@@ -338,7 +311,7 @@ fn without_to_returns_20_with_remaining_5_then_other_5() {
     );
     let probe = format!("ci={}", script.display());
 
-    let first = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let first = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(first["expired"], false);
     assert_eq!(first["remaining"], 5);
     let first_items = first["items"].as_array().unwrap();
@@ -346,7 +319,7 @@ fn without_to_returns_20_with_remaining_5_then_other_5() {
     assert_eq!(first_items[0]["fingerprint"], "fp-01");
     assert_eq!(first_items[19]["fingerprint"], "fp-20");
 
-    let second = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let second = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(second["expired"], false);
     assert_eq!(second["remaining"], 0);
     let second_items = second["items"].as_array().unwrap();
@@ -357,41 +330,69 @@ fn without_to_returns_20_with_remaining_5_then_other_5() {
 
 #[cfg(unix)]
 #[test]
-fn probe_past_60_seconds_is_killed_and_leaves_no_child() {
+fn concurrent_long_probes_keep_the_reader_lease_and_enforce_the_timeout() {
     let room = Room::new();
     room.join("sentry");
-    let pid_file = room.path().join("pids");
     let script = room.script(
         "slow.sh",
-        &format!(
-            "#!/bin/sh\nsleep 300 </dev/null >/dev/null 2>&1 &\nprintf '%s\\n%s\\n' \"$!\" \"$$\" > '{}'\nwait\n",
-            pid_file.display()
+        concat!(
+            "#!/bin/sh\nsleep 300 </dev/null >/dev/null 2>&1 &\nworker=$!\n",
+            "trap 'wait \"$worker\"; exit 143' TERM\n",
+            "printf '%s\\n%s\\n' \"$worker\" \"$$\" > pids\nwait",
         ),
     );
-    let probe = format!("slow={}", script.display());
 
-    let start = Instant::now();
-    let mut cmd = room.watch_cmd("sentry");
-    cmd.args(["--probe", &probe, "--timeout", "120"]);
-    let out = SpawnedChild::spawn(&mut cmd).wait_within(Duration::from_secs(90));
-    let elapsed = start.elapsed();
-
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
+    let add = room
+        .watch_cmd("sentry")
+        .current_dir(room.path())
+        .args(["add", "slow", "--", script.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(add.status.success(), "{:?}", add.stderr);
+    room.set_ok(
+        "sentry",
+        &[
+            "add",
+            "overlap",
+            "--",
+            "sleep 48; printf 'fp\\tcompleted\\n'",
+        ],
     );
+    let start = Instant::now();
+    let mut reader = room.start_reader("sentry");
+    let pid = reader.pid();
+    let first_beat = reader.until(Duration::from_secs(5), || {
+        let active = room.listing("sentry")["reader"]["active"].clone();
+        active["last_beat"].as_str().map(str::to_owned)
+    });
+    let status = reader.until(Duration::from_secs(75), || {
+        let listing = room.listing("sentry");
+        assert_eq!(listing["reader"]["active"]["pid"], pid);
+        (listing["watches"][1]["last_result"] == "read failed").then_some(listing)
+    });
+    let elapsed = start.elapsed();
     assert!(
         elapsed >= Duration::from_secs(59),
         "probe ended too early: {elapsed:?}"
     );
-    let body: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(body["expired"], false);
-    assert_eq!(body["items"], serde_json::json!([]));
-    let failed = body["failed"].as_array().unwrap();
-    assert_eq!(failed.len(), 1);
-    assert_eq!(failed[0]["probe"], "slow");
+    assert_ne!(status["reader"]["active"]["last_beat"], first_beat);
+    assert_eq!(status["watches"][0]["last_result"], "ok, 1 item");
+    let inbox = room.inbox("sentry");
+    let messages = inbox["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["body"], "overlap | completed");
+    assert_eq!(
+        messages[1]["body"],
+        "slow | read failed: probe timed out after 60 seconds"
+    );
 
+    reader.terminate().unwrap();
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+    let stopped = room.listing("sentry");
+    assert_eq!(stopped["reader"]["state"], "none");
+    assert!(stopped["reader"]["since"].is_string());
+
+    let pid_file = room.path().join("pids");
     let pid_text = std::fs::read_to_string(&pid_file).unwrap();
     let pids: Vec<libc::pid_t> = pid_text
         .lines()
@@ -523,8 +524,9 @@ fn watch_set_refuses_invalid_names_intervals_and_recipients() {
         &["add", "ci", "--every", "9", "--", "true"][..],
         &["add", "ci", "--every", "soon", "--", "true"],
         &["add", "ci"],
-        &["--probe", "a=true", "list"],
+        &["--probe", "a=true"],
         &["--timeout", "5", "list"],
+        &["wait", "--probe", "a=true", "--to", "alpha"],
     ] {
         assert_eq!(
             room.set_run("alpha", args).status.code(),
@@ -607,7 +609,7 @@ fn replacing_a_watch_keeps_fingerprints_and_removing_it_forgets_them() {
     let command = script.to_str().unwrap();
     let probe = format!("ci={command}");
     room.set_ok("sentry", &["add", "ci", "--", command]);
-    let first = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let first = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(first["items"].as_array().unwrap().len(), 2);
     assert_eq!(room.watches("sentry")[0]["sent"], 2);
 
@@ -620,7 +622,7 @@ fn replacing_a_watch_keeps_fingerprints_and_removing_it_forgets_them() {
     assert_eq!(watches[0]["every_seconds"], 30);
     assert_eq!(watches[0]["command"], "true");
     assert_eq!(watches[0]["sent"], 2);
-    let second = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let second = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(second["items"], serde_json::json!([]));
 
     let removed = room.set_ok("sentry", &["remove", "ci"]);
@@ -628,7 +630,7 @@ fn replacing_a_watch_keeps_fingerprints_and_removing_it_forgets_them() {
     assert!(room.watches("sentry").is_empty());
     room.set_ok("sentry", &["add", "ci", "--", "true"]);
     assert_eq!(room.watches("sentry")[0]["sent"], 0);
-    let third = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    let third = room.watch_ok("sentry", &["wait", "--probe", &probe, "--timeout", "0"]);
     assert_eq!(third["items"].as_array().unwrap().len(), 2);
 }
 
@@ -639,12 +641,215 @@ fn list_in_an_empty_room_reports_no_reader_and_no_watches() {
     let listing = room.set_ok("alpha", &["list", "--json"]);
     assert_eq!(
         listing,
-        serde_json::json!({"reader": {"state": "none"}, "watches": []})
+        serde_json::json!({
+            "reader": {"state": "none", "since": null, "active": null, "standbys": []},
+            "watches": []
+        })
     );
     let text = room.set_run("alpha", &["list"]);
     assert_eq!(String::from_utf8_lossy(&text.stdout), "reader: none\n");
     assert_eq!(
         String::from_utf8_lossy(&text.stderr),
         "No watches in this room.\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn live_reader_picks_up_edits_and_honors_each_watch_schedule() {
+    let room = Room::new();
+    for seat in ["reader", "alpha", "beta"] {
+        room.join(seat);
+    }
+    let mut reader = SpawnedChild::spawn(
+        room.watch_cmd("reader")
+            .env("TEST_PROBE_MARKER", "reader-env")
+            .arg("run"),
+    );
+    let pid = reader.pid();
+    reader.until(Duration::from_secs(5), || {
+        (room.listing("reader")["reader"]["active"]["pid"] == pid).then_some(())
+    });
+    let fast = room.path().join("fast");
+    let slow = room.path().join("slow");
+    for path in [&fast, &slow] {
+        std::fs::create_dir(path).unwrap();
+        std::fs::write(
+            path.join("input"),
+            path.file_name().unwrap().as_encoded_bytes(),
+        )
+        .unwrap();
+    }
+    let probe = "read_label=$(cat input) || exit 1; date +%s >> reads; \
+                 printf 'fp\\t%s %s\\n' \"$read_label\" \"$TEST_PROBE_MARKER\"";
+    for (path, seat, interval) in [(&fast, "alpha", "10"), (&slow, "beta", "15")] {
+        let add = room
+            .watch_cmd("reader")
+            .current_dir(path)
+            .args([
+                "add", "test", "--to", seat, "--every", interval, "--", probe,
+            ])
+            .output()
+            .unwrap();
+        assert!(add.status.success(), "{:?}", add.stderr);
+    }
+    reader.until(Duration::from_secs(20), || {
+        let listing = room.listing("reader");
+        assert_eq!(listing["reader"]["active"]["pid"], pid);
+        listing["watches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|watch| watch["last_result"] == "ok, 1 item")
+            .then_some(())
+    });
+    assert_eq!(
+        room.inbox("alpha")["messages"][0]["body"],
+        "test | fast reader-env"
+    );
+    assert_eq!(
+        room.inbox("beta")["messages"][0]["body"],
+        "test | slow reader-env"
+    );
+    let reads = |path: &Path| {
+        std::fs::read_to_string(path.join("reads"))
+            .unwrap()
+            .lines()
+            .map(|line| line.parse::<u64>().unwrap())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(reads(&slow).len(), 1);
+    let fast_reads = reader.until(Duration::from_secs(15), || {
+        let reads = reads(&fast);
+        (reads.len() >= 2).then_some(reads)
+    });
+    assert!(fast_reads[1].saturating_sub(fast_reads[0]) >= 10);
+    assert_eq!(reads(&slow).len(), 1);
+    room.set_ok("reader", &["pause", "test", "--to", "alpha"]);
+    room.set_ok("reader", &["remove", "test", "--to", "beta"]);
+    let fast_count = reads(&fast).len();
+
+    // Use another watch with the minimum interval as a clock for a full pass after both edits.
+    room.set_ok("reader", &["add", "control", "--every", "10", "--", "true"]);
+    let control_read = || room.watches("reader")[0]["last_read"].clone();
+    let first_read = reader.until(Duration::from_secs(5), || {
+        let read = control_read();
+        (!read.is_null()).then_some(read)
+    });
+    reader.until(Duration::from_secs(15), || {
+        (control_read() != first_read).then_some(())
+    });
+    assert_eq!(reads(&fast).len(), fast_count);
+    assert_eq!(reads(&slow).len(), 1);
+    assert_eq!(room.inbox("alpha")["messages"].as_array().unwrap().len(), 1);
+    room.set_ok("reader", &["stop"]);
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+}
+
+#[cfg(unix)]
+#[test]
+fn standby_takes_over_after_kill_and_stop_exits_all_invocations() {
+    let room = Room::new();
+    for seat in ["alpha", "beta", "recipient"] {
+        room.join(seat);
+    }
+    let probe = concat!(
+        "printf 'same\\tfirst item\\n'\n",
+        "if [ -f new-item ]; then printf 'new\\tsecond item\\n'; fi",
+    );
+    let add = room
+        .watch_cmd("recipient")
+        .current_dir(room.path())
+        .args(["add", "ci", "--every", "10", "--", probe])
+        .output()
+        .unwrap();
+    assert!(add.status.success(), "{:?}", add.stderr);
+    room.set_ok("recipient", &["add", "control", "--", "true"]);
+    let mut alpha = room.start_reader("alpha");
+    let beta = room.start_reader("beta");
+    let alpha_pid = alpha.pid();
+    let beta_pid = beta.pid();
+    let elected = alpha.until(Duration::from_secs(8), || {
+        let listing = room.listing("recipient");
+        let status = &listing["reader"];
+        (status["active"].is_object() && status["standbys"][0].is_object()).then(|| status.clone())
+    });
+    assert_eq!(elected["state"], "live");
+    let (seat, mut holder, mut standby) = if elected["active"]["pid"] == alpha_pid {
+        ("alpha", alpha, beta)
+    } else {
+        assert_eq!(elected["active"]["pid"], beta_pid);
+        ("beta", beta, alpha)
+    };
+    assert_eq!(elected["standbys"].as_array().unwrap().len(), 1);
+    assert_eq!(elected["standbys"][0]["pid"], standby.pid());
+    let standby_seat = elected["standbys"][0]["seat"].as_str().unwrap();
+    let table = room.set_run("recipient", &["list"]);
+    let header = String::from_utf8_lossy(&table.stdout);
+    assert!(header.starts_with(&format!("reader: {seat}, pid {}", holder.pid())));
+    assert!(header.contains(&format!("; standby: {standby_seat}, pid {}", standby.pid())));
+    let control_read = holder.until(Duration::from_secs(5), || {
+        let inbox = room.inbox("recipient");
+        let messages = inbox["messages"].as_array().unwrap();
+        assert!(messages.len() <= 1);
+        let first = messages.first()?;
+        assert_eq!(first["sender"], seat);
+        let read = room.watches("recipient")[1]["last_read"].clone();
+        read.is_string().then_some(read)
+    });
+
+    holder.kill().unwrap();
+    assert!(!holder.wait_within(Duration::from_secs(5)).status.success());
+    std::fs::write(room.path().join("new-item"), "").unwrap();
+    let standby_pid = standby.pid();
+    standby.until(Duration::from_secs(60), || {
+        let listing = room.listing("recipient");
+        let status = &listing["reader"];
+        (status["active"]["pid"] == standby_pid
+            && status["standbys"].as_array().unwrap().is_empty()
+            && listing["watches"][0]["sent"] == 2)
+            .then_some(())
+    });
+    assert_eq!(room.watches("recipient")[1]["last_read"], control_read);
+    let inbox = room.inbox("recipient");
+    let messages = inbox["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1]["sender"], standby_seat);
+    assert_eq!(messages[1]["body"], "ci | second item");
+
+    let replacement = room.start_reader(seat);
+    let replacement_pid = replacement.pid();
+    standby.until(Duration::from_secs(5), || {
+        let listing = room.listing("recipient");
+        (listing["reader"]["standbys"][0]["pid"] == replacement_pid).then_some(())
+    });
+    room.set_ok("recipient", &["stop"]);
+    assert!(standby.wait_within(Duration::from_secs(5)).status.success());
+    assert!(
+        replacement
+            .wait_within(Duration::from_secs(5))
+            .status
+            .success()
+    );
+    let listing = room.listing("recipient");
+    assert_eq!(listing["reader"]["state"], "stopped");
+    assert!(listing["reader"]["active"].is_null());
+    assert!(listing["reader"]["since"].is_string());
+    assert_eq!(listing["reader"]["standbys"], serde_json::json!([]));
+    let table = room.set_run("recipient", &["list"]);
+    assert!(String::from_utf8_lossy(&table.stdout).starts_with("reader: stopped since "));
+
+    let mut restarted = room.start_reader(seat);
+    let restarted_pid = restarted.pid();
+    restarted.until(Duration::from_secs(5), || {
+        let listing = room.listing("recipient");
+        (listing["reader"]["active"]["pid"] == restarted_pid).then_some(())
+    });
+    room.set_ok("recipient", &["stop"]);
+    assert!(
+        restarted
+            .wait_within(Duration::from_secs(5))
+            .status
+            .success()
     );
 }

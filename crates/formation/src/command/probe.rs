@@ -2,6 +2,7 @@
 
 use formation_core::app::watch::{ProbeLimits, ProbeOutput, ProbeRunner};
 use std::io::{self, Read};
+use std::path::Path;
 use std::process::{Child, Command as ProcessCommand, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -93,8 +94,14 @@ fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
 pub(super) struct ShellProbeRunner;
 
 impl ProbeRunner for ShellProbeRunner {
-    fn run(&self, command: &str, limits: ProbeLimits) -> ProbeOutput {
-        run_probe(command, limits)
+    fn run(
+        &self,
+        command: &str,
+        cwd: Option<&Path>,
+        limits: ProbeLimits,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ProbeOutput {
+        run_probe(command, cwd, limits, &|| self.stopped() || cancelled())
     }
 
     fn stopped(&self) -> bool {
@@ -243,7 +250,15 @@ impl Drop for ChildGuard {
     }
 }
 
-fn run_probe(command: &str, limits: ProbeLimits) -> ProbeOutput {
+fn run_probe(
+    command: &str,
+    cwd: Option<&Path>,
+    limits: ProbeLimits,
+    cancelled: &dyn Fn() -> bool,
+) -> ProbeOutput {
+    if cancelled() {
+        return ProbeOutput::Cancelled;
+    }
     let mut process = ProcessCommand::new("sh");
     process
         .arg("-c")
@@ -251,6 +266,9 @@ fn run_probe(command: &str, limits: ProbeLimits) -> ProbeOutput {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(cwd) = cwd {
+        process.current_dir(cwd);
+    }
 
     #[cfg(unix)]
     {
@@ -295,7 +313,7 @@ fn run_probe(command: &str, limits: ProbeLimits) -> ProbeOutput {
         .and_then(|remaining| start.checked_add(remaining));
 
     let status = loop {
-        if STOP_REQUESTED.load(Ordering::SeqCst) {
+        if cancelled() {
             guard.terminate_and_reap();
             drain_readers(&receiver);
             return ProbeOutput::Cancelled;

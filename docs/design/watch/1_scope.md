@@ -8,12 +8,12 @@ feature: watch
 doc_role: scope
 summary: A watch set kept in the room that seats change while it runs, one reader with standbys, and a command that lists what is being watched.
 stage: building
-next: File the six build tasks, the set and the reader first.
+next: Build the probe check, then the stopped-reader hook.
 ---
 
 # Formation — Watch set
 
-Daniel approved this shape on 2026-11-26 ([Decided](#decided)). Nothing in it is built yet.
+Daniel approved this shape on 2026-11-26 ([Decided](#decided)). The room stores the watch set and runs it with a leased reader and standbys.
 
 ## Problem
 

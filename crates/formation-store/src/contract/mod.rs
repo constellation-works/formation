@@ -11,7 +11,7 @@ pub mod roster;
 pub use audit::{AuditEvent, AuditStatus};
 pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
 use std::fmt;
-pub use watch::{NewWatch, WatchEntry, WatchState};
+pub use watch::{NewWatch, WatchEntry, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState};
 
 /// Invalid caller session identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

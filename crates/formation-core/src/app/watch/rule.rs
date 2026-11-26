@@ -10,7 +10,7 @@ pub const DEFAULT_EVERY_SECONDS: u64 = 120;
 /// Minimum allowed interval between probe polls in seconds.
 pub const MIN_EVERY_SECONDS: u64 = 10;
 
-/// Default wait timeout without `--to` in seconds.
+/// Default blocking wait timeout in seconds.
 pub const DEFAULT_WAIT_TIMEOUT_SECONDS: u64 = 300;
 
 /// Maximum wall-clock runtime for a single probe execution in seconds.

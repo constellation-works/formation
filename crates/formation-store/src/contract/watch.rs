@@ -70,4 +70,41 @@ pub struct WatchEntry {
     pub last_result: Option<String>,
     /// Fingerprints remembered for the watch.
     pub remembered: i64,
+    /// Version of the definition used to fence in-flight results.
+    pub revision: i64,
+}
+
+/// One invocation of the room reader.
+pub struct WatchParticipant {
+    /// Room-assigned invocation identity, independent of PID reuse.
+    pub id: i64,
+    /// Seat that started the invocation.
+    pub seat: String,
+    /// Process ID for display.
+    pub pid: u32,
+    /// Unix seconds of the last beat.
+    pub heartbeat: i64,
+    /// Unix seconds when this invocation's registration expires.
+    pub expires_at: i64,
+}
+
+/// The room's reader record and its live standbys.
+#[derive(Default)]
+pub struct WatchLeaseStatus {
+    /// The lease holder, which may have expired.
+    pub reader: Option<WatchParticipant>,
+    /// Live invocations eligible for takeover.
+    pub standbys: Vec<WatchParticipant>,
+    /// Unix seconds of a deliberate stop, if stopped.
+    pub stopped_at: Option<i64>,
+    /// Unix seconds of a graceful reader exit, if no reader has taken over.
+    pub released_at: Option<i64>,
+}
+
+/// Role held by an active reader invocation.
+pub enum WatchRole {
+    /// Holds the room's lease.
+    Reader,
+    /// Eligible to claim the lease when it is free.
+    Standby,
 }

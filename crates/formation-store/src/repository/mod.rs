@@ -10,12 +10,15 @@ pub(crate) mod session;
 
 mod watch;
 
+mod watch_reader;
+
 use crate::driver::sqlite;
 pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
 pub use message::{Messages, MessagesMut, PriorDelivery};
 pub use seat::{Seats, SeatsRead};
 pub use watch::{Watch, WatchRead};
+pub use watch_reader::WatchLease;
 
 /// One committed version of the room.
 pub struct Snapshot {
@@ -36,6 +39,7 @@ impl Snapshot {
         WatchRead {
             conn: &self.reader,
             has_set: sqlite::has_watch_set(self.reader.version()),
+            has_reader: sqlite::has_watch_reader(self.reader.version()),
         }
     }
 
@@ -63,6 +67,11 @@ impl Tx<'_> {
     /// Message records in this transaction.
     pub fn messages(&self) -> MessagesMut<'_> {
         MessagesMut { conn: self.conn }
+    }
+
+    /// Lease and standby records in this transaction.
+    pub fn watch_reader(&self) -> WatchLease<'_> {
+        WatchLease { conn: self.conn }
     }
 
     /// Audit records in this transaction.

@@ -1,7 +1,7 @@
 //! Exercise the watch set at the public store boundary.
 
 use formation_store::Store;
-use formation_store::contract::{NewWatch, WatchState};
+use formation_store::contract::{NewWatch, WatchRole, WatchState};
 
 fn new<'a>(recipient: &'a str, name: &'a str, command: &'a str, added_by: &'a str) -> NewWatch<'a> {
     NewWatch {
@@ -103,5 +103,78 @@ fn replacing_keeps_fingerprints_and_removal_forgets_them() -> Result<(), Box<dyn
         Ok(())
     })?;
     assert_eq!(store.read()?.watch().list()?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn lease_expiry_and_stop_fence_previous_invocations() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let (first, standby) = store.write(|tx| {
+        let lease = tx.watch_reader();
+        let (first, role) = lease.register("alpha", 10, 0, 45)?;
+        assert!(matches!(role, WatchRole::Reader));
+        let (standby, role) = lease.register("beta", 11, 15, 60)?;
+        assert!(matches!(role, WatchRole::Standby));
+        Ok((first, standby))
+    })?;
+    store.write(|tx| {
+        let lease = tx.watch_reader();
+        assert!(lease.holds_lease(first, 44)?);
+        assert!(matches!(
+            lease.pulse(standby, 44, None)?,
+            Some(WatchRole::Standby)
+        ));
+        assert!(matches!(
+            lease.pulse(standby, 45, Some(90))?,
+            Some(WatchRole::Reader)
+        ));
+        assert!(!lease.holds_lease(first, 45)?);
+        assert!(lease.pulse(first, 45, Some(90))?.is_none());
+
+        lease.stop(46)?;
+        let (restart, role) = lease.register("beta", 11, 47, 92)?;
+        assert_ne!(standby, restart);
+        assert!(matches!(role, WatchRole::Reader));
+        assert!(lease.pulse(standby, 47, Some(92))?.is_none());
+        lease.leave(standby, 47)?;
+        assert!(lease.holds_lease(restart, 47)?);
+        Ok(())
+    })?;
+
+    let status = store.read()?.watch().readers(47)?;
+    assert!(status.stopped_at.is_none());
+    assert!(status.standbys.is_empty());
+    assert_eq!(
+        status.reader.map(|reader| (reader.pid, reader.heartbeat)),
+        Some((11, 47)),
+    );
+    Ok(())
+}
+
+#[test]
+fn in_flight_reads_cannot_update_edited_watches() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let definition = new("alpha", "ci", "true", "alpha");
+    store.write(|tx| tx.watch().put(&definition))?;
+    let mut watches = store.read()?.watch().list()?;
+    let original = watches.remove(0);
+    store.write(|tx| {
+        let watch = tx.watch();
+        watch.set_state("alpha", "ci", WatchState::Paused)?;
+        watch.set_state("alpha", "ci", WatchState::On)?;
+        assert!(!watch.record_read(&original, 100, "stale")?);
+        watch.remove("alpha", "ci")?;
+        watch.put(&definition)?;
+        assert!(!watch.record_read(&original, 100, "stale")?);
+        let current = watch.list()?.remove(0);
+        assert!(watch.record_read(&current, 101, "ok, 0 items")?);
+        Ok(())
+    })?;
+
+    let current = store.read()?.watch().list()?.remove(0);
+    assert_eq!(current.last_read, Some(101));
+    assert_eq!(current.last_result.as_deref(), Some("ok, 0 items"));
     Ok(())
 }

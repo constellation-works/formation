@@ -52,40 +52,36 @@ Hooks deliver whole envelopes in receipt order within the host's character budge
 
 ## Watching
 
-`formation watch` polls one or more caller-supplied probes on an interval and passes on only what is new:
-
-```sh
-formation watch \
-  --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
-  --to captain --every 120 --room trial --as sentry
-```
-
-Each `--probe <name>=<command>` names a probe (1 to 32 lowercase ASCII letters, digits or hyphens) and a command run through `sh -c` in the caller's working directory with the caller's environment. Every probe runs immediately and then every `--every` seconds (default 120, minimum 10). A probe run that passes 60 seconds is killed with its process group and reported as a failed read, and any surviving child is terminated when `watch` exits.
-
-Probe stdout is treated as data under a one-line-per-item contract: `<fingerprint><TAB><text>`, where `<fingerprint>` is 1 to 200 characters with no tab and `<text>` past 400 characters is cut to end in `…`. Handed fingerprints are stored in the room per `(seat, probe)` (using `--to` when given, else the caller's seat), so restarted or concurrent watchers never hand over the same fingerprint twice. A non-zero exit, killed run or malformed line is a failed read: it is reported once with its first line and stays silent until that probe completes a successful read.
-
-- **With `--to <seat>`:** `--to` must be a joined seat. New items are mailed from the caller's seat as `<probe> | <text>` (and failed reads as `<probe> | read failed: <error>`), up to 20 lines per envelope, with handed fingerprints committed in the same transaction that stores each envelope. The command runs until `--timeout` (no default) or a termination signal (`SIGTERM` or `SIGINT`) and exits 0.
-- **Without `--to`:** The command returns at the first poll with new items or failures as `{"items":[{"probe":...,"fingerprint":...,"text":...}],"failed":[{"probe":...,"error":...}],"remaining":<n>,"expired":false}`, handing over at most 20 items per call and leaving any remainder for the next call. At `--timeout` (default 300 seconds) with nothing to report, it returns empty lists with `"expired":true` and exits 0:
-
-```sh
-formation watch \
-  --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
-  --timeout 300 --room trial --as sentry
-```
-
-### The watch set
-
-The room also keeps a set of watches that seats change while the room runs. The set is stored and listed today; nothing reads it yet, so a stored watch is not run until the reader of the [watch scope](design/watch/1_scope.md#the-reader) ships.
+Add probes to the room's watch set and run a shared reader.
 
 ```sh
 formation watch add ci --every 300 -- plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main
 formation watch add release --to captain -- ./scripts/release-read.sh
+formation watch run
+```
+
+A watch is keyed by its recipient and name, so two seats can each have a `ci`. `--to` names a joined seat and defaults to the caller. Names use 1 to 32 lowercase ASCII letters, digits or hyphens. The interval defaults to 120 seconds and must be at least 10. One word after `--` is shell text as written. Several words are quoted so each stays one argument. `add` replaces an existing watch, switches it on and keeps its remembered fingerprints. `remove` forgets them.
+
+```sh
 formation watch pause ci
 formation watch resume ci
 formation watch remove release --to captain
-formation watch list
+formation watch list --json
+formation watch stop
 ```
 
-A watch is keyed by its recipient and name, so two seats can each have a `ci`. `--to` names a joined seat and defaults to the caller. The name is 1 to 32 lowercase ASCII letters, digits or hyphens, and `--every` is at least 10 seconds (default 120). The command is stored with the working directory it was added from. One word after `--` is shell text as written; several words are quoted into one command line. `add` with an existing key replaces that watch, switches it on and keeps its remembered fingerprints. `remove` forgets them.
+`watch run` keeps one active lease per room. Extra invocations stand by. The reader renews its lease every 15 seconds and a standby can take over when a heartbeat is 45 seconds old. Changes to the set take effect on the next pass. A watch runs through `sh -c` in the directory it was added from, using the active reader's environment. Due probes run concurrently and each has a 60-second limit. `watch stop` marks the room stopped and ends the reader and its standbys. A later `watch run` clears the mark.
 
-`list` prints the reader's state (`reader: none` until a reader exists) and one row per watch ordered by name and recipient. `list --json` gives `{"reader":{"state":"none"},"watches":[...]}` with `every_seconds`, RFC 3339 `added_at` and `last_read`, and `sent`, the fingerprints remembered for the watch. The other subcommands print one JSON object naming the watch they changed. `list` never writes, so it works in a room an older build created and shows an empty set there.
+`list` shows the active reader and standbys with their seat, PID and last heartbeat. It shows when reading stopped if that time is known. Each watch row includes its last read and result. `list --json` exposes the same data with `reader.state` set to `live`, `none` or `stopped`. Timestamps are RFC 3339 UTC. `list` works against older rooms without upgrading them.
+
+A probe prints one `<fingerprint><TAB><text>` per item. Fingerprints use 1 to 200 characters with no tab. Text past 400 characters is cut to end in `…`. The reader mails new items as `<probe> | <text>`, up to 20 lines per envelope. A failed read is mailed once with its first diagnostic line and can be reported again after a successful read. The room stores handover state per recipient and watch, so a standby reuses it when it takes over.
+
+### Blocking wait
+
+`watch wait` runs caller-supplied probes from your current directory and returns new items or failures as JSON. It uses the calling seat's handover state, returns at most 20 items per call and reports any remainder. It polls every 120 seconds by default. After `--timeout` seconds (default 300) with nothing to report, it returns empty lists with `"expired":true`. Use `--timeout 0` for a single pass.
+
+```sh
+formation watch wait \
+  --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
+  --timeout 300 --room trial --as sentry
+```

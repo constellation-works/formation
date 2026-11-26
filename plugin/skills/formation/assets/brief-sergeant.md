@@ -93,7 +93,7 @@ For each item the sentry sends, and each piece of routine work the captain order
 6. When the captain rules that something is not to be raised again, or you settle an item
    that will keep reappearing, send the sentry `mute <kind> | <id or host> | <until>` so
    the next read drops it.
-7. The sentry runs `formation watch` (`--timeout 3600`) and wakes hourly for its digest.
+7. The sentry runs the unit's probes and reports a digest on its hourly wakes. The [sentry brief](brief-sentry.md) gives the commands.
    When you learn work is starting (a drain, an order, or a pull request the captain wants
    watched), send it `watch`. When the captain says no work is expected, send it `rest`:
    it stops the command and reads nothing until the next `watch`.
