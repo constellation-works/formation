@@ -30,7 +30,7 @@ The chief sends work orders to captains. Each captain propagates those orders th
 
 ## Watch and dispatch
 
-A `formation watch` process runs attention, CI and other probes on an interval and mails findings on change. The [shift-messaging design](../../shift-messaging/1_scope.md#watch) describes probe output and deduplication. The process handles the timed reading, and a seat responds when it receives an item. A quiet workspace can wake its captain. A busy workspace can wake a sergeant at lower model and context cost.
+A `formation watch` process runs attention, CI and other probes on an interval and mails findings on change. The [shift-messaging design](../../shift-messaging/1_scope.md#watch) describes probe output and deduplication. The process handles the timed reading, and a seat responds when it receives an item. A quiet workspace can wake its captain. A busy workspace can wake a sergeant at lower model and context cost. The [watch set proposal](../../watch/1_scope.md) covers changing and listing the watches of a running room.
 
 A captain or the chief can request a sentry when a squad needs someone to direct incoming work among its sergeants and lieutenants. Once the chief or Daniel approves the request, the captain can start it as a direct report. The sentry dispatches incoming work within its squad. Details of dispatch, recordkeeping and return routes are open below.
 

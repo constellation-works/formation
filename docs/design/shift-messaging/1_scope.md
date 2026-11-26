@@ -134,6 +134,8 @@ Daniel is asked three things:
 
 `watch` needs no model. A captain starts it as a background command, or a sentry subagent runs it where the read needs judgment before it is passed on. The binary knows nothing about GitHub or Orbit: a new thing to watch is a new script. Without `--to`, `watch` returns the new items to its caller, for use outside a formation.
 
+A [proposal](../watch/1_scope.md) keeps the watches in the room, so that seats change them while a reader runs and one command lists them. It waits for Daniel.
+
 ### What changes in the first build
 
 | First build | Proposal | Why |
