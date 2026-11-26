@@ -19,12 +19,14 @@ Implementation lieutenants use their own persistent worktrees. A peer-initiated 
 
 Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
 
-For cross-provider routes, `UserPromptSubmit` adds unread mail to a typed turn. `Stop` uses `asyncRewake` to wake the session if mail arrives during its background wait. Use the [manual wake procedure](mail.md#wake-an-unheld-claude-seat) for a Claude seat whose wait has expired.
+For shared watches and cross-provider routes, join Formation mail once (`formation mail join`). `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` uses `asyncRewake` (540s hold, 600s host timeout) to wake the session if mail arrives while waiting. After the hold expires, mail waits for the next hook or [manual wake](mail.md#wake-an-unheld-claude-seat).
 
-A background `formation watch wait` invocation may notify a live Claude sentry on exit. Confirm that capability before promising a watch.
+Each attention-owning captain registers `attention` and `ci` with `formation watch add` and starts `formation watch run` in a background shell; extra captains join as standbys. Only one reader holds the 45s lease (15s heartbeat); `formation watch list [--json]` shows the active reader, standbys (`reader.state`: `live`, `none` or `stopped`), and per-watch `last_result` (`ok, ...` or `read failed`).
 
-Inspect context with `get_usage` if available. The chief and any captain in active operator conversation compact. For a run-output-heavy session with a confirmed handoff, `clear_session` with self is its last act. The parent sends the restart line identifying the handoff. Re-establish any lost watch and group seat before proceeding.
+A background `formation watch run` process lives only as long as that session’s background shell survives. If every reader exits without `formation watch stop`, the next hook delivers a one-time `watch: nothing has read...` notice to affected seats; restart `formation watch run` in a live seat’s background shell. Keep `formation watch wait` only for a standalone blocking wait (confirm background exit notification before relying on it).
+
+Inspect context with `get_usage` if available. The chief and any captain in active operator conversation compact. For a run-output-heavy session with a confirmed handoff, `clear_session` with self is its last act. The parent sends the restart line identifying the handoff. Verify `formation watch list` and re-arm a reader if `none`, then re-establish the group seat before proceeding.
 
 If the app refuses the clear because of live work, queued input, pinning or permissions, honor that refusal. The operator can type /clear or /scribe continue with the handoff ID where applicable.
 
-Before archiving a replaced captain, have it detach lieutenants it started. At authorized close, archive roster sessions by ID after reading their records, leaving the aide to the operator. If pinned, on screen or busy, report the session. A visible chief or captain can ask the operator to archive it when self-archive is refused.
+Before archiving a replaced captain, have it detach lieutenants it started. At authorized shift close, issue `formation watch stop` before archiving roster sessions so readers exit cleanly, read session records and leave the aide to the operator. If pinned, on screen or busy, report the session. A visible chief or captain can ask the operator to archive it when self-archive is refused.
