@@ -1,7 +1,7 @@
 //! Exercise the watch set at the public store boundary.
 
 use formation_store::Store;
-use formation_store::contract::{NewWatch, WatchRole, WatchState};
+use formation_store::contract::{NewWatch, WatchHandover, WatchRole, WatchState};
 
 fn new<'a>(recipient: &'a str, name: &'a str, command: &'a str, added_by: &'a str) -> NewWatch<'a> {
     NewWatch {
@@ -205,6 +205,67 @@ fn stopped_notice_resets_when_a_new_reader_claims_the_lease()
         assert!(lease.claim_stopped_notice("other", 20)?.is_none());
         lease.stop(21)?;
         assert!(lease.claim_stopped_notice("alpha", 21)?.is_none());
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn absence_counts_persist_per_watch_key_and_clear_on_forget()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        let watch = tx.watch();
+        watch.mark_handed("alpha", "ci", "fp-1", 100)?;
+        watch.mark_handed("alpha", "ci", "fp-2", 100)?;
+        watch.mark_handed("beta", "ci", "fp-1", 100)?;
+        watch.mark_handed("alpha", "other", "fp-1", 100)?;
+        watch.set_absent_reads("alpha", "ci", "fp-1", 1)?;
+        Ok(())
+    })?;
+
+    store.write(|tx| {
+        let watch = tx.watch();
+        assert_eq!(
+            watch.remembered("alpha", "ci")?,
+            vec![
+                WatchHandover {
+                    fingerprint: "fp-1".to_owned(),
+                    absent_reads: 1,
+                },
+                WatchHandover {
+                    fingerprint: "fp-2".to_owned(),
+                    absent_reads: 0,
+                },
+            ]
+        );
+        assert_eq!(
+            watch.remembered("beta", "ci")?,
+            vec![WatchHandover {
+                fingerprint: "fp-1".to_owned(),
+                absent_reads: 0,
+            }]
+        );
+        assert_eq!(
+            watch.remembered("alpha", "other")?,
+            vec![WatchHandover {
+                fingerprint: "fp-1".to_owned(),
+                absent_reads: 0,
+            }]
+        );
+
+        watch.set_absent_reads("alpha", "ci", "fp-1", 0)?;
+        assert_eq!(watch.remembered("alpha", "ci")?[0].absent_reads, 0);
+
+        assert!(watch.forget_handed("alpha", "ci", "fp-1")?);
+        assert!(!watch.forget_handed("alpha", "ci", "fp-1")?);
+        assert_eq!(watch.remembered("alpha", "ci")?.len(), 1);
+        assert_eq!(watch.remembered("beta", "ci")?.len(), 1);
+        assert_eq!(watch.remembered("alpha", "other")?.len(), 1);
+
+        assert!(watch.mark_handed("alpha", "ci", "fp-1", 200)?);
+        assert_eq!(watch.remembered("alpha", "ci")?[0].absent_reads, 0);
         Ok(())
     })?;
     Ok(())

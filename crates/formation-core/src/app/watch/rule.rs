@@ -19,6 +19,9 @@ pub const PROBE_TIMEOUT_SECONDS: u64 = 60;
 /// Maximum items handed over per report or per mailed envelope.
 pub(super) const MAX_BATCH_ITEMS: usize = 20;
 
+/// Consecutive successful complete reads omitting a fingerprint before forgetting it.
+pub(super) const FORGET_AFTER_ABSENT_READS: u32 = 2;
+
 const MAX_PROBE_NAME_LEN: usize = 32;
 
 const MAX_COMMAND_BYTES: usize = 8192;

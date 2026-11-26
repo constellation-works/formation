@@ -5,6 +5,7 @@ use super::{
     Store, refused, rule, set,
 };
 use formation_store::Tx;
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -255,11 +256,42 @@ fn collect_changes(
         match verdict {
             ProbeVerdict::Ok(lines) => {
                 tx.watch().clear_failure(target_seat, probe_name)?;
+                let present: HashSet<&str> =
+                    lines.iter().map(|line| line.fingerprint.as_str()).collect();
+                let remembered = tx.watch().remembered(target_seat, probe_name)?;
+                let mut handed = HashSet::with_capacity(remembered.len());
+                for entry in remembered {
+                    if present.contains(entry.fingerprint.as_str()) {
+                        if entry.absent_reads > 0 {
+                            tx.watch().set_absent_reads(
+                                target_seat,
+                                probe_name,
+                                &entry.fingerprint,
+                                0,
+                            )?;
+                        }
+                        handed.insert(entry.fingerprint);
+                    } else {
+                        let next_absent = entry.absent_reads.saturating_add(1);
+                        if next_absent >= rule::FORGET_AFTER_ABSENT_READS {
+                            tx.watch().forget_handed(
+                                target_seat,
+                                probe_name,
+                                &entry.fingerprint,
+                            )?;
+                        } else {
+                            tx.watch().set_absent_reads(
+                                target_seat,
+                                probe_name,
+                                &entry.fingerprint,
+                                next_absent,
+                            )?;
+                            handed.insert(entry.fingerprint);
+                        }
+                    }
+                }
                 for line in lines {
-                    if !tx
-                        .watch()
-                        .is_handed(target_seat, probe_name, &line.fingerprint)?
-                    {
+                    if !handed.contains(&line.fingerprint) {
                         new_items.push(Item {
                             probe: (*probe_name).to_owned(),
                             fingerprint: line.fingerprint.clone(),

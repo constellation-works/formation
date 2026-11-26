@@ -1059,3 +1059,431 @@ fn check_refuses_a_seat_that_has_not_joined() {
         })
     );
 }
+
+/// Build a probe script that steps through `actions` on successive invocations, repeating the last.
+#[cfg(unix)]
+fn sequence_script(room: &Room, name: &str, actions: &[&str]) -> (PathBuf, PathBuf) {
+    let count_file = room.path().join(format!("{name}.count"));
+    let mut cases = String::new();
+    for (index, action) in actions.iter().enumerate() {
+        let step = index + 1;
+        let pattern = if step == actions.len() {
+            "*".to_owned()
+        } else {
+            step.to_string()
+        };
+        cases.push_str(&format!("  {pattern}) {action} ;;\n"));
+    }
+    let body = format!(
+        concat!(
+            "#!/bin/sh\n",
+            "count_file='{count}'\n",
+            "n=0\n",
+            "if [ -f \"$count_file\" ]; then n=$(cat \"$count_file\"); fi\n",
+            "n=$((n + 1))\n",
+            "printf '%s\\n' \"$n\" > \"$count_file\"\n",
+            "case \"$n\" in\n",
+            "{cases}",
+            "esac\n",
+        ),
+        count = count_file.display(),
+        cases = cases,
+    );
+    let script = room.script(&format!("{name}.sh"), &body);
+    (script, count_file)
+}
+
+#[cfg(unix)]
+fn call_count(path: &Path) -> usize {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .unwrap_or(0)
+}
+
+#[cfg(unix)]
+#[test]
+fn wait_forgets_after_two_clean_omissions_and_ignores_interleaved_failures() {
+    let room = Room::new();
+    room.join("alpha");
+    room.join("beta");
+    let mode_file = room.path().join("mode");
+    let script = room.script(
+        "state.sh",
+        &format!(
+            concat!(
+                "#!/bin/sh\n",
+                "mode=$(cat '{mode}')\n",
+                "case \"$mode\" in\n",
+                "  present) printf 'fp-1\\tservice degraded\\n' ;;\n",
+                "  absent) exit 0 ;;\n",
+                "  fail) echo 'probe offline' >&2; exit 1 ;;\n",
+                "esac\n",
+            ),
+            mode = mode_file.display(),
+        ),
+    );
+    let probe = format!("ci={}", script.display());
+    let other_probe = format!("other={}", script.display());
+
+    // Initial present on alpha/ci, beta/ci, and alpha/other.
+    std::fs::write(&mode_file, "present").unwrap();
+    for (seat, spec) in [
+        ("alpha", probe.as_str()),
+        ("beta", probe.as_str()),
+        ("alpha", other_probe.as_str()),
+    ] {
+        let out = room.watch_ok(seat, &["wait", "--probe", spec, "--timeout", "0"]);
+        assert_eq!(out["items"].as_array().unwrap().len(), 1);
+    }
+
+    // Single omission followed by return stays quiet and resets the absence streak.
+    std::fs::write(&mode_file, "absent").unwrap();
+    let miss_one = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(miss_one["expired"], true);
+    std::fs::write(&mode_file, "present").unwrap();
+    let returned_early = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(returned_early["expired"], true);
+    assert_eq!(returned_early["items"], serde_json::json!([]));
+
+    // Interleaved failures after one omission never advance the threshold to two.
+    std::fs::write(&mode_file, "absent").unwrap();
+    room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    std::fs::write(&mode_file, "fail").unwrap();
+    let first_fail = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(
+        first_fail["failed"],
+        serde_json::json!([{"probe": "ci", "error": "probe offline"}])
+    );
+    let second_fail = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(second_fail["expired"], true);
+    assert_eq!(second_fail["failed"], serde_json::json!([]));
+    std::fs::write(&mode_file, "present").unwrap();
+    let still_remembered = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(still_remembered["expired"], true);
+    assert_eq!(still_remembered["items"], serde_json::json!([]));
+
+    // Two consecutive successful omissions (with a failure between) forget alpha/ci only.
+    std::fs::write(&mode_file, "absent").unwrap();
+    room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    std::fs::write(&mode_file, "fail").unwrap();
+    let mid_fail = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(mid_fail["failed"].as_array().unwrap().len(), 1);
+    std::fs::write(&mode_file, "absent").unwrap();
+    let forgotten = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(forgotten["expired"], true);
+
+    std::fs::write(&mode_file, "present").unwrap();
+    let renotified = room.watch_ok("alpha", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(renotified["expired"], false);
+    assert_eq!(renotified["items"].as_array().unwrap().len(), 1);
+    assert_eq!(renotified["items"][0]["fingerprint"], "fp-1");
+
+    // Same watch name for beta and other watch name for alpha remain untouched.
+    let beta = room.watch_ok("beta", &["wait", "--probe", &probe, "--timeout", "0"]);
+    assert_eq!(beta["expired"], true);
+    assert_eq!(beta["items"], serde_json::json!([]));
+    let other = room.watch_ok(
+        "alpha",
+        &["wait", "--probe", &other_probe, "--timeout", "0"],
+    );
+    assert_eq!(other["expired"], true);
+    assert_eq!(other["items"], serde_json::json!([]));
+}
+
+#[cfg(unix)]
+#[test]
+fn reader_mails_returning_conditions_after_two_omissions_scoped_by_watch() {
+    let room = Room::new();
+    for seat in ["sentry", "alpha", "beta"] {
+        room.join(seat);
+    }
+
+    let (cycle_alpha, cycle_alpha_count) = sequence_script(
+        &room,
+        "cycle-alpha",
+        &[
+            "printf 'fp-1\\talpha alert\\n'",
+            "exit 0",
+            "exit 0",
+            "printf 'fp-1\\talpha alert\\n'",
+        ],
+    );
+    let (cycle_beta, cycle_beta_count) =
+        sequence_script(&room, "cycle-beta", &["printf 'fp-1\\tbeta alert\\n'"]);
+    let (flicker, flicker_count) = sequence_script(
+        &room,
+        "flicker",
+        &[
+            "printf 'fp-f\\tflicker alert\\n'",
+            "exit 0",
+            "printf 'fp-f\\tflicker alert\\n'",
+            "exit 0",
+            "printf 'fp-f\\tflicker alert\\n'",
+        ],
+    );
+    let (flaky, flaky_count) = sequence_script(
+        &room,
+        "flaky",
+        &[
+            "printf 'fp-k\\tflaky alert\\n'",
+            "exit 0",
+            "echo 'upstream down' >&2; exit 1",
+            "echo 'upstream down' >&2; exit 1",
+            "printf 'fp-k\\tflaky alert\\n'",
+        ],
+    );
+    let (fail_gap, fail_gap_count) = sequence_script(
+        &room,
+        "fail-gap",
+        &[
+            "printf 'fp-g\\tgap alert\\n'",
+            "exit 0",
+            "echo 'blip error' >&2; exit 1",
+            "exit 0",
+            "printf 'fp-g\\tgap alert\\n'",
+        ],
+    );
+
+    room.set_ok(
+        "alpha",
+        &[
+            "add",
+            "cycle",
+            "--every",
+            "10",
+            "--",
+            cycle_alpha.to_str().unwrap(),
+        ],
+    );
+    room.set_ok(
+        "beta",
+        &[
+            "add",
+            "cycle",
+            "--every",
+            "10",
+            "--",
+            cycle_beta.to_str().unwrap(),
+        ],
+    );
+    room.set_ok(
+        "alpha",
+        &[
+            "add",
+            "flicker",
+            "--every",
+            "10",
+            "--",
+            flicker.to_str().unwrap(),
+        ],
+    );
+    room.set_ok(
+        "alpha",
+        &[
+            "add",
+            "flaky",
+            "--every",
+            "10",
+            "--",
+            flaky.to_str().unwrap(),
+        ],
+    );
+    room.set_ok(
+        "beta",
+        &[
+            "add",
+            "fail-gap",
+            "--every",
+            "10",
+            "--",
+            fail_gap.to_str().unwrap(),
+        ],
+    );
+
+    let mut reader = room.start_reader("sentry");
+    reader.until(Duration::from_secs(55), || {
+        let ready = call_count(&cycle_alpha_count) >= 4
+            && call_count(&cycle_beta_count) >= 4
+            && call_count(&flicker_count) >= 5
+            && call_count(&flaky_count) >= 5
+            && call_count(&fail_gap_count) >= 5;
+        if !ready {
+            return None;
+        }
+        let alpha_bodies: Vec<String> = room.inbox("alpha")["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|msg| msg["body"].as_str().unwrap().to_owned())
+            .collect();
+        let beta_bodies: Vec<String> = room.inbox("beta")["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|msg| msg["body"].as_str().unwrap().to_owned())
+            .collect();
+        let alpha_done = alpha_bodies
+            .iter()
+            .filter(|body| *body == "cycle | alpha alert")
+            .count()
+            == 2
+            && alpha_bodies
+                .iter()
+                .any(|body| body == "flaky | read failed: upstream down");
+        let beta_done = beta_bodies
+            .iter()
+            .filter(|body| *body == "fail-gap | gap alert")
+            .count()
+            == 2;
+        (alpha_done && beta_done).then_some(())
+    });
+
+    room.set_ok("sentry", &["stop"]);
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+
+    let alpha_bodies: Vec<String> = room.inbox("alpha")["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|msg| msg["body"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        alpha_bodies
+            .iter()
+            .filter(|body| *body == "cycle | alpha alert")
+            .count(),
+        2,
+        "alpha/cycle should mail twice: {alpha_bodies:?}"
+    );
+    assert_eq!(
+        alpha_bodies
+            .iter()
+            .filter(|body| *body == "flicker | flicker alert")
+            .count(),
+        1,
+        "alpha/flicker should mail once: {alpha_bodies:?}"
+    );
+    assert_eq!(
+        alpha_bodies
+            .iter()
+            .filter(|body| *body == "flaky | flaky alert")
+            .count(),
+        1,
+        "alpha/flaky should mail once despite interleaved failures: {alpha_bodies:?}"
+    );
+    assert_eq!(
+        alpha_bodies
+            .iter()
+            .filter(|body| *body == "flaky | read failed: upstream down")
+            .count(),
+        1,
+        "alpha/flaky failure should mail once: {alpha_bodies:?}"
+    );
+
+    let beta_bodies: Vec<String> = room.inbox("beta")["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|msg| msg["body"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        beta_bodies
+            .iter()
+            .filter(|body| *body == "cycle | beta alert")
+            .count(),
+        1,
+        "beta/cycle must stay isolated from alpha/cycle: {beta_bodies:?}"
+    );
+    assert_eq!(
+        beta_bodies
+            .iter()
+            .filter(|body| *body == "fail-gap | gap alert")
+            .count(),
+        2,
+        "beta/fail-gap should mail twice after two clean omissions: {beta_bodies:?}"
+    );
+    assert_eq!(
+        beta_bodies
+            .iter()
+            .filter(|body| *body == "fail-gap | read failed: blip error")
+            .count(),
+        1,
+        "beta/fail-gap failure should mail once: {beta_bodies:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn returning_condition_reuses_persisted_absence_across_reader_takeover() {
+    let room = Room::new();
+    for seat in ["alpha", "beta", "recipient"] {
+        room.join(seat);
+    }
+    let (script, count_file) = sequence_script(
+        &room,
+        "takeover",
+        &[
+            "printf 'fp-1\\ttakeover alert\\n'",
+            "exit 0",
+            "exit 0",
+            "printf 'fp-1\\ttakeover alert\\n'",
+        ],
+    );
+    room.set_ok(
+        "recipient",
+        &["add", "ci", "--every", "10", "--", script.to_str().unwrap()],
+    );
+
+    let mut first = room.start_reader("alpha");
+    let second = room.start_reader("beta");
+    let first_pid = first.pid();
+    let elected = first.until(Duration::from_secs(8), || {
+        let status = room.listing("recipient")["reader"].clone();
+        (status["active"].is_object() && status["standbys"][0].is_object()).then_some(status)
+    });
+    let (first_seat, mut holder, standby_seat, mut standby) =
+        if elected["active"]["pid"] == first_pid {
+            ("alpha", first, "beta", second)
+        } else {
+            ("beta", second, "alpha", first)
+        };
+
+    // Wait for pass 1 (present -> mailed) and pass 2 (first clean omission -> persisted).
+    holder.until(Duration::from_secs(20), || {
+        let watches = room.watches("recipient");
+        (call_count(&count_file) >= 2 && watches[0]["last_result"] == "ok, 0 items").then_some(())
+    });
+    assert_eq!(room.watches("recipient")[0]["sent"], 1);
+    assert_eq!(
+        room.inbox("recipient")["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // Gracefully release the first reader so the standby takes over immediately.
+    holder.terminate().unwrap();
+    assert!(holder.wait_within(Duration::from_secs(5)).status.success());
+    let standby_pid = standby.pid();
+    standby.until(Duration::from_secs(5), || {
+        (room.listing("recipient")["reader"]["active"]["pid"] == standby_pid).then_some(())
+    });
+
+    // Pass 3 (second clean omission) forgets fp-1; pass 4 (present) mails it again via standby.
+    standby.until(Duration::from_secs(28), || {
+        let inbox = room.inbox("recipient");
+        (inbox["messages"].as_array().unwrap().len() == 2).then_some(())
+    });
+    room.set_ok("recipient", &["stop"]);
+    assert!(standby.wait_within(Duration::from_secs(5)).status.success());
+
+    let inbox = room.inbox("recipient");
+    let messages = inbox["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["sender"], first_seat);
+    assert_eq!(messages[0]["body"], "ci | takeover alert");
+    assert_eq!(messages[1]["sender"], standby_seat);
+    assert_eq!(messages[1]["body"], "ci | takeover alert");
+}

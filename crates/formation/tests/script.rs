@@ -244,3 +244,368 @@ print(json.dumps({{"items": items}}))
     );
     assert!(fail_err.contains("owner unreachable"));
 }
+
+fn prepend_path(bin: &Path) -> std::ffi::OsString {
+    match std::env::var_os("PATH") {
+        Some(existing) => {
+            let mut joined = std::ffi::OsString::from(bin.as_os_str());
+            joined.push(":");
+            joined.push(existing);
+            joined
+        }
+        None => bin.as_os_str().to_os_string(),
+    }
+}
+
+#[test]
+fn attention_read_returns_more_than_20_items_preserving_filters_and_severity_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let queries_file = dir.path().join("queries.jsonl");
+
+    let orbit = bin.join("orbit");
+    let fixture = format!(
+        r#"#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+assert args[:5] == ["--workspace", "hm_host/ws_demo", "tool", "run", "orbit.attention"], args
+assert args[5] == "--input", args
+query = json.loads(args[6])
+with Path("{queries}").open("a") as fh:
+    fh.write(json.dumps(query) + "\n")
+
+if query.get("severity") == "critical":
+    items = [
+        {{
+            "id": "att_crit_1",
+            "fingerprint": "fp_crit_1",
+            "kind": "host_unhealthy",
+            "severity": "critical",
+            "refs": {{}},
+            "host": {{"name": "build-box"}},
+            "reason": "build-box unreachable",
+            "next": {{"command": "orbit host show build-box"}},
+        }},
+        {{
+            "id": "att_crit_2",
+            "fingerprint": "fp_crit_2",
+            "kind": "review_waiting",
+            "severity": "critical",
+            "refs": {{"task_id": "TASK-99"}},
+            "reason": "critical review waiting",
+            "next": {{"command": "orbit task show TASK-99"}},
+        }},
+        {{
+            "id": "att_dup",
+            "fingerprint": "fp_item_01",
+            "kind": "notice_open",
+            "severity": "critical",
+            "refs": {{"notice_id": "N-1"}},
+            "reason": "duplicate fingerprint should be deduplicated",
+            "next": {{"command": "orbit notice list"}},
+        }},
+    ]
+else:
+    severities = ["low", "medium", "high", "critical"]
+    items = []
+    for idx in range(1, 26):
+        sev = severities[idx % len(severities)]
+        items.append({{
+            "id": f"att_{{idx:02d}}",
+            "fingerprint": f"fp_item_{{idx:02d}}",
+            "kind": "blocked",
+            "severity": sev,
+            "refs": {{"task_id": f"TASK-{{idx:02d}}"}},
+            "reason": f"item {{idx:02d}} waiting",
+            "next": {{"command": f"orbit task show TASK-{{idx:02d}}"}},
+        }})
+
+print(json.dumps({{
+    "items": items,
+    "counts": {{
+        "matching": len(items),
+        "returned": len(items),
+        "truncated": False,
+    }},
+    "degraded": [],
+}}))
+"#,
+        queries = queries_file.display(),
+    );
+    fs::write(&orbit, fixture).unwrap();
+    fs::set_permissions(&orbit, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let script = repo_root().join("plugin/skills/formation/scripts/attention-read.sh");
+    let out = Command::new(&script)
+        .arg("hm_host/ws_demo")
+        .env("PATH", prepend_path(&bin))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let queries: Vec<serde_json::Value> = fs::read_to_string(&queries_file)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(queries.len(), 2);
+    assert_eq!(queries[0]["limit"], 500);
+    assert_eq!(
+        queries[0]["exclude_kind"],
+        serde_json::json!([
+            "friction_untriaged",
+            "host_unhealthy",
+            "notice_open",
+            "review_waiting",
+        ])
+    );
+    assert_eq!(queries[1]["limit"], 500);
+    assert_eq!(queries[1]["severity"], "critical");
+    assert_eq!(queries[1]["kind"], queries[0]["exclude_kind"]);
+
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 27, "expected 25 + 2 unique items: {stdout}");
+
+    let rank = |sev: &str| match sev {
+        "critical" => 0,
+        "high" => 1,
+        "medium" => 2,
+        "low" => 3,
+        other => panic!("unexpected severity {other}"),
+    };
+    let severities: Vec<u8> = lines
+        .iter()
+        .map(|line| {
+            let (_, body) = line.split_once('\t').unwrap();
+            let parts: Vec<&str> = body.split(" | ").collect();
+            assert_eq!(parts.len(), 5);
+            rank(parts[1])
+        })
+        .collect();
+    assert!(
+        severities.windows(2).all(|pair| pair[0] <= pair[1]),
+        "items not sorted by severity: {severities:?}"
+    );
+}
+
+#[test]
+fn attention_read_rejects_partial_or_truncated_snapshots_and_preserves_watch_state() {
+    let temp = cw_testkit::TempRoot::new("FORMATION").unwrap();
+    let bin = temp.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let mode_file = temp.path().join("mode");
+    let orbit = bin.join("orbit");
+    let fixture = format!(
+        r#"#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+mode = Path("{mode}").read_text().strip()
+args = sys.argv[1:]
+query = json.loads(args[6])
+is_crit = query.get("severity") == "critical"
+
+def make_items(count):
+    return [
+        {{
+            "id": f"att_{{idx:02d}}",
+            "fingerprint": f"fp_item_{{idx:02d}}",
+            "kind": "blocked",
+            "severity": "high",
+            "refs": {{"task_id": f"TASK-{{idx:02d}}"}},
+            "reason": f"blocked item {{idx:02d}}",
+            "next": {{"command": f"orbit task show TASK-{{idx:02d}}"}},
+        }}
+        for idx in range(1, count + 1)
+    ]
+
+if is_crit:
+    if mode == "degraded_crit":
+        print(json.dumps({{
+            "items": [],
+            "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+            "degraded": [{{
+                "scope": "host:build-box",
+                "kind": "host_unhealthy",
+                "code": "unreachable",
+                "message": "host unreachable",
+            }}],
+        }}))
+    elif mode == "truncated_crit":
+        print(json.dumps({{
+            "items": [],
+            "counts": {{"matching": 2, "returned": 0, "truncated": True}},
+            "degraded": [],
+        }}))
+    else:
+        print(json.dumps({{
+            "items": [],
+            "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+            "degraded": [],
+        }}))
+    sys.exit(0)
+
+if mode == "complete_25":
+    items = make_items(25)
+    print(json.dumps({{
+        "items": items,
+        "counts": {{"matching": 25, "returned": 25, "truncated": False}},
+        "degraded": [],
+    }}))
+elif mode == "complete_24":
+    items = make_items(24)
+    print(json.dumps({{
+        "items": items,
+        "counts": {{"matching": 24, "returned": 24, "truncated": False}},
+        "degraded": [],
+    }}))
+elif mode == "truncated_flag":
+    items = make_items(10)
+    print(json.dumps({{
+        "items": items,
+        "counts": {{"matching": 25, "returned": 10, "truncated": True}},
+        "degraded": [],
+    }}))
+elif mode == "matching_gt_returned":
+    items = make_items(10)
+    print(json.dumps({{
+        "items": items,
+        "counts": {{"matching": 25, "returned": 10, "truncated": False}},
+        "degraded": [],
+    }}))
+elif mode == "returned_mismatch":
+    items = make_items(2)
+    print(json.dumps({{
+        "items": items,
+        "counts": {{"matching": 2, "returned": 3, "truncated": False}},
+        "degraded": [],
+    }}))
+elif mode == "degraded_fast":
+    print(json.dumps({{
+        "items": [],
+        "counts": {{"matching": 0, "returned": 0, "truncated": False}},
+        "degraded": [{{
+            "scope": "workspace:ws_demo",
+            "kind": "ci_red",
+            "code": "capped",
+            "message": "per-workspace item cap reached",
+        }}],
+    }}))
+else:
+    sys.stderr.write(f"unknown mode {{mode}}\n")
+    sys.exit(2)
+"#,
+        mode = mode_file.display(),
+    );
+    fs::write(&orbit, fixture).unwrap();
+    fs::set_permissions(&orbit, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let path_env = prepend_path(&bin);
+    let script = repo_root().join("plugin/skills/formation/scripts/attention-read.sh");
+
+    for (mode, expected) in [
+        ("truncated_flag", "truncated"),
+        ("matching_gt_returned", "truncated"),
+        ("returned_mismatch", "incomplete"),
+        ("degraded_fast", "degraded"),
+        ("degraded_crit", "degraded"),
+        ("truncated_crit", "truncated"),
+    ] {
+        fs::write(&mode_file, mode).unwrap();
+        let out = Command::new(&script)
+            .arg("hm_host/ws_demo")
+            .env("PATH", &path_env)
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "{mode} unexpectedly succeeded");
+        assert!(out.stdout.is_empty(), "{mode} wrote stdout");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert_eq!(stderr.lines().count(), 1, "{mode}: {stderr}");
+        assert!(stderr.contains(expected), "{mode}: {stderr}");
+    }
+
+    // End-to-end: truncated/degraded responses must not mark unlisted items cleared.
+    let join = temp
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(["mail", "join", "sentry", "--room"])
+        .arg(temp.path())
+        .output()
+        .unwrap();
+    assert!(join.status.success());
+
+    let probe = format!("attention={} hm_host/ws_demo", script.display());
+    let wait_once = || -> serde_json::Value {
+        let out = temp
+            .command(env!("CARGO_BIN_EXE_formation"))
+            .env("PATH", &path_env)
+            .args(["watch", "--room"])
+            .arg(temp.path())
+            .args([
+                "--as",
+                "sentry",
+                "wait",
+                "--probe",
+                &probe,
+                "--timeout",
+                "0",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+
+    fs::write(&mode_file, "complete_25").unwrap();
+    let first = wait_once();
+    assert_eq!(first["items"].as_array().unwrap().len(), 20);
+    assert_eq!(first["remaining"], 5);
+    let second = wait_once();
+    assert_eq!(second["items"].as_array().unwrap().len(), 5);
+    assert_eq!(second["remaining"], 0);
+
+    // Two truncated reads and one degraded read omit items 11..=25 but must fail closed.
+    fs::write(&mode_file, "truncated_flag").unwrap();
+    let fail_one = wait_once();
+    assert_eq!(fail_one["failed"].as_array().unwrap().len(), 1);
+    assert_eq!(fail_one["items"], serde_json::json!([]));
+    let fail_two = wait_once();
+    assert_eq!(fail_two["expired"], true);
+    assert_eq!(fail_two["failed"], serde_json::json!([]));
+
+    fs::write(&mode_file, "degraded_fast").unwrap();
+    let fail_three = wait_once();
+    assert_eq!(fail_three["expired"], true);
+    assert_eq!(fail_three["failed"], serde_json::json!([]));
+
+    // Returning to the complete 25-item snapshot must not re-report any unlisted item.
+    fs::write(&mode_file, "complete_25").unwrap();
+    let recovered = wait_once();
+    assert_eq!(recovered["expired"], true);
+    assert_eq!(recovered["items"], serde_json::json!([]));
+
+    // Only two consecutive complete reads omitting item 25 forget item 25.
+    fs::write(&mode_file, "complete_24").unwrap();
+    assert_eq!(wait_once()["expired"], true);
+    assert_eq!(wait_once()["expired"], true);
+
+    fs::write(&mode_file, "complete_25").unwrap();
+    let returned = wait_once();
+    assert_eq!(returned["expired"], false);
+    let items = returned["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["fingerprint"], "fp_item_25");
+}

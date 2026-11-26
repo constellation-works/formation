@@ -1,6 +1,6 @@
 //! The watch set, handed watch fingerprints and active probe failure records.
 
-use crate::contract::{NewWatch, WatchEntry, WatchLeaseStatus, WatchState};
+use crate::contract::{NewWatch, WatchEntry, WatchHandover, WatchLeaseStatus, WatchState};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::types::Type;
@@ -211,6 +211,58 @@ impl Watch<'_> {
                 "INSERT OR IGNORE INTO watch_handover (seat, probe, fingerprint, handed_at)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![seat, probe, fingerprint, handed_at],
+            )
+            .map(|affected| affected == 1)
+            .map_err(error::sql)
+    }
+
+    /// Remembered fingerprints for `seat` and `probe` with their consecutive absent-read counts.
+    pub fn remembered(&self, seat: &str, probe: &str) -> Result<Vec<WatchHandover>, Error> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT fingerprint, absent_reads FROM watch_handover
+                  WHERE seat = ?1 AND probe = ?2
+                  ORDER BY fingerprint",
+            )
+            .map_err(error::sql)?;
+        statement
+            .query_map(params![seat, probe], |row| {
+                Ok(WatchHandover {
+                    fingerprint: row.get(0)?,
+                    absent_reads: row.get(1)?,
+                })
+            })
+            .map_err(error::sql)?
+            .collect::<Result<_, _>>()
+            .map_err(error::sql)
+    }
+
+    /// Update the consecutive absent-read count for one remembered fingerprint.
+    pub fn set_absent_reads(
+        &self,
+        seat: &str,
+        probe: &str,
+        fingerprint: &str,
+        absent_reads: u32,
+    ) -> Result<(), Error> {
+        self.conn
+            .execute(
+                "UPDATE watch_handover SET absent_reads = ?4
+                  WHERE seat = ?1 AND probe = ?2 AND fingerprint = ?3",
+                params![seat, probe, fingerprint, absent_reads],
+            )
+            .map(|_| ())
+            .map_err(error::sql)
+    }
+
+    /// Forget one remembered fingerprint so a later occurrence is treated as new.
+    pub fn forget_handed(&self, seat: &str, probe: &str, fingerprint: &str) -> Result<bool, Error> {
+        self.conn
+            .execute(
+                "DELETE FROM watch_handover
+                  WHERE seat = ?1 AND probe = ?2 AND fingerprint = ?3",
+                params![seat, probe, fingerprint],
             )
             .map(|affected| affected == 1)
             .map_err(error::sql)
