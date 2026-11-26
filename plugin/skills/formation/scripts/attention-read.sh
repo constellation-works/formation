@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# The sentry's read of Orbit attention for one workspace selector.
+# The sentry's read of Orbit attention for one host-qualified workspace selector.
 # Read-only. Prints one line per item:
 #
 #   <fingerprint><TAB><kind> | <severity> | <id> | <reason> | <next command>
 #
-# Usage: attention-read.sh <workspace selector>
-# Exit 0 with no output means nothing needs attention. A non-zero exit with one
-# line on stderr means the read failed, was truncated or degraded, or `orbit` is absent.
+# Usage: attention-read.sh hm_<owner>/ws_<name>
+#
+# Both reads are pinned to the selector's owner host. This probe holds no Operator
+# capability, so it covers the owner's agent-readable task kinds only. It never asks
+# for the Operator-only runtime and host kinds (run_failed, run_stuck, claim_stale,
+# host_unhealthy); those are read on an authorized path (references/sentry.md#coverage).
+# Exit 0 with no output means nothing needs attention. A non-zero exit with one line
+# on stderr means the read failed, was truncated or degraded, the selector names no
+# owner (exit 2), or `orbit` is absent.
 set -uo pipefail
 
 if [ "$#" -ne 1 ] || [ -z "${1:-}" ]; then
-  echo "usage: attention-read.sh <workspace selector>" >&2
+  echo "usage: attention-read.sh hm_<owner>/ws_<name>" >&2
   exit 2
 fi
 
@@ -28,18 +34,32 @@ fi
 
 exec python3 - "$sel" <<'PY'
 import json
+import re
 import subprocess
 import sys
 
 # Orbit's maximum public page size (`per_workspace_item_cap` is 200).
 QUERY_LIMIT = 500
 
-EXCLUDED_KINDS = [
-    "friction_untriaged",
+# Operator-only runtime and host sources. Orbit answers an unprivileged read of
+# these with a `capability` degradation, so the probe never requests them.
+OPERATOR_KINDS = [
+    "run_failed",
+    "run_stuck",
+    "claim_stale",
     "host_unhealthy",
+]
+
+# Agent-readable kinds that the sentry's digest covers. The fast read omits them;
+# the critical read returns only their critical items.
+DIGEST_KINDS = [
+    "friction_untriaged",
     "notice_open",
     "review_waiting",
 ]
+
+# `hm_<owner>/ws_<name>`, as `orbit.workspace.list` reports a workspace.
+OWNER_SELECTOR = re.compile(r"(hm_[A-Za-z0-9_-]+)/ws_[A-Za-z0-9_-]+")
 
 SEVERITY_ORDER = {
     "critical": 0,
@@ -159,6 +179,18 @@ def ensure_complete(payload: dict, items: list) -> None:
             fail(degraded_error(degraded))
 
 
+def owner_host(selector: str) -> str:
+    match = OWNER_SELECTOR.fullmatch(selector)
+    if match is None:
+        print(
+            "attention-read.sh: the selector must be host-qualified (hm_<owner>/ws_<name>) "
+            "so both reads pin to its owner",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return match.group(1)
+
+
 def read_attention(selector: str, query: dict) -> list:
     proc = subprocess.run(
         [
@@ -236,13 +268,23 @@ def next_command(item: dict) -> str:
 
 def main() -> None:
     selector = sys.argv[1]
+    owner = owner_host(selector)
     fast_items = read_attention(
         selector,
-        {"limit": QUERY_LIMIT, "exclude_kind": EXCLUDED_KINDS},
+        {
+            "limit": QUERY_LIMIT,
+            "host": [owner],
+            "exclude_kind": DIGEST_KINDS + OPERATOR_KINDS,
+        },
     )
     crit_items = read_attention(
         selector,
-        {"kind": EXCLUDED_KINDS, "severity": "critical", "limit": QUERY_LIMIT},
+        {
+            "kind": DIGEST_KINDS,
+            "severity": "critical",
+            "host": [owner],
+            "limit": QUERY_LIMIT,
+        },
     )
 
     seen: set[str] = set()
