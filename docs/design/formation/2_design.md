@@ -51,6 +51,7 @@ can delegate the work to \"implementer\"."
 
 | Rank | Name | Model, effort | Replaces | Work | Record |
 |---|---|---|---|---|---|
+| admiral | None: a person, never a session | None | the person the skill called "the operator" | Gives the formation order and is the only one who settles what the authority table reserves | None |
 | chief | `0-chief` | Fable or Opus, high | lead, manager | Staffs the units, keeps the roster, is the first stop for every captain's questions and blockers, and is Daniel's design partner | Its assignment in `ws_constellation` |
 | aide | `0-aide` | Haiku, high | aide | Briefs Daniel at its start with the previous session's summary and the open claims (scribe's open proposals); manages the scribe store on his instruction through the `scribe` CLI; quick questions; relaying his quoted words. Daniel, 2026-11-21: "I will be interacting with the scribe primarily to manage scribe artifacts, e.g. instruct scribe to approve certain claims, delete certain artifacts, etc. the scribe will be using cli tool to perform these operations." The CLI still refuses an agent settling a session's claim, changing an entry Daniel wrote, and any delete; until scribe changes, the aide hands him the line to type for those | Agent notes under its own name |
 | captain | `<ws>-0-capt` | Opus, high | orchestrator | Commands one workspace per `orchestration-session`, owns its record, talks to Daniel | Its assignment |

@@ -19,6 +19,6 @@ Orbit answers an unprivileged read of the Operator-only kinds with a `capability
 - a live resident whose mandate covers the workspace, which reads them read-only; or
 - an Operator session's own Orbit read, `orbit.attention` with `"host": ["hm_<owner>"]` and `"kind": ["run_failed", "run_stuck", "claim_stale", "host_unhealthy"]`.
 
-A `capability` degradation on a path means that path lacks the Operator capability. Report it to the operator and do not treat the empty result as clear.
+A `capability` degradation on a path means that path lacks the Operator capability. Report it to the admiral and do not treat the empty result as clear.
 
 Any other degraded entry, a truncated page or malformed counts fails the probe's read closed. The reader keeps every remembered fingerprint, reports the failure once and resumes when a complete read returns.

@@ -1,10 +1,10 @@
 # Ranks fix a session's model and effort, not its duty. A unit is one workspace's line-up.
-# Claude-specific defaults are labeled. Codex uses the operator’s assigned models and actual host capacity.
-talks_to_operator: [chief, aide, captain]
+# Claude-specific defaults are labeled. Codex uses the admiral’s assigned models and actual host capacity.
+talks_to_admiral: [chief, aide, captain]
 
 once:                        # staffed once, whatever the units
   chief:
-    name: 0-chief            # the session the operator opens
+    name: 0-chief            # the session the admiral opens
     claude_model: its own           # Fable or Opus
     claude_effort: high             # a child's effort is clamped to this
     record: "[orchestration]: formation <units> - <family>, tags orchestration, formation-day, no-drain"
@@ -15,11 +15,11 @@ once:                        # staffed once, whatever the units
     started_by: chief
     claude_detach: true
     brief: assets/brief-aide.md
-    relays_to: [captain]     # the operator's quoted words, to the owner; it holds no authority
+    relays_to: [captain]     # the admiral's quoted words, to the owner; it holds no authority
     record: none             # agent notes under its own author name
-  specialist:                # one per subject the operator names; none by default
+  specialist:                # one per subject the admiral names; none by default
     name: "1-spec-{subject}"
-    claude_model: sonnet            # unless the operator names another
+    claude_model: sonnet            # unless the admiral names another
     claude_effort: medium
     started_by: chief
     claude_detach: true             # it reports to nobody; it answers the session that asked
@@ -33,13 +33,13 @@ ranks:
     claude_model: opus
     claude_effort: high
     started_by: chief
-    claude_detach: true             # the operator drives it; without the detach every turn would wake the chief
-    reports_to: chief        # questions, blockers and results; the operator directly when the operator is in its chat
+    claude_detach: true             # the admiral drives it; without the detach every turn would wake the chief
+    reports_to: chief        # questions, blockers and results; the admiral directly when the admiral is in its chat
     peers: [captain]         # other captains, for cross-workspace asks
     brief: assets/brief-captain.md
     record: "[orchestration]: {ws} - {actual_model}"   # filed by the chief before the start; its id goes in the brief
     watch_reader: "formation watch run"   # attention-owning captains register attention/ci and start a reader; others stand by
-    scribe_on: no            # captains are not switched on; /scribe on is the operator's, per session
+    scribe_on: no            # captains are not switched on; /scribe on is the admiral's, per session
   lieutenant:
     name: "{ws}-1-lt"        # a reinforcement is {ws}-1-lt2
     claude_model: opus
@@ -80,25 +80,25 @@ units:                       # each has exactly one captain
 
 reinforcements:              # a captain asks the chief for a rank, never for a second unit
   chief_approves: the squad line-up plus one more lieutenant, per workspace
-  beyond_that: operator
+  beyond_that: admiral
 
 resident:                    # close-out step 4: one per workspace that still has pending tasks
   defaults:                  # resident duration 16 hours, 1 hour wake, same
-    deadline_hours: 16       #   instructions and goals as always; the operator decides the crew each night.
+    deadline_hours: 16       #   instructions and goals as always; the admiral decides the crew each night.
     cadence: {heartbeat_minutes: 60, floor_minutes: 60}   # one cycle an hour, no more and no less
     goal_and_instructions: the last mandate in that workspace
     rights: [dispatch, promote, merge, plugin_upgrade]    # requested, never assumed
-    crew: ask operator       # the operator's choice each night; do not copy the last mandate's crew
+    crew: ask admiral       # the admiral's choice each night; do not copy the last mandate's crew
   procedure:
     - File the mandate as the orbit skill's Manager reference describes (an [orchestration]
-      task tagged resident with resident/mandate.json), with the defaults above unless the operator
+      task tagged resident with resident/mandate.json), with the defaults above unless the admiral
       named something else. Write the artifact from a file under the checkout's `.orbit/tmp/`
       with `orbit.task.artifact` action `put` and `sourcePath`.
-    - Request the grant with `orbit resident grant`, quoting the operator's words. It raises a
-      decision that only the operator answers.
-    - Give the operator the one command that enables the cycle routine. An agent session is refused
+    - Request the grant with `orbit resident grant`, quoting the admiral's words. It raises a
+      decision that only the admiral answers.
+    - Give the admiral the one command that enables the cycle routine. An agent session is refused
       there, and that refusal is not worked around.
-    - Offer the operator the dashboard's Tasks dock > Residents > Start dialog as the one-act
+    - Offer the admiral the dashboard's Tasks dock > Residents > Start dialog as the one-act
       alternative to file, grant and enable (not yet used by a formation).
     - Confirm the first cycle wrote a checkpoint before reporting the resident as running.
   morning:

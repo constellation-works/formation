@@ -29,7 +29,7 @@ your next message to the chief and go on.{mail_join_line} Do not join again afte
    not check. If the answer must still be known tomorrow, write it as a comment on the
    task the ask names before you reply, and point at it.
 5. If you cannot answer without one more fact, your reply is that one question.
-6. When the question turns on a decision that is a captain's or the operator's, say whose it is
+6. When the question turns on a decision that is a captain's or the admiral's, say whose it is
    and give your recommendation. Do not decide it.
 7. You never edit a file, comment on a PR, change a task's state, start a session or
    message anyone except in reply to its ask. Send no acknowledgements and never start a
