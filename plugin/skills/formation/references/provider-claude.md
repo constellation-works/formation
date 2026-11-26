@@ -11,11 +11,11 @@ Use this procedure in a Claude Desktop Code chat that exposes the session tools.
 | Sergeant or specialist | Sonnet, medium |
 | Sentry | Haiku, medium |
 
-A named Sonnet in a duo selects a sergeant who watches on its own wakes. Keep Haiku for a Claude sentry. Apply the operator’s actual model and effort choices to other seats. Check `get_session` on self before staffing. A child cannot exceed its parent’s model or starting effort. Ask for the required parent capacity if unavailable. Confirm the child’s effective settings. Where supported, `set_session_effort` changes effort for its next turn.
+A named Sonnet in a duo selects a sergeant who watches on its own wakes. Keep Haiku for a Claude sentry. Apply the admiral’s actual model and effort choices to other seats. Check `get_session` on self before staffing. A child cannot exceed its parent’s model or starting effort. Ask for the required parent capacity if unavailable. Confirm the child’s effective settings. Where supported, `set_session_effort` changes effort for its next turn.
 
-On a requested formation in Constellation, turn off the Claude Docs connector for formation sessions before spawning if the app offers `set_session_connector_enabled`. Inherit the permission mode. Use `start_session` with fresh context, name, model, effort, filled background and prompt, on the operator’s own initiating turn. Use `set_session_title` for readable titles. Shared-checkout seats use no worktree.
+On a requested formation in Constellation, turn off the Claude Docs connector for formation sessions before spawning if the app offers `set_session_connector_enabled`. Inherit the permission mode. Use `start_session` with fresh context, name, model, effort, filled background and prompt, on the admiral’s own initiating turn. Use `set_session_title` for readable titles. Shared-checkout seats use no worktree.
 
-Implementation lieutenants use their own persistent worktrees. A peer-initiated turn may require proposing the start for the operator or waiting for their typed turn.
+Implementation lieutenants use their own persistent worktrees. A peer-initiated turn may require proposing the start for the admiral or waiting for their typed turn.
 
 Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
 
@@ -25,8 +25,8 @@ Each attention-owning captain registers `attention` and `ci` with `formation wat
 
 A background `formation watch run` process lives only as long as that session’s background shell survives. If every reader exits without `formation watch stop`, the next hook delivers a one-time `watch: nothing has read...` notice to affected seats; restart `formation watch run` in a live seat’s background shell. Keep `formation watch wait` only for a standalone blocking wait (confirm background exit notification before relying on it).
 
-Inspect context with `get_usage` if available. The chief and any captain in active operator conversation compact. For a run-output-heavy session with a confirmed handoff, `clear_session` with self is its last act. The parent sends the restart line identifying the handoff. Verify `formation watch list` and re-arm a reader if `none`, then re-establish the group seat before proceeding.
+Inspect context with `get_usage` if available. The chief and any captain in active admiral conversation compact. For a run-output-heavy session with a confirmed handoff, `clear_session` with self is its last act. The parent sends the restart line identifying the handoff. Verify `formation watch list` and re-arm a reader if `none`, then re-establish the group seat before proceeding.
 
-If the app refuses the clear because of live work, queued input, pinning or permissions, honor that refusal. The operator can type /clear or /scribe continue with the handoff ID where applicable.
+If the app refuses the clear because of live work, queued input, pinning or permissions, honor that refusal. The admiral can type /clear or /scribe continue with the handoff ID where applicable.
 
-Before archiving a replaced captain, have it detach lieutenants it started. At authorized shift close, issue `formation watch stop` before archiving roster sessions so readers exit cleanly, read session records and leave the aide to the operator. If pinned, on screen or busy, report the session. A visible chief or captain can ask the operator to archive it when self-archive is refused.
+Before archiving a replaced captain, have it detach lieutenants it started. At authorized shift close, issue `formation watch stop` before archiving roster sessions so readers exit cleanly, read session records and leave the aide to the admiral. If pinned, on screen or busy, report the session. A visible chief or captain can ask the admiral to archive it when self-archive is refused.

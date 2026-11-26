@@ -6,7 +6,7 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 
 `UserPromptSubmit` adds unread mail to the current turn. Hook delivery marks the envelope delivered. Use `formation mail inbox` and `formation mail ack "$receipt"` for a seat with no hook, such as a headless worker, or to read and acknowledge an envelope too large for the hook budget.
 
-| Operator request | Command |
+| Admiral request | Command |
 | --- | --- |
 | Join from an open Scribe group (or pass `"$seat" --room "$room"`) | `formation mail join` |
 | List every joined seat with its unread count, `held` and `seen` | `formation mail who` |
@@ -14,7 +14,7 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 | Inspect unread mail and leave it pending | `formation mail inbox` |
 | Acknowledge handled mail (writes the receipt state) | `formation mail ack "$receipt"` |
 
-- For a send, use the operator’s request or standing permission covering this recipient and content. If either is unclear, ask before sending.
+- For a send, use the admiral’s request or standing permission covering this recipient and content. If either is unclear, ask before sending.
 - Choose a fresh ID for a new message. On a retry, reuse the same ID, recipient and body. For example, `{"id":"ci-1","receipt":7}` confirms storage. If the CLI refuses an `unknown_recipient`, report the refusal and the joined seats it lists. If it reports an ID conflict, reconcile the earlier send before sending again.
 - Use `held` as a recent-presence signal. A receipt confirms that mail is stored. Check `formation mail who` for the seat’s current `held` status and unread count.
 - Acknowledge only after the responsible recipient has handled the message and authorized marking it handled. Reading an inbox leaves the envelope unacknowledged.
@@ -23,4 +23,4 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 
 Claude’s background `Stop` hook waits for 55 minutes (3,300 seconds) with one live waiter per seat. After it expires, stored mail waits for the seat’s next hook or inbox read.
 
-If a send to a Claude seat returns `"held": false`, use an authorized native Claude session message to the same open chat with the single line `Formation mail waiting`. If you are a Codex captain or a process, route the wake request to the chief or the seat’s captain, who can send that native message. For a closed or unloaded chat, ask the operator to open it and start a turn.
+If a send to a Claude seat returns `"held": false`, use an authorized native Claude session message to the same open chat with the single line `Formation mail waiting`. If you are a Codex captain or a process, route the wake request to the chief or the seat’s captain, who can send that native message. For a closed or unloaded chat, ask the admiral to open it and start a turn.
