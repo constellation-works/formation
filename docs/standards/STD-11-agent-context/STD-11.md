@@ -4,8 +4,8 @@ title: Agent context files — skills and instruction files loaded by an agent h
 summary: Normative rules for the skills and instruction files an agent harness loads — their source, content, structure, size, links and checks; follow them in every repository agents work in.
 tags: [standard, docs, agents]
 version: 3
-created: 2026-11-22
-updated: 2026-11-25
+created_date: 2026-11-22
+updated_date: 2026-11-25
 last_validated: 2026-11-22
 related: [STD-08-economy, STD-09-project-docs]
 ---
