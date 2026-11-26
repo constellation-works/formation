@@ -11,7 +11,7 @@ fails CI on any edit; changes come only from a re-sync.
 | Standard | Version | Title | Rules |
 |---|---|---|---|
 | STD-01 | 4 | CLI surface — command grammar, inputs and effects, output modes, errors, help, and golden-tested public surfaces | [STD-01-cli-surface/STD-01.md](STD-01-cli-surface/STD-01.md) |
-| STD-02 | 8 | Rust architecture and errors — layering, visibility, typed errors, failure semantics, idiom and naming, logging, and test layout for constellation Rust projects | [STD-02-rust-architecture-and-errors/STD-02.md](STD-02-rust-architecture-and-errors/STD-02.md) |
+| STD-02 | 10 | Rust architecture and errors — layering, visibility, typed errors, failure semantics, idiom and naming, logging, and test layout for constellation Rust projects | [STD-02-rust-architecture-and-errors/STD-02.md](STD-02-rust-architecture-and-errors/STD-02.md) |
 | STD-03 | 2 | Concurrency and process safety — locks, channels, durable writes, state evolution, subprocess lifecycles, destructive operations, remote effects, test containment and resource bounds | [STD-03-concurrency-and-process-safety/STD-03.md](STD-03-concurrency-and-process-safety/STD-03.md) |
 | STD-04 | 2 | Testing and verification — test design, hermetic tests, honest gates, docs as contracts, and evidence-based verification conduct | [STD-04-testing-and-verification/STD-04.md](STD-04-testing-and-verification/STD-04.md) |
 | STD-05 | 1 | Security boundaries — authority, filesystem containment, child environments, redaction, local network surfaces, supply chain and consent | [STD-05-security-boundaries/STD-05.md](STD-05-security-boundaries/STD-05.md) |
@@ -19,14 +19,14 @@ fails CI on any edit; changes come only from a re-sync.
 | STD-08 | 3 | Economy — bounded agent context, delta-only records, one channel per ask, bookkeeping off the page, one-line errors, complete stored records, size stated at design time | [STD-08-economy/STD-08.md](STD-08-economy/STD-08.md) |
 | STD-09 | 4 | Project docs — a shared structure for the README and common repository documentation | [STD-09-project-docs/STD-09.md](STD-09-project-docs/STD-09.md) |
 | STD-11 | 3 | Agent context files — skills and instruction files loaded by an agent harness | [STD-11-agent-context/STD-11.md](STD-11-agent-context/STD-11.md) |
-| STD-12 | 1 | Source style — names, vertical spacing, line width and the formatter gate, as a language-neutral core with one profile per language | [STD-12-source-style/STD-12.md](STD-12-source-style/STD-12.md) |
+| STD-12 | 4 | Source style — names, vertical spacing, line width and the formatter gate, as a language-neutral core with one profile per language | [STD-12-source-style/STD-12.md](STD-12-source-style/STD-12.md) |
 
 Each standard is a directory. `STD-nn.md` holds its rules, where they apply and how to
 deviate: read it first. `why.md` explains each rule, `checks.md` names the gate that
 enforces it, `exemplars.md` points at worked examples in Orbit, and `CHANGELOG.md`
 records its versions.
 
-Source: the constellation umbrella `docs/standards/` at commit `1c9e7e77b593c501f7decd0d286adcee523c7809`.
+Source: the constellation umbrella `docs/standards/` at commit `663451f31fe33cc9fddafda3eba6ded7c63638d4`.
 
 ## Normative
 
