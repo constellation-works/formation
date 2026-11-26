@@ -3,17 +3,17 @@ title: Formation — Watch set
 owner: claude
 created_date: 2026-11-26
 updated_date: 2026-11-26
-status: Draft
+status: Accepted
 feature: watch
 doc_role: scope
 summary: A watch set kept in the room that seats change while it runs, one reader with standbys, and a command that lists what is being watched.
-stage: idea
-next: Daniel reviews the shape and answers the three questions.
+stage: building
+next: File the six build tasks, the set and the reader first.
 ---
 
 # Formation — Watch set
 
-This is a proposal. Nothing in it is built, and it waits for Daniel ([Questions for Daniel](#questions-for-daniel)).
+Daniel approved this shape on 2026-11-26 ([Decided](#decided)). Nothing in it is built yet.
 
 ## Problem
 
@@ -124,7 +124,7 @@ The contract stays: one line per item as `<fingerprint><TAB><text>`, exit 0 with
 
 ### A condition that returns
 
-Today a fingerprint that was sent once is never sent again. The proposal: a fingerprint missing from two successful reads in a row is forgotten, and if the item comes back it is mailed as new. A failed read counts for nothing, and an item that flickers for a single read stays quiet.
+Today a fingerprint that was sent once is never sent again. In this design a fingerprint missing from two successful reads in a row is forgotten, and if the item comes back it is mailed as new. A failed read counts for nothing, and an item that flickers for a single read stays quiet.
 
 The cost falls on probes that list only part of a condition, because an unlisted item looks cleared. The shipped attention probe reads the first 20 items, so it changes to read them all.
 
@@ -148,27 +148,29 @@ A watch's mail carries text from outside the formation: a check's name, an atten
 | Alternative | Why not |
 | --- | --- |
 | Keep one process per seat and let it reread its probes | Each seat must keep its own process alive, and each death is silent. It fixes the first limit only |
-| The hook restarts a dead reader itself | A process spawned from a hook has the app's environment, and nothing yet shows that `gh` and `orbit` probes run there or that the process outlives the hook. [Question 2](#questions-for-daniel) |
+| The hook restarts a dead reader itself | A process spawned from a hook has the app's environment, and nothing yet shows that `gh` and `orbit` probes run there or that the process outlives the hook. [Decided 2](#decided) |
 | An OS service per host | Installing one is the operator's act on each machine. Standbys cover a reader's death without it |
 | A file that declares the set, loaded at start | A captain's set is two `add` lines in its brief. It returns when a set outgrows that |
 | Mute for single items in the set | Fingerprints already stop repeats, and `pause` covers a whole watch. The sentry keeps its mute file |
 | Mail when an item clears | It doubles the mail, and the seat working the item sees it clear. It returns if a seat is seen working an item that had already cleared |
 
-## Questions for Daniel
+## Decided
 
-1. Is this the shape: the set in the room, one reader with standbys, and `watch list`? Recommended: yes.
-2. When no reader is left, should the hooks tell the affected seats, or start a reader themselves? Recommended: tell them in the first build, and trial a hook-started reader afterwards.
-3. Should a cleared fingerprint be forgotten after two clean reads, so that a returning condition is mailed again? Recommended: yes, with the attention probe changed to read every item.
+Daniel, 2026-11-26 (UTC), in the designer's chat, to "Approve the watch set design with my three recommended answers?": "Yes, all three".
+
+1. **The shape is the set in the room,** one reader with standbys, and `watch list`.
+2. **When no reader is left, the hooks tell the affected seats.** A reader started by a hook is trialled after the first build, and is added only if `gh` and `orbit` probes run in the hook's environment and the process outlives the hook.
+3. **A cleared fingerprint is forgotten after two clean reads,** and the attention probe changes to read every item.
 
 ## Build
 
-One task per item, filed after Daniel answers.
+One task per item.
 
 1. **The set.** The store's watch table and `add`, `remove`, `pause`, `resume`, `list`.
 2. **The reader.** `run`, `stop`, the lease, standby and per-watch intervals. The blocking form moves to `wait`.
 3. **Check.** `watch check`.
 4. **Hooks.** The stopped-reader line, and the heading for watch mail.
-5. **Returning conditions,** if question 3 is yes: forgetting, and the attention probe reads every item.
+5. **Returning conditions.** Forgetting, and the attention probe reads every item.
 6. **Plugin.** Start, the briefs, close-out and the usage page.
 
 ## Verification
