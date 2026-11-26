@@ -53,7 +53,8 @@ For each item the sentry sends, and each piece of routine work the captain order
    - **Never move the branch of a PR an Orbit run published** (branch `orbit/<task>-…`): no push, no rebase, no
      `gh pr update-branch`, even at the captain's order. Delivery accepts only the
      candidate it published or a head it advanced through its own repair. "Rebase a stuck
-     PR" means a PR a session opened. A changed candidate may require admiral reconciliation.
+     PR" means a PR a session opened. A changed candidate may require an Orbit operator
+     command to reconcile it.
    - **Repair mode** says who repairs a red check or a merge conflict on an open PR. It
      is **{repair_mode}** at your start, and the captain tells you when it changes.
      - **Off.** An Orbit drain started with `--auto-fix` repairs the PRs its runs
