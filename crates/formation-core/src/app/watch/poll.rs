@@ -6,7 +6,7 @@ use super::{
 };
 use std::time::{Duration, Instant};
 
-const LISTED_SEATS: usize = 32;
+pub(super) const LISTED_SEATS: usize = 32;
 
 const SLEEP_SLICE: Duration = Duration::from_millis(50);
 
@@ -382,7 +382,7 @@ fn collect_changes(
     Ok((new_items, new_failures))
 }
 
-fn unknown_recipient(mut joined: Vec<String>, to: &str) -> Error {
+pub(super) fn unknown_recipient(mut joined: Vec<String>, to: &str) -> Error {
     let more = joined.len() > LISTED_SEATS;
     joined.truncate(LISTED_SEATS);
     let more = if more { " and more" } else { "" };

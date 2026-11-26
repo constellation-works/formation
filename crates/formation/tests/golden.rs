@@ -4,7 +4,7 @@
     reason = "failed integration fixtures should panic"
 )]
 
-use cw_testkit::{Goldens, TempRoot};
+use cw_testkit::{Goldens, TempRoot, redact_timestamps};
 use std::io::Write;
 use std::process::{Output, Stdio};
 
@@ -42,6 +42,11 @@ fn help_and_roster_output() {
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
         ("help/watch.txt", vec!["watch", "--help"]),
+        ("help/watch-add.txt", vec!["watch", "add", "--help"]),
+        ("help/watch-remove.txt", vec!["watch", "remove", "--help"]),
+        ("help/watch-pause.txt", vec!["watch", "pause", "--help"]),
+        ("help/watch-resume.txt", vec!["watch", "resume", "--help"]),
+        ("help/watch-list.txt", vec!["watch", "list", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {
@@ -52,6 +57,101 @@ fn help_and_roster_output() {
             .check(name, std::str::from_utf8(&result.stdout).unwrap())
             .unwrap();
     }
+}
+
+/// Run `formation <args>` against a shared room from a fixed working directory.
+fn in_room(root: &TempRoot, cwd: &std::path::Path, args: &[&str]) -> String {
+    let result = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    String::from_utf8(result.stdout).unwrap()
+}
+
+#[test]
+fn watch_list_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap().to_owned();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    let run_in_room = |args: &[&str]| in_room(&root, &cwd, args);
+
+    for seat in ["orbit-0-capt", "scribe-0-capt"] {
+        run_in_room(&["mail", "join", seat, "--room", &room]);
+    }
+    let watch = |seat: &str, args: &[&str]| {
+        let mut full = vec!["watch", "--room", &room, "--as", seat];
+        full.extend_from_slice(args);
+        run_in_room(&full)
+    };
+    watch(
+        "orbit-0-capt",
+        &["add", "attention", "--", "./attention-read.sh", "orbit"],
+    );
+    watch(
+        "orbit-0-capt",
+        &[
+            "add",
+            "ci",
+            "--every",
+            "300",
+            "--",
+            "./ci-read.sh",
+            "owner/name",
+            "main",
+        ],
+    );
+    watch(
+        "scribe-0-capt",
+        &[
+            "add",
+            "ci",
+            "--every",
+            "300",
+            "--",
+            "./ci-read.sh",
+            "owner/name",
+            "main",
+        ],
+    );
+    watch(
+        "scribe-0-capt",
+        &[
+            "add",
+            "release",
+            "--to",
+            "orbit-0-capt",
+            "--every",
+            "60",
+            "--",
+            "./release-read.sh",
+        ],
+    );
+    watch(
+        "orbit-0-capt",
+        &["pause", "release", "--to", "orbit-0-capt"],
+    );
+
+    let normalize = |text: String| redact_timestamps(&text).replace(cwd.to_str().unwrap(), "<cwd>");
+    goldens
+        .check(
+            "output/watch-list.txt",
+            &normalize(watch("scribe-0-capt", &["list"])),
+        )
+        .unwrap();
+    goldens
+        .check(
+            "output/watch-list.json",
+            &normalize(watch("scribe-0-capt", &["list", "--json"])),
+        )
+        .unwrap();
 }
 
 #[test]

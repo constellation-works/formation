@@ -14,6 +14,8 @@ pub(crate) const SENT_SCHEMA_VERSION: u32 = 5;
 
 pub(crate) const DELIVERED_SCHEMA_VERSION: u32 = 6;
 
+pub(crate) const WATCH_SET_SCHEMA_VERSION: u32 = 8;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -22,4 +24,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     message::SENT,
     message::DELIVERED,
     watch::CREATE,
+    watch::SET,
 ];

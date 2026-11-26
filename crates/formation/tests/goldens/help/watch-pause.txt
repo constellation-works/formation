@@ -1,0 +1,12 @@
+Keep a watch but stop reading it
+
+Usage: formation watch pause [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Watch name
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --to <SEAT>         Seat the watch mails (default: the calling seat)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

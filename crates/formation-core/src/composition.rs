@@ -32,6 +32,7 @@ pub struct Env {
     claude_session: Option<OsString>,
     codex_session: Option<OsString>,
     pub(crate) actor: Option<String>,
+    pub(crate) cwd: Option<PathBuf>,
 }
 
 impl Env {
@@ -47,6 +48,7 @@ impl Env {
             actor: std::env::var("USER")
                 .or_else(|_| std::env::var("USERNAME"))
                 .ok(),
+            cwd: std::env::current_dir().ok(),
         }
     }
 

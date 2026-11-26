@@ -68,6 +68,33 @@ impl Room {
         serde_json::from_slice(&out.stdout).unwrap()
     }
 
+    fn set_run(&self, seat: &str, args: &[&str]) -> Output {
+        self.watch_cmd(seat).args(args).output().unwrap()
+    }
+
+    fn set_ok(&self, seat: &str, args: &[&str]) -> Value {
+        let out = self.set_run(seat, args);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+
+    fn set_refused(&self, seat: &str, args: &[&str]) -> String {
+        let out = self.set_run(seat, args);
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        assert!(out.stdout.is_empty());
+        let body: Value = serde_json::from_slice(&out.stderr).unwrap();
+        body["code"].as_str().unwrap().to_owned()
+    }
+
+    fn watches(&self, seat: &str) -> Vec<Value> {
+        let listing = self.set_ok(seat, &["list", "--json"]);
+        listing["watches"].as_array().unwrap().clone()
+    }
+
     fn script(&self, name: &str, body: &str) -> PathBuf {
         let path = self.0.path().join(name);
         std::fs::write(&path, body).unwrap();
@@ -386,4 +413,238 @@ fn probe_past_60_seconds_is_killed_and_leaves_no_child() {
             "process {pid} still alive after watch exited (rc={rc}, errno={err:?})"
         );
     }
+}
+
+fn rows(watches: &[Value]) -> Vec<(&str, &str, &str)> {
+    watches
+        .iter()
+        .map(|watch| {
+            (
+                watch["name"].as_str().unwrap(),
+                watch["to"].as_str().unwrap(),
+                watch["state"].as_str().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn same_name_watches_are_scoped_to_each_recipient() {
+    let room = Room::new();
+    room.join("alpha");
+    room.join("beta");
+    room.set_ok("alpha", &["add", "ci", "--every", "300", "--", "true"]);
+    room.set_ok("beta", &["add", "ci", "--", "true"]);
+    room.set_ok("beta", &["add", "rel", "--to", "alpha", "--", "true"]);
+    let watches = room.watches("beta");
+    assert_eq!(
+        rows(&watches),
+        [
+            ("ci", "alpha", "on"),
+            ("ci", "beta", "on"),
+            ("rel", "alpha", "on")
+        ]
+    );
+    assert_eq!(watches[0]["every_seconds"], 300);
+    assert_eq!(watches[1]["every_seconds"], 120);
+    assert_eq!(watches[2]["added_by"], "beta");
+
+    let paused = room.set_ok("alpha", &["pause", "ci"]);
+    assert_eq!(
+        paused,
+        serde_json::json!({"name": "ci", "to": "alpha", "state": "paused", "changed": true})
+    );
+    assert_eq!(
+        rows(&room.watches("alpha")),
+        [
+            ("ci", "alpha", "paused"),
+            ("ci", "beta", "on"),
+            ("rel", "alpha", "on")
+        ]
+    );
+    let again = room.set_ok("alpha", &["pause", "ci"]);
+    assert_eq!(again["changed"], false);
+
+    let resumed = room.set_ok("beta", &["resume", "ci", "--to", "alpha"]);
+    assert_eq!(resumed["state"], "on");
+    assert_eq!(resumed["changed"], true);
+
+    room.set_ok("beta", &["remove", "ci"]);
+    room.set_ok("alpha", &["remove", "rel"]);
+    assert_eq!(rows(&room.watches("beta")), [("ci", "alpha", "on")]);
+}
+
+#[test]
+fn watch_set_refuses_invalid_names_intervals_and_recipients() {
+    let room = Room::new();
+    room.join("alpha");
+    let too_long = "a".repeat(33);
+    for name in ["", "Bad", "has_underscore", "has space", too_long.as_str()] {
+        assert_eq!(
+            room.set_refused("alpha", &["add", name, "--", "true"]),
+            "invalid_watch_name",
+            "{name:?}"
+        );
+    }
+    assert_eq!(
+        room.set_refused("alpha", &["add", "ci", "--to", "ghost", "--", "true"]),
+        "unknown_recipient"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["add", "ci", "--to", "bad name", "--", "true"]),
+        "invalid_identifier"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["add", "ci", "--", " "]),
+        "invalid_command"
+    );
+    assert_eq!(
+        room.set_refused("ghost", &["add", "ci", "--", "true"]),
+        "unknown_seat"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["pause", "missing"]),
+        "unknown_watch"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["resume", "missing"]),
+        "unknown_watch"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["remove", "missing"]),
+        "unknown_watch"
+    );
+    assert_eq!(
+        room.set_refused("alpha", &["remove", "missing", "--to", "ghost"]),
+        "unknown_recipient"
+    );
+
+    for args in [
+        &["add", "ci", "--every", "9", "--", "true"][..],
+        &["add", "ci", "--every", "soon", "--", "true"],
+        &["add", "ci"],
+        &["--probe", "a=true", "list"],
+        &["--timeout", "5", "list"],
+    ] {
+        assert_eq!(
+            room.set_run("alpha", args).status.code(),
+            Some(2),
+            "{args:?}"
+        );
+    }
+    assert!(room.watches("alpha").is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn watch_round_trips_command_directory_interval_state_and_attribution() {
+    let room = Room::new();
+    room.join("alpha");
+    room.join("beta");
+    let dir = std::fs::canonicalize(room.path()).unwrap().join("work");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(
+        dir.join("probe.sh"),
+        "#!/bin/sh\nprintf '%s|' \"$@\"\npwd\n",
+    )
+    .unwrap();
+
+    let out = room
+        .watch_cmd("alpha")
+        .current_dir(&dir)
+        .args(["add", "args", "--to", "beta", "--every", "45", "--"])
+        .args(["sh", "./probe.sh", "two words", "it's", "$HOME", ""])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let added: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(added["replaced"], false);
+    assert_eq!(added["to"], "beta");
+
+    let watches = room.watches("beta");
+    assert_eq!(watches.len(), 1);
+    let watch = &watches[0];
+    assert_eq!(watch["name"], "args");
+    assert_eq!(watch["to"], "beta");
+    assert_eq!(watch["every_seconds"], 45);
+    assert_eq!(watch["state"], "on");
+    assert_eq!(watch["added_by"], "alpha");
+    assert_eq!(watch["cwd"], dir.to_str().unwrap());
+    assert!(watch["added_at"].as_str().unwrap().ends_with('Z'));
+    assert!(watch["last_read"].is_null());
+    assert!(watch["last_result"].is_null());
+    assert_eq!(watch["sent"], 0);
+
+    let ran = Command::new("sh")
+        .args(["-c", watch["command"].as_str().unwrap()])
+        .current_dir(watch["cwd"].as_str().unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(ran.stdout).unwrap(),
+        format!("two words|it's|$HOME||{}\n", dir.display())
+    );
+
+    let single = room
+        .watch_cmd("alpha")
+        .args(["add", "pipe", "--", "echo a | cat"])
+        .output()
+        .unwrap();
+    assert!(single.status.success());
+    let stored = room.watches("alpha");
+    assert_eq!(stored[1]["command"], "echo a | cat");
+}
+
+#[cfg(unix)]
+#[test]
+fn replacing_a_watch_keeps_fingerprints_and_removing_it_forgets_them() {
+    let room = Room::new();
+    room.join("sentry");
+    let script = room.script(
+        "probe.sh",
+        "#!/bin/sh\nprintf 'fp-1\\tred\\nfp-2\\tblue\\n'\n",
+    );
+    let command = script.to_str().unwrap();
+    let probe = format!("ci={command}");
+    room.set_ok("sentry", &["add", "ci", "--", command]);
+    let first = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    assert_eq!(first["items"].as_array().unwrap().len(), 2);
+    assert_eq!(room.watches("sentry")[0]["sent"], 2);
+
+    room.set_ok("sentry", &["pause", "ci"]);
+    let replaced = room.set_ok("sentry", &["add", "ci", "--every", "30", "--", "true"]);
+    assert_eq!(replaced["replaced"], true);
+    let watches = room.watches("sentry");
+    assert_eq!(watches.len(), 1);
+    assert_eq!(watches[0]["state"], "on");
+    assert_eq!(watches[0]["every_seconds"], 30);
+    assert_eq!(watches[0]["command"], "true");
+    assert_eq!(watches[0]["sent"], 2);
+    let second = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    assert_eq!(second["items"], serde_json::json!([]));
+
+    let removed = room.set_ok("sentry", &["remove", "ci"]);
+    assert_eq!(removed["forgotten"], 2);
+    assert!(room.watches("sentry").is_empty());
+    room.set_ok("sentry", &["add", "ci", "--", "true"]);
+    assert_eq!(room.watches("sentry")[0]["sent"], 0);
+    let third = room.watch_ok("sentry", &["--probe", &probe, "--timeout", "0"]);
+    assert_eq!(third["items"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn list_in_an_empty_room_reports_no_reader_and_no_watches() {
+    let room = Room::new();
+    room.join("alpha");
+    let listing = room.set_ok("alpha", &["list", "--json"]);
+    assert_eq!(
+        listing,
+        serde_json::json!({"reader": {"state": "none"}, "watches": []})
+    );
+    let text = room.set_run("alpha", &["list"]);
+    assert_eq!(String::from_utf8_lossy(&text.stdout), "reader: none\n");
+    assert_eq!(
+        String::from_utf8_lossy(&text.stderr),
+        "No watches in this room.\n"
+    );
 }
