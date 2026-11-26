@@ -10,6 +10,7 @@ Commands:
   list    List every watch in the room and whether anything reads the set
   run     Read the room's watches, or wait as a standby while another reader holds the lease
   stop    Stop the room's reader and all its standbys
+  check   Run a watch command once and print its items without changing the room
   wait    Block until a caller-supplied probe returns new items or a read failure
   help    Print this message or the help of the given subcommand(s)
 

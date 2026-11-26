@@ -1,6 +1,7 @@
 //! Watch command output: wire shape and JSON write.
 
 use formation_core::app::watch::Outcome as WatchOutcome;
+use formation_core::app::watch::check;
 use formation_core::app::watch::reader;
 use formation_core::app::watch::set::{Entry, Outcome as SetOutcome, Participant, Reader};
 use serde_json::{Value, json};
@@ -31,6 +32,22 @@ pub(crate) fn payload(out: WatchOutcome) -> Value {
 
 pub(crate) fn exited(out: &reader::Outcome) -> ExitCode {
     write(&json!({"room": out.room, "state": "exited"}))
+}
+
+pub(crate) fn checked(out: &check::Outcome) -> ExitCode {
+    if out.items.is_empty() {
+        let _ = writeln!(
+            io::stderr().lock(),
+            "No items: the command printed nothing."
+        );
+    }
+    write(&json!({
+        "items": out
+            .items
+            .iter()
+            .map(|item| json!({"fingerprint": item.fingerprint, "text": item.text}))
+            .collect::<Vec<_>>(),
+    }))
 }
 
 pub(crate) fn write(value: &Value) -> ExitCode {

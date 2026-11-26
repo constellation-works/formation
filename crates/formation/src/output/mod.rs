@@ -21,7 +21,7 @@ pub(crate) use roster::summary;
 pub(crate) use shared::failure;
 
 pub(crate) use watch::{
-    exited as watch_exited, list as watch_list, payload as watch_payload,
+    checked as watch_checked, exited as watch_exited, list as watch_list, payload as watch_payload,
     set_payload as watch_set_payload, write as watch_write,
 };
 

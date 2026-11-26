@@ -5,7 +5,7 @@ use crate::output;
 use clap::{Args, Subcommand};
 use formation_core::Env;
 use formation_core::app::watch;
-use formation_core::app::watch::{reader, set};
+use formation_core::app::watch::{check, reader, set};
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -83,6 +83,20 @@ Examples:
     Run,
     /// Stop the room's reader and all its standbys.
     Stop,
+    /// Run a watch command once and print its items without changing the room.
+    #[command(after_help = "\
+Runs the command once through `sh -c` from the current directory, under the reader's 60-second
+limit. It prints the items as JSON and changes nothing: no watch is added, the reader's lease is
+not taken, no fingerprint is remembered and no mail is sent. A malformed line, a failed run and a
+run past the limit exit 1 with the reason on stderr.
+
+Examples:
+  formation watch check -- ./scripts/ci-read.sh owner/name main")]
+    Check {
+        /// Command to run through `sh -c` from the current directory.
+        #[arg(last = true, required = true, value_name = "COMMAND")]
+        command: Vec<String>,
+    },
     /// Block until a caller-supplied probe returns new items or a read failure.
     Wait {
         /// Probe to run as <name>=<command>; repeat for multiple probes.
@@ -106,6 +120,7 @@ pub(crate) fn run(env: Env, args: Watch, queue: &dyn Fn(&str) -> bool) -> ExitCo
     let env = env.with_mail_options(args.room, args.seat);
     match args.action {
         Action::Run => run_reader(&env, queue),
+        Action::Check { command } => run_check(&env, command),
         Action::Wait {
             probes,
             every,
@@ -146,6 +161,22 @@ fn run_reader(env: &Env, queue: &dyn Fn(&str) -> bool) -> ExitCode {
         },
         |result| match result {
             Ok(out) => output::watch_exited(&out),
+            Err(error) => output::error(&error),
+        },
+    )
+}
+
+fn run_check(env: &Env, command: Vec<String>) -> ExitCode {
+    let _signals = SignalGuard::install();
+    let runner = ShellProbeRunner;
+    check::exec(
+        env,
+        check::Command {
+            words: command,
+            runner: &runner,
+        },
+        |result| match result {
+            Ok(out) => output::watch_checked(&out),
             Err(error) => output::error(&error),
         },
     )
