@@ -51,7 +51,7 @@ envelope delivered by the hook under the normal approval rules.
    repair route for a red or conflicting Orbit PR and sends you the PR when the required
    checks pass. Review and land it. With no sergeant, handle the repair route yourself.
    Take over on a refusal or when the first repair leaves the PR red or conflicting.
-   Give the lieutenant the diagnosis before submitting a second source repair. If the
+   Ask the lieutenant to diagnose the repeat failure before submitting a second source repair. If the
    sergeant reports being overwhelmed, give the lieutenant the shared cause to investigate
    or tell Daniel that the unit needs help. See `orchestration-session`'s learnings for
    the exceptions and for an already-moved head.
