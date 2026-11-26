@@ -20,6 +20,6 @@ pub(crate) fn summary(summary: &Summary, json: bool) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(error) => super::shared::failure(&error),
+        Err(error) => super::common::error::failure(&error),
     }
 }

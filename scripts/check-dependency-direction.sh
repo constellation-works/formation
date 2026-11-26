@@ -315,8 +315,15 @@ if [[ -n "$sqlite_hits" ]]; then
   err "rusqlite and cw_sqlite are named only inside formation-store"
 fi
 
-for retired_path in "$STORE/db" "$STORE/driver/sqlite/db"; do
-  [[ ! -e "$retired_path" ]] || err "retired database layout: $retired_path"
+for retired_path in \
+  "$STORE/db" \
+  "$STORE/driver/sqlite/db" \
+  "$CLI/command/mail.rs" \
+  "$CLI/command/watch.rs" \
+  "$CLI/command/probe.rs" \
+  "$CLI/command/codex_wake.rs" \
+  "$CLI/output/shared.rs"; do
+  [[ ! -e "$retired_path" ]] || err "retired layout: $retired_path"
 done
 # The kit's test isolation is for tests only: no non-test source names it.
 ban crates 'cw_testkit'                                                  "cw-testkit is a dev-dependency: only test code names it"
