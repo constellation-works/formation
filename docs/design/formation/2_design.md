@@ -51,7 +51,8 @@ can delegate the work to \"implementer\"."
 
 | Rank | Name | Model, effort | Replaces | Work | Record |
 |---|---|---|---|---|---|
-| chief | `0-chief` | Fable or Opus, high | lead, manager | Staffs the units, keeps the roster, is the first stop for every captain's questions and blockers, and is Daniel's design partner | Its assignment in `ws_constellation` |
+| chief | `0-chief` | Opus, high | lead, manager | Staffs the units, keeps the roster, handles mail, relays and the list of what waits for Daniel, is the first stop for every captain's questions and blockers, and runs the close-out. It wakes the designer for what the [designer](#the-chief-and-the-designer) owns | Its assignment in `ws_constellation` |
+| designer, on demand | `0-designer` | Fable, high | the chief's design-partner duty | Writes every design doc, in whichever repository owns the feature, and is Daniel's design partner. Advises the chief on architecture and on decisions that go to Daniel with options. It carries none of the day's traffic | The design task it writes for |
 | aide | `0-aide` | Haiku, high | aide | Briefs Daniel at its start with the previous session's summary and the open claims (scribe's open proposals); manages the scribe store on his instruction through the `scribe` CLI; quick questions; relaying his quoted words. Daniel, 2026-11-21: "I will be interacting with the scribe primarily to manage scribe artifacts, e.g. instruct scribe to approve certain claims, delete certain artifacts, etc. the scribe will be using cli tool to perform these operations." The CLI still refuses an agent settling a session's claim, changing an entry Daniel wrote, and any delete; until scribe changes, the aide hands him the line to type for those | Agent notes under its own name |
 | captain | `<ws>-0-capt` | Opus, high | orchestrator | Commands one workspace per `orchestration-session`, owns its record, talks to Daniel | Its assignment |
 | lieutenant | `<ws>-1-lt` | Opus, medium | implementer, reviewer | Whatever needs the big model: implementation outside the drains, root-cause analysis, debugging, PR rescue, review | The Orbit task it claims or is ordered onto |
@@ -88,7 +89,17 @@ can delegate the work to \"implementer\"."
   [overview](1_overview.md#authority). A red pull request stays with the run that owns it.
 - The chief runs at high effort. `start_session` clamps a child's effort to its parent's, so
   a chief at medium starts every captain at medium (observed twice on the second squad day).
-- Daniel talks to tier 0: the chief, the aide and every captain.
+- Daniel talks to tier 0: the chief, the aide, the designer and every captain.
+
+### The chief and the designer
+
+Daniel, 2026-11-26, asked whether an Opus seat should stand in front of the chief: "many of my requests don't require fable (question, feature request, status check, even formation-complete). so things could get filtered by opus first." Most of a chief's turns that day were routine: acknowledging mail, relaying his answers, filing tasks, status checks and the fallback check. Each one paid for the whole day's context at the largest model's rate.
+
+A filter in front of a standing Fable chief only filters mail. Whatever Daniel types in the chief's chat still wakes it. So the standing seat is the Opus chief, and Fable is kept for design, in a seat that is woken with a brief and stays small. Daniel: "I like that idea. but I think Fable should write all designs."
+
+- The designer writes every design doc. It works from a design task, in a worktree of the repository that owns the feature, and opens the pull request there. That repository's captain lands it once Daniel has approved the design; no other session writes to the branch meanwhile.
+- The chief wakes the designer for design work, for architecture advice a captain asked for, for a decision that goes to Daniel with options and one recommendation, and for a conflict between two rules. Daniel can open the designer's chat himself.
+- The chief answers everything else. When it is unsure whether a question is the designer's, it asks the designer.
 
 ## Units
 
@@ -142,6 +153,7 @@ Daniel ─┬─ 0-chief ─┬─ orbit-0-capt ──┬─ orbit-1-lt
         │           │                 ├─ orbit-1-sgt
         │           │                 └─ orbit-1-sentry
         │           └─ scribe-0-capt
+        ├─ 0-designer
         └─ 0-aide
 ```
 
@@ -150,6 +162,7 @@ Daniel ─┬─ 0-chief ─┬─ orbit-0-capt ──┬─ orbit-1-lt
 - The chief sends work orders to captains, who propagate them through their units.
   Sends from the chief beyond the captains are announcements such as close-out or refresh.
   The aide exchanges requests and relays with the chief and captains.
+- The designer exchanges messages with the chief. A captain's design question reaches it through the chief, which sends the question with the record it concerns.
 - Lieutenants and sergeants report to their captain. A squad's appointed sentry can exchange
   dispatch messages with both ranks. Captains can reach their direct reports and peers.
 - A captain that is blocked, needs a decision or has finished something it was asked for
@@ -292,3 +305,4 @@ File one later task per item after Daniel approves the draft and settles the rel
 3. **Watch recipient.** Select the default addressee from the roster in sentry, sergeant, captain order. Verify that probes mail findings on change and cover deliberate process stops and failed reads.
 4. **Sentry staffing and brief.** Rewrite the plugin's sentry brief and reference around the optional dispatcher, update unit defaults and role descriptions, and carry the approved dispatch rules into the brief.
 5. **Chief probes.** Replace the scheduled fallback turn with change-detecting watch probes, using the receiving seat Daniel approves. Verify that an unchanged read wakes nobody.
+6. **Chief and designer.** Set the chief's model to Opus in the unit defaults, add the designer's rank, brief and roster edge, and write the list of what the chief passes to the designer into the chief's brief.

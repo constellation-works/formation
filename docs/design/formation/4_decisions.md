@@ -140,3 +140,19 @@ Daniel, 2026-11-26 (UTC), in the chief's chat: "sounds good." He agreed to move 
 ### Consequences
 
 Cost: the probes must cover the fallback's checks and expose failed reads. Their receiving seat is [open](references/network.md#open-questions).
+
+## The standing chief is Opus, and Fable writes every design
+
+### Context
+
+The chief ran on the largest model and held the whole day in one chat. Most of its turns were routine: acknowledging mail, relaying answers, filing tasks, status checks and the fallback check. Each paid for that context at the largest model's rate. Daniel asked whether an Opus seat should filter for the chief: "many of my requests don't require fable (question, feature request, status check, even formation-complete). so things could get filtered by opus first." The chief proposed making the standing chief Opus and keeping Fable in a design seat woken on demand, because a filter in front of the chief stops mail but not what Daniel types in the chief's chat.
+
+### Decision
+
+Daniel, 2026-11-26 (UTC), in the chief's chat: "I like that idea. but I think Fable should write all designs." The standing chief runs on Opus. A designer seat on Fable writes every design doc and is Daniel's design partner.
+
+### Consequences
+
+- Routine traffic no longer wakes the largest model, and the designer's context holds a design and not the day.
+- Cost: a design question crosses one more seat, so the chief must send it with its record and not a summary. The designer's name and routes are [open](references/network.md#open-questions).
+- A design doc is written by the designer in the repository that owns the feature, and landed by that repository's captain.

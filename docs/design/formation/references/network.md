@@ -19,14 +19,15 @@ The table shows who each seat can address directly. A two-way edge lets either s
 
 | Seat | Two-way with | One-way out |
 |---|---|---|
-| chief | `0-aide`, captains | Announcements to all |
+| chief | `0-aide`, `0-designer`, captains | Announcements to all |
+| `0-designer` (on demand) | chief | — |
 | `0-aide` | chief, captains | — |
 | captain | chief, `0-aide`, other captains, its own squad | — |
 | sentry (on request) | its captain, its squad's sergeants and lieutenants | — |
 | lieutenant, sergeant | its captain, its squad's sentry | — |
 | watch (a process) | — | Its squad's sentry, else its sergeant, else its captain |
 
-The chief sends work orders to captains. Each captain propagates those orders through its own squad. A formation-wide announcement from the chief can reach every seat, for example at close-out or refresh. The aide relays Daniel's quoted words or asks on his behalf. The captain remains the reporting lead for its lieutenants and sergeants and can reach its direct reports, reporters and peer captains.
+The chief sends work orders to captains. Each captain propagates those orders through its own squad. A formation-wide announcement from the chief can reach every seat, for example at close-out or refresh. The aide relays Daniel's quoted words or asks on his behalf. The designer is reached through the chief, so that a design question arrives once, with its record, and the largest model is woken only for [what it owns](../2_design.md#the-chief-and-the-designer). The captain remains the reporting lead for its lieutenants and sergeants and can reach its direct reports, reporters and peer captains.
 
 ## Watch and dispatch
 
@@ -63,6 +64,7 @@ The chief proposed the following for Daniel to settle.
 4. **Aide and chief probes.** Should the chief's fallback probes mail `0-aide`, which then wakes the chief only when the result requires it?
 5. **Tell all.** Daniel's example was "tell all that I am updating orbit binary". Should the aide relay a request like that to the chief and every captain, with captains passing it down to their squads?
 6. **Captain to captain.** Should a cross-workspace request still be an Orbit task filed in the owning workspace, followed by one mail naming it to the receiving captain?
+7. **The designer's seat.** Daniel settled that the chief is Opus and that Fable writes every design. Three details are the chief's proposal. Is `0-designer` the name? Is the designer reached only through the chief, or may a captain mail it directly? May the chief's seat be a session of another provider once it works by mail alone?
 
 ## Sources
 
