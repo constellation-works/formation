@@ -6,7 +6,7 @@
 #
 # Usage: attention-read.sh <workspace selector>
 # Exit 0 with no output means nothing needs attention. A non-zero exit with one
-# line on stderr means the read failed or `orbit` is absent.
+# line on stderr means the read failed, was truncated or degraded, or `orbit` is absent.
 set -uo pipefail
 
 if [ "$#" -ne 1 ] || [ -z "${1:-}" ]; then
@@ -30,6 +30,9 @@ exec python3 - "$sel" <<'PY'
 import json
 import subprocess
 import sys
+
+# Orbit's maximum public page size (`per_workspace_item_cap` is 200).
+QUERY_LIMIT = 500
 
 EXCLUDED_KINDS = [
     "friction_untriaged",
@@ -87,6 +90,75 @@ def extract_error(stdout: str, stderr: str, returncode: int) -> str:
     return f"orbit exited with status {returncode}"
 
 
+def is_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def describe_degraded_entry(entry: object) -> str:
+    if isinstance(entry, dict):
+        kind = one_line(str(entry.get("kind") or ""))
+        scope = one_line(str(entry.get("scope") or ""))
+        code = one_line(str(entry.get("code") or ""))
+        msg = one_line(str(entry.get("message") or ""))
+        label = kind or scope or "source"
+        if code:
+            label = f"{label} [{code}]"
+        if msg:
+            return f"{label}: {msg}"
+        return label
+    return one_line(str(entry)) or "unknown source"
+
+
+def degraded_error(degraded: list) -> str:
+    count = len(degraded)
+    noun = "source" if count == 1 else "sources"
+    details = "; ".join(describe_degraded_entry(entry) for entry in degraded[:3])
+    if count > 3:
+        details = f"{details}; +{count - 3} more"
+    return f"incomplete attention read ({count} degraded {noun}): {details}"
+
+
+def truncation_error(counts: dict, item_count: int) -> str:
+    matching = counts.get("matching")
+    if is_int(matching):
+        return f"truncated attention read: returned {item_count} of {matching} matching items"
+    return f"truncated attention read: response reported truncated after {item_count} items"
+
+
+def ensure_complete(payload: dict, items: list) -> None:
+    if payload.get("truncated") is True:
+        fail("truncated attention read")
+    if payload.get("incomplete") is True or payload.get("complete") is False:
+        fail("incomplete attention read")
+
+    counts = payload.get("counts")
+    if counts is not None:
+        if not isinstance(counts, dict):
+            fail("unexpected counts metadata from orbit.attention")
+        if counts.get("truncated") is True:
+            fail(truncation_error(counts, len(items)))
+        returned = counts.get("returned")
+        if is_int(returned) and returned != len(items):
+            fail(
+                f"incomplete attention read: counts.returned={returned} "
+                f"does not match items={len(items)}"
+            )
+        matching = counts.get("matching")
+        if is_int(matching) and matching > len(items):
+            fail(
+                f"truncated attention read: returned {len(items)} of {matching} matching items"
+            )
+    elif len(items) >= QUERY_LIMIT:
+        fail(f"truncated attention read: reached limit {QUERY_LIMIT} without counts metadata")
+
+    degraded = payload.get("degraded")
+    if degraded is not None:
+        if not isinstance(degraded, list):
+            fail("unexpected degraded metadata from orbit.attention")
+        if degraded:
+            fail(degraded_error(degraded))
+
+
 def read_attention(selector: str, query: dict) -> list:
     proc = subprocess.run(
         [
@@ -113,7 +185,9 @@ def read_attention(selector: str, query: dict) -> list:
         if isinstance(payload, dict) and isinstance(payload.get("error"), str):
             fail(payload["error"])
         fail("unexpected response from orbit.attention")
-    return payload["items"]
+    items = payload["items"]
+    ensure_complete(payload, items)
+    return items
 
 
 def clean_field(value: str) -> str:
@@ -164,11 +238,11 @@ def main() -> None:
     selector = sys.argv[1]
     fast_items = read_attention(
         selector,
-        {"limit": 20, "exclude_kind": EXCLUDED_KINDS},
+        {"limit": QUERY_LIMIT, "exclude_kind": EXCLUDED_KINDS},
     )
     crit_items = read_attention(
         selector,
-        {"kind": EXCLUDED_KINDS, "severity": "critical", "limit": 20},
+        {"kind": EXCLUDED_KINDS, "severity": "critical", "limit": QUERY_LIMIT},
     )
 
     seen: set[str] = set()

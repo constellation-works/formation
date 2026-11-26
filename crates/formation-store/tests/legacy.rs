@@ -1,13 +1,14 @@
 //! Exercise the shipped unversioned SQLite format at the public store boundary.
 
 use cw_sqlite::rusqlite::Connection;
-use formation_store::contract::{HookProvider, NewWatch};
+use formation_store::contract::{HookProvider, NewWatch, WatchHandover};
 use formation_store::{SessionId, Store};
 use std::os::unix::fs::PermissionsExt;
 
 fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     connection.execute_batch(
-        "DROP TABLE watch_notice;
+        "ALTER TABLE watch_handover DROP COLUMN absent_reads;
+         DROP TABLE watch_notice;
          ALTER TABLE messages DROP COLUMN watch_name;
          ALTER TABLE messages DROP COLUMN watch_added_by;
          ALTER TABLE seats DROP COLUMN wake_requested;
@@ -213,5 +214,49 @@ fn upgrade_keeps_binding_without_granting_a_wake() -> Result<(), Box<dyn std::er
 
     assert!(store.write(|tx| tx.seats().mark_hook(&session, HookProvider::Codex, false))?);
     assert_eq!(store.read()?.seats().idle_codex("captain")?, Some(session));
+    Ok(())
+}
+
+#[test]
+fn upgrade_to_watch_absence_retains_handovers_with_zero_missed_reads()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        tx.watch().put(&NewWatch {
+            recipient: "captain",
+            name: "ci",
+            command: "true",
+            cwd: "/",
+            every: 120,
+            added_by: "captain",
+            added_at: 100,
+        })?;
+        tx.watch().mark_handed("captain", "ci", "fp-1", 100)?;
+        Ok(())
+    })?;
+
+    let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    connection.execute_batch(
+        "ALTER TABLE watch_handover DROP COLUMN absent_reads;
+         PRAGMA user_version = 11;",
+    )?;
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.watch().list()?[0].remembered, 1);
+    assert_eq!(
+        connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?,
+        11
+    );
+    drop(snapshot);
+    drop(connection);
+
+    let remembered = store.write(|tx| tx.watch().remembered("captain", "ci"))?;
+    assert_eq!(
+        remembered,
+        vec![WatchHandover {
+            fingerprint: "fp-1".to_owned(),
+            absent_reads: 0,
+        }]
+    );
     Ok(())
 }

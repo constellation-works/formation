@@ -11,7 +11,9 @@ pub mod roster;
 pub use audit::{AuditEvent, AuditStatus};
 pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
 use std::fmt;
-pub use watch::{NewWatch, WatchEntry, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState};
+pub use watch::{
+    NewWatch, WatchEntry, WatchHandover, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState,
+};
 
 /// Provider observed in a host hook for a session binding.
 #[derive(Clone, Copy)]

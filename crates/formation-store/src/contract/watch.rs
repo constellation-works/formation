@@ -108,3 +108,12 @@ pub enum WatchRole {
     /// Eligible to claim the lease when it is free.
     Standby,
 }
+
+/// One remembered watch fingerprint and how many consecutive complete reads omitted it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WatchHandover {
+    /// Item fingerprint remembered for a `(seat, probe)` watch key.
+    pub fingerprint: String,
+    /// Consecutive successful complete reads that omitted this fingerprint.
+    pub absent_reads: u32,
+}

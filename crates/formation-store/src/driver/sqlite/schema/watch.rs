@@ -53,3 +53,8 @@ pub(super) const READER: cw_sqlite::Step = cw_sqlite::Step::sql(
      ) STRICT;
      INSERT INTO watch_reader (singleton) VALUES (1);",
 );
+
+pub(super) const ABSENCE: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE watch_handover ADD COLUMN absent_reads INTEGER NOT NULL DEFAULT 0
+         CHECK(absent_reads >= 0);",
+);

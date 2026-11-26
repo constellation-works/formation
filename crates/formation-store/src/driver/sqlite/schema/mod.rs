@@ -34,4 +34,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     watch::READER,
     seat::HOOK_STATE,
     message::WATCH_MAIL,
+    watch::ABSENCE,
 ];
