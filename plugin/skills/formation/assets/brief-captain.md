@@ -13,6 +13,10 @@ Your questions, blockers and results go to the chief first. Handoff from the las
 in this workspace: {handoff_summary}. Open items: {open_items}. The chief read only
 attention counts; read the items yourself.
 
+If this is a Codex seat, Daniel’s typed input can wait up to 30 minutes while the Stop
+hook holds the turn. He can stop the held turn before typing, or use Formation mail
+during the hold.
+
 ## prompt
 
 1. Join the day's scribe group: `scribe group join {group_id} --as {capt_name} --author
