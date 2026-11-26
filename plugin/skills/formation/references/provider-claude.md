@@ -21,6 +21,8 @@ Send the roster before `detach_session`. Detach the aide, captains, specialists,
 
 For shared watches and cross-provider routes, join Formation mail once (`formation mail join`). `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` uses `asyncRewake` (3300s hold, 3600s host timeout, one live waiter per seat) to wake the session if mail arrives while waiting. After the hold expires, mail waits for the next hook or [manual wake](mail.md#wake-an-unheld-claude-seat).
 
+A sergeant that receives watch mail with no sentry keeps one background `sleep 3000` running and starts the next when it returns. Each return starts a turn, and the turn's end renews the hold before it lapses. On that turn it checks `formation watch list`, reads the digest kinds and sends its held asks.
+
 Each attention-owning captain registers `attention` and `ci` with `formation watch add` and starts `formation watch run` in a background shell; extra captains join as standbys. Only one reader holds the 45s lease (15s heartbeat); `formation watch list [--json]` shows the active reader, standbys (`reader.state`: `live`, `none` or `stopped`), and per-watch `last_result` (`ok, ...` or `read failed`).
 
 A background `formation watch run` process lives only as long as that session’s background shell survives. If every reader exits without `formation watch stop`, the next hook delivers a one-time `watch: nothing has read...` notice to affected seats; restart `formation watch run` in a live seat’s background shell. Keep `formation watch wait` only for a standalone blocking wait (confirm background exit notification before relying on it).

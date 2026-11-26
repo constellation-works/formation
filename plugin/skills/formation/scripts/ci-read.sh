@@ -9,13 +9,22 @@
 # Orbit's own `ci_red` attention kind covers only completed runs on the base branch's
 # current head, and no pull request, so the sentry reads the forge as well.
 #
-# Usage: ci-read.sh <owner/name> <base branch> [pr grace minutes, default 15]
+# Usage: ci-read.sh [--base-only] <owner/name> <base branch> [pr grace minutes, default 15]
+# --base-only reads the base branch and no pull request. Use it while repair mode is off:
+# an Orbit drain started with --auto-fix repairs the pull requests its runs published, so
+# a line for each of them would only cost its reader a turn.
 # Exit 0 with no output means a complete read found no failures or conflicts.
 # A non-zero exit means the read failed.
 set -euo pipefail
 
-repo="${1:?usage: ci-read.sh <owner/name> <base branch> [pr grace minutes]}"
-base="${2:?usage: ci-read.sh <owner/name> <base branch> [pr grace minutes]}"
+usage="usage: ci-read.sh [--base-only] <owner/name> <base branch> [pr grace minutes]"
+base_only=0
+if [ "${1:-}" = "--base-only" ]; then
+  base_only=1
+  shift
+fi
+repo="${1:?$usage}"
+base="${2:?$usage}"
 grace_seconds=$(( ${3:-15} * 60 ))
 
 # Base branch: the newest finished run of each workflow. A cancelled or skipped run is
@@ -27,6 +36,8 @@ gh run list -R "$repo" --branch "$base" --limit 40 \
     | group_by(.workflowName) | map(max_by(.databaseId)) | .[]
     | select(.conclusion != "success" and .conclusion != "neutral")
     | "ci:\(.workflowName):\(.headSha[0:9])\tci_red | high | run \(.databaseId) | \(.workflowName) \(.conclusion) on '"$base"' at \(.headSha[0:9]) | gh run view \(.databaseId) -R '"$repo"' --log-failed"'
+
+[ "$base_only" -eq 1 ] && exit 0
 
 # Pull requests: a check that failed on the current head and has stayed failed for the
 # grace period. A delivery run's own re-run settles a flake within minutes; one that is
