@@ -3,6 +3,7 @@ title: Formation — Shift messaging
 owner: codex
 created_date: 2026-11-24
 updated_date: 2026-11-25
+last_validated: 2026-11-25
 status: Draft
 feature: shift-messaging
 doc_role: scope
