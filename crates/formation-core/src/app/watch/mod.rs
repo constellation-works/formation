@@ -4,6 +4,8 @@ mod poll;
 
 mod rule;
 
+pub mod set;
+
 use crate::Env;
 use crate::composition::Caller;
 use crate::runtime;
@@ -149,18 +151,19 @@ impl<'a> App for Watch<'a> {
 
     fn run(ctx: &Ctx<'_>, cmd: Command<'a>) -> Result<Outcome, Error> {
         let mail = ctx.mail()?;
-        let seat = match &mail.caller {
-            Caller::Explicit(name) => SeatRef::Name(name),
-            Caller::Session(session) => SeatRef::Session(session),
-            Caller::Join { .. } => {
-                return Err(Error::new(
-                    Kind::Internal,
-                    "missing_context",
-                    std::io::Error::other("seat context unavailable"),
-                ));
-            }
-        };
-        poll::run(ctx, &mail.store, seat, cmd)
+        poll::run(ctx, &mail.store, caller_ref(&mail.caller)?, cmd)
+    }
+}
+
+fn caller_ref(caller: &Caller) -> Result<SeatRef<'_>, Error> {
+    match caller {
+        Caller::Explicit(name) => Ok(SeatRef::Name(name)),
+        Caller::Session(session) => Ok(SeatRef::Session(session)),
+        Caller::Join { .. } => Err(Error::new(
+            Kind::Internal,
+            "missing_context",
+            std::io::Error::other("seat context unavailable"),
+        )),
     }
 }
 

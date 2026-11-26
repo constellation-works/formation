@@ -1,0 +1,9 @@
+List every watch in the room and whether anything reads the set
+
+Usage: formation watch list [OPTIONS]
+
+Options:
+      --json              Print a JSON document
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

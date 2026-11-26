@@ -72,3 +72,20 @@ formation watch \
   --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
   --timeout 300 --room trial --as sentry
 ```
+
+### The watch set
+
+The room also keeps a set of watches that seats change while the room runs. The set is stored and listed today; nothing reads it yet, so a stored watch is not run until the reader of the [watch scope](design/watch/1_scope.md#the-reader) ships.
+
+```sh
+formation watch add ci --every 300 -- plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main
+formation watch add release --to captain -- ./scripts/release-read.sh
+formation watch pause ci
+formation watch resume ci
+formation watch remove release --to captain
+formation watch list
+```
+
+A watch is keyed by its recipient and name, so two seats can each have a `ci`. `--to` names a joined seat and defaults to the caller. The name is 1 to 32 lowercase ASCII letters, digits or hyphens, and `--every` is at least 10 seconds (default 120). The command is stored with the working directory it was added from. One word after `--` is shell text as written; several words are quoted into one command line. `add` with an existing key replaces that watch, switches it on and keeps its remembered fingerprints. `remove` forgets them.
+
+`list` prints the reader's state (`reader: none` until a reader exists) and one row per watch ordered by name and recipient. `list --json` gives `{"reader":{"state":"none"},"watches":[...]}` with `every_seconds`, RFC 3339 `added_at` and `last_read`, and `sent`, the fingerprints remembered for the watch. The other subcommands print one JSON object naming the watch they changed. `list` never writes, so it works in a room an older build created and shows an empty set there.
