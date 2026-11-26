@@ -77,16 +77,6 @@ impl Watch<'_> {
             .map_err(error::sql)
     }
 
-    fn next_revision(&self) -> Result<i64, Error> {
-        self.conn
-            .query_row(
-                "UPDATE watch_reader SET revision = revision + 1 RETURNING revision",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(error::sql)
-    }
-
     /// Set a watch, replacing one with the same recipient and name in place.
     ///
     /// A replacement is switched on and its last read is forgotten, because that read ran the
@@ -307,6 +297,16 @@ impl Watch<'_> {
                 params![seat, probe],
             )
             .map(|_| ())
+            .map_err(error::sql)
+    }
+
+    fn next_revision(&self) -> Result<i64, Error> {
+        self.conn
+            .query_row(
+                "UPDATE watch_reader SET revision = revision + 1 RETURNING revision",
+                [],
+                |row| row.get(0),
+            )
             .map_err(error::sql)
     }
 }

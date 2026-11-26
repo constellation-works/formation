@@ -120,14 +120,14 @@ impl HookProcess {
         self.0.as_ref().unwrap().id()
     }
 
-    fn is_alive(&mut self) -> bool {
-        self.0.as_mut().unwrap().try_wait().unwrap().is_none()
-    }
-
     fn signal(&self, sig: libc::c_int) {
         let pid = libc::pid_t::try_from(self.pid()).unwrap();
         // SAFETY: The fixture spawned this child and has not reaped it yet.
         assert_eq!(unsafe { libc::kill(pid, sig) }, 0);
+    }
+
+    fn is_alive(&mut self) -> bool {
+        self.0.as_mut().unwrap().try_wait().unwrap().is_none()
     }
 
     fn kill(&mut self) {

@@ -117,6 +117,29 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    fn commit(&self, watch: &WatchEntry, verdict: ProbeVerdict) -> Result<(), Error> {
+        let inserted = self.store.write(|tx| {
+            let now = (self.ctx.clock)().unix_timestamp();
+            if tx.watch_reader().holds_lease(self.id, now)?
+                && tx.watch().record_read(watch, now, &verdict.summary())?
+            {
+                return send_changes(
+                    tx,
+                    &self.seat,
+                    &watch.recipient,
+                    &watch.added_by,
+                    &[(&watch.name, verdict)],
+                    now,
+                );
+            }
+            Ok(false)
+        })?;
+        if inserted {
+            crate::app::wake::after_commit(self.ctx, &watch.recipient, self.queue);
+        }
+        Ok(())
+    }
+
     fn read_set<'scope>(&mut self, scope: &'scope Scope<'scope, 'a>) -> Result<(), Error> {
         let mut next_beat = Instant::now() + HEARTBEAT;
         while !self.runner.stopped() {
@@ -246,29 +269,6 @@ impl<'a> Reader<'a> {
             if current.get(key) != Some(&job.revision) {
                 job.cancelled.store(true, Ordering::Relaxed);
             }
-        }
-        Ok(())
-    }
-
-    fn commit(&self, watch: &WatchEntry, verdict: ProbeVerdict) -> Result<(), Error> {
-        let inserted = self.store.write(|tx| {
-            let now = (self.ctx.clock)().unix_timestamp();
-            if tx.watch_reader().holds_lease(self.id, now)?
-                && tx.watch().record_read(watch, now, &verdict.summary())?
-            {
-                return send_changes(
-                    tx,
-                    &self.seat,
-                    &watch.recipient,
-                    &watch.added_by,
-                    &[(&watch.name, verdict)],
-                    now,
-                );
-            }
-            Ok(false)
-        })?;
-        if inserted {
-            crate::app::wake::after_commit(self.ctx, &watch.recipient, self.queue);
         }
         Ok(())
     }

@@ -73,35 +73,6 @@ impl WatchLease<'_> {
         self.claim(id, now).map(Some)
     }
 
-    fn claim(&self, id: i64, now: i64) -> Result<WatchRole, Error> {
-        let claimed = self
-            .conn
-            .execute(
-                "UPDATE watch_reader SET reader_id = ?1, released_at = NULL
-                  WHERE NOT EXISTS (
-                    SELECT 1 FROM watch_participant
-                     WHERE id = watch_reader.reader_id AND expires_at > ?2
-                  )",
-                params![id, now],
-            )
-            .map_err(error::sql)?;
-        self.conn
-            .execute(
-                "DELETE FROM watch_participant WHERE expires_at <= ?1
-                   AND id IS NOT (SELECT reader_id FROM watch_reader)",
-                [now],
-            )
-            .map_err(error::sql)?;
-        if claimed == 1 {
-            self.conn
-                .execute("DELETE FROM watch_notice", [])
-                .map_err(error::sql)?;
-            Ok(WatchRole::Reader)
-        } else {
-            Ok(WatchRole::Standby)
-        }
-    }
-
     /// Check the lease in the same transaction that commits a probe result.
     pub fn holds_lease(&self, id: i64, now: i64) -> Result<bool, Error> {
         holds_lease(self.conn, id, now)
@@ -169,6 +140,35 @@ impl WatchLease<'_> {
             .execute("DELETE FROM watch_participant", [])
             .map_err(error::sql)?;
         Ok(())
+    }
+
+    fn claim(&self, id: i64, now: i64) -> Result<WatchRole, Error> {
+        let claimed = self
+            .conn
+            .execute(
+                "UPDATE watch_reader SET reader_id = ?1, released_at = NULL
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM watch_participant
+                     WHERE id = watch_reader.reader_id AND expires_at > ?2
+                  )",
+                params![id, now],
+            )
+            .map_err(error::sql)?;
+        self.conn
+            .execute(
+                "DELETE FROM watch_participant WHERE expires_at <= ?1
+                   AND id IS NOT (SELECT reader_id FROM watch_reader)",
+                [now],
+            )
+            .map_err(error::sql)?;
+        if claimed == 1 {
+            self.conn
+                .execute("DELETE FROM watch_notice", [])
+                .map_err(error::sql)?;
+            Ok(WatchRole::Reader)
+        } else {
+            Ok(WatchRole::Standby)
+        }
     }
 }
 

@@ -52,7 +52,7 @@ fmt-check:
 
 # Source-only structure checks: dependency direction (STD-02 R1-R6), unit-test
 # module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17),
-# and the source style rustfmt cannot check (STD-12 R12, R13, R16, R19).
+# and the source style rustfmt cannot check (STD-12 R12, R13, R16, R19, R21, R22, R26).
 structure:
 	./scripts/check-dependency-direction.sh
 	./scripts/check-test-modules.sh
