@@ -148,7 +148,37 @@ install:
 update-plugins: install
 	codex plugin marketplace add "$$PWD"
 	codex plugin add formation@formation-local
-	claude plugin install formation --marketplace "$$PWD" --scope user
+	@set -eu; \
+	plugin_id="formation@formation-local"; \
+	marketplace_name="formation-local"; \
+	installed_plugins="$$HOME/.claude/plugins/installed_plugins.json"; \
+	checkout_sha=$$(git rev-parse HEAD); \
+	marketplaces=$$(claude plugin marketplace list --json); \
+	marketplace_present=$$(printf '%s\n' "$$marketplaces" | jq -r --arg name "$$marketplace_name" 'any(.[]; .name == $$name)'); \
+	if [ "$$marketplace_present" = "true" ]; then \
+		claude plugin marketplace update "$$marketplace_name"; \
+	else \
+		claude plugin marketplace add "$$PWD"; \
+	fi; \
+	plugins=$$(claude plugin list --json); \
+	plugin_present=$$(printf '%s\n' "$$plugins" | jq -r --arg id "$$plugin_id" 'any(.[]; .id == $$id and .scope == "user")'); \
+	if [ "$$plugin_present" = "true" ]; then \
+		claude plugin update "$$plugin_id" --scope user; \
+		installed_sha=$$(jq -r --arg id "$$plugin_id" '[.plugins[$$id][]? | select(.scope == "user") | .gitCommitSha // empty][0] // empty' "$$installed_plugins"); \
+		if [ "$$installed_sha" != "$$checkout_sha" ]; then \
+			echo "Claude plugin update left gitCommitSha at '$$installed_sha'; reinstalling from this checkout." >&2; \
+			claude plugin uninstall "$$plugin_id" --scope user --keep-data; \
+			claude plugin install formation --marketplace "$$PWD" --scope user; \
+		fi; \
+	else \
+		claude plugin install formation --marketplace "$$PWD" --scope user; \
+	fi; \
+	plugin_record=$$(jq -c --arg id "$$plugin_id" '[.plugins[$$id][]? | select(.scope == "user")][0] // null' "$$installed_plugins"); \
+	if [ "$$plugin_record" = "null" ]; then echo "error: Claude did not record $$plugin_id in user scope." >&2; exit 1; fi; \
+	installed_sha=$$(printf '%s\n' "$$plugin_record" | jq -r '.gitCommitSha // empty'); \
+	if [ "$$installed_sha" != "$$checkout_sha" ]; then echo "error: Claude plugin gitCommitSha is '$$installed_sha', expected checkout HEAD '$$checkout_sha'." >&2; exit 1; fi; \
+	plugin_path=$$(printf '%s\n' "$$plugin_record" | jq -r '.installPath // empty'); \
+	if [ -z "$$plugin_path" ] || [ ! -f "$$plugin_path/hooks/claude.json" ]; then echo "error: Claude plugin cache is missing hooks/claude.json." >&2; exit 1; fi
 
 clean:
 	$(CARGO) clean
