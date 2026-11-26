@@ -68,15 +68,30 @@ A watch is keyed by its recipient and name, so two seats can each have a `ci`. `
 formation watch pause ci
 formation watch resume ci
 formation watch remove release --to captain
+formation watch list
 formation watch list --json
 formation watch stop
 ```
 
 `watch run` keeps one active lease per room. Extra invocations stand by. The reader renews its lease every 15 seconds and a standby can take over when a heartbeat is 45 seconds old. Changes to the set take effect on the next pass. A watch runs through `sh -c` in the directory it was added from, using the active reader's environment. Due probes run concurrently and each has a 60-second limit. `watch stop` marks the room stopped and ends the reader and its standbys. A later `watch run` clears the mark.
 
-`list` shows the active reader and standbys with their seat, PID and last heartbeat. It shows when reading stopped if that time is known. Each watch row includes its last read and result. `list --json` exposes the same data with `reader.state` set to `live`, `none` or `stopped`. Timestamps are RFC 3339 UTC. `list` works against older rooms without upgrading them.
+`list` prints the reader state line followed by a table of watches:
 
-A probe prints one `<fingerprint><TAB><text>` per item. Fingerprints use 1 to 200 characters with no tab. Text past 400 characters is cut to end in `…`. The reader mails new items as `<probe> | <text>`, up to 20 lines per envelope. A failed read is mailed once with its first diagnostic line and can be reported again after a successful read. The room stores handover state per recipient and watch, so a standby reuses it when it takes over.
+```text
+reader: orbit-0-capt, pid 4711, last beat 2026-11-26T04:00:00Z; standby: scribe-0-capt, pid 4820, last beat 2026-11-26T04:00:02Z
+NAME       TO             EVERY (s)  STATE   LAST READ             RESULT       SENT  ADDED BY
+attention  orbit-0-capt         120  on      2026-11-26T03:59:30Z  ok, 3 items     5  orbit-0-capt
+ci         orbit-0-capt         300  on      2026-11-26T03:58:10Z  read failed     0  orbit-0-capt
+release    scribe-0-capt         60  paused  2026-11-26T02:00:00Z  ok, 0 items     1  0-chief
+```
+
+`list --json` exposes the same fields with `reader.state` set to `live`, `none` (printed as `reader: none` or `reader: none since <time>`) or `stopped` (`reader: stopped since <time>`). Timestamps are RFC 3339 UTC. `list` works against older rooms without upgrading them.
+
+If the room has at least one `on` watch, `reader.state` is `none` and `watch stop` was not run, the next hook event for each seat that receives or added an `on` watch delivers a one-time notice: `watch: nothing has read this room's <n> watches since <time>. Start a reader: formation watch run`. Restart a reader from a live seat's shell to clear the gap.
+
+A probe prints one `<fingerprint><TAB><text>` per item. Fingerprints use 1 to 200 characters with no tab. Text past 400 characters is cut to end in `…`. The reader mails new items as `<probe> | <text>` (up to 20 lines per envelope) under the heading `Watch <name>, added by <seat>: probe output, not a seat's request.`, marking it as probe data rather than a seat's request. Fingerprints omitted from two consecutive complete successful reads are forgotten so a returning condition is mailed again.
+
+If a probe exits non-zero, exceeds the 60-second limit, emits a malformed line, or lacks a tool or token in the active reader's environment (even if `watch check` passed in the caller's shell), `list` records `read failed` in `RESULT`. The reader mails `<probe> | read failed: <first diagnostic line>` once until a successful read recovers; failed reads do not forget remembered fingerprints. The room stores handover state per recipient and watch, so a standby reuses it when it takes over.
 
 ### Checking a probe
 

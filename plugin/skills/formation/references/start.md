@@ -12,7 +12,7 @@ scribe group open --kind formation --project "$project" --title "$title" --relat
 scribe group join "$group" --as "$seat" --author "$model" --role "$rank"
 ```
 
-   Seats with a cross-provider edge (or receiving mail from a headless worker or watch) also join Formation mail once beside `scribe group join`. In a mixed Claude and Codex shift, that includes `0-chief`, `0-aide` when relaying to another provider’s captain, any captain with a cross-provider edge, and any specialist serving both providers; same-provider seats keep native channels and do not join.
+   Every captain, plus any seat with a cross-provider edge or registering, receiving or reading watches (including `0-chief`, `0-aide` when relaying across providers, and shared specialists), joins Formation mail once beside `scribe group join`. Same-provider seat messages keep native channels.
 
 ```sh
 formation mail join
@@ -20,5 +20,9 @@ formation mail join
 
    Pass `"$seat" --room "$group"` if Scribe is unavailable.
 
-5. Use the provider procedure. Brief the aide, each captain and each named specialist with background, order, durable record, previous handoff, roster routes, provider, actual model, group, mail join line where a cross-provider edge applies, and close trigger. A captain briefs its own unit. Start the sergeant before the sentry. A lieutenant starts only when ordered. If an integration is absent, name the missing capability and what the seat can do.
-6. Stamp the roster comment in UTC. Record the group, seat names, provider host IDs, reporting lines, models/efforts and task IDs. `scribe group show` identifies transcripts. A host session ID or collaboration ID is a separate address. Send each seat only its allowed routes, give the aide the captains’ routes and records, then apply the provider’s reporting mode. Tell the operator who actually started, what carried over and what awaits them.
+5. Use the provider procedure. Brief the aide, each captain and each named specialist with background, order, durable record, previous handoff, roster routes, provider, actual model, group, mail join line, `{ws_selector}`, `{repo}`, `{base_branch}`, attention ownership and close trigger.
+   - A captain owning its workspace’s attention registers `attention` (when Orbit is configured) and `ci` in the room watch set and starts `formation watch run` in the background; other captains join `formation watch run` as standbys through the shared room.
+   - A captain in a resident-owned workspace avoids duplicate attention monitoring and registers no `attention` watch while the resident owns attention.
+   - Keep the chief’s fallback probes unconfigured until the seat-network design settles their recipient (`0-aide` vs `0-chief`).
+   - A captain briefs its own unit, starting the sergeant before the sentry; a lieutenant starts only when ordered. Name any missing integration and what the seat can still do.
+6. Stamp the roster comment in UTC with group, seat names, host IDs, reporting lines, models/efforts and task IDs. Verify starting watch coverage with `formation watch list` (or `--json`), record each captain’s watches and reader state on the chief’s assignment for close-out comparison, apply the provider’s reporting mode, and tell the operator who started, what carried over and what awaits them.

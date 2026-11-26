@@ -38,6 +38,7 @@ ranks:
     peers: [captain]         # other captains, for cross-workspace asks
     brief: assets/brief-captain.md
     record: "[orchestration]: {ws} - {actual_model}"   # filed by the chief before the start; its id goes in the brief
+    watch_reader: "formation watch run"   # attention-owning captains register attention/ci and start a reader; others stand by
     scribe_on: no            # Daniel, 2026-11-22: captains are not switched on; /scribe on is his, per session
   lieutenant:
     name: "{ws}-1-lt"        # a reinforcement is {ws}-1-lt2
@@ -66,13 +67,13 @@ ranks:
     started_by: captain   # or the explicitly assigned Codex parent
     claude_detach: true
     reports_to: sergeant     # the captain in a duo; by message, only on a change
-    watch: "formation watch wait --timeout 3600"
+    watch: "formation watch add / pause / resume (room reader via formation watch run; wait --timeout 3600 standalone only)"
     probes: [scripts/attention-read.sh, scripts/ci-read.sh]
     brief: assets/brief-sentry.md
     record: none
 
 units:                       # each has exactly one captain
-  solo: [captain]                               # a quiet workspace, or one with a resident
+  solo: [captain]                               # a quiet workspace, or one with a resident (no attention watch if resident-owned)
   duo: [captain, sentry]                        # needs watching, little clearing
   trio: [captain, sergeant, sentry]             # steady traffic
   squad: [captain, lieutenant, sergeant, sentry]   # the most demanding work
@@ -113,4 +114,5 @@ aliases:                     # for workspace names that push a session name past
 notes:
   - Start order under a captain is sergeant, then sentry, so the sentry's first report has a reader.
   - A cross-workspace ask is an Orbit task in the workspace that must act, plus a message pointing at it.
-  - A unit with a sentry replaces a resident in that workspace; never run both. A solo may sit beside one.
+  - A unit with a sentry replaces a resident in that workspace; never run both. A solo may sit beside one without registering an attention watch.
+  - Attention-owning captains register attention and ci watches and start `formation watch run` in the shared room; close-out issues `formation watch stop`.
