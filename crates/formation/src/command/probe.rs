@@ -220,54 +220,6 @@ impl Drop for ChildGuard {
     }
 }
 
-#[cfg(unix)]
-extern "C" fn handle_stop_signal(_signal: libc::c_int) {
-    STOP_REQUESTED.store(true, Ordering::SeqCst);
-}
-
-#[cfg(unix)]
-fn install_signal(signal: libc::c_int) -> Option<libc::sigaction> {
-    // SAFETY: `sigaction` with a plain C handler writing only an atomic bool is async-signal-safe.
-    unsafe {
-        let mut action: libc::sigaction = std::mem::zeroed();
-        action.sa_sigaction = handle_stop_signal as *const () as usize;
-        libc::sigemptyset(&raw mut action.sa_mask);
-        action.sa_flags = 0;
-        let mut previous: libc::sigaction = std::mem::zeroed();
-        if libc::sigaction(signal, &raw const action, &raw mut previous) == 0 {
-            Some(previous)
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(unix)]
-fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
-    // SAFETY: restoring a previously retrieved `sigaction` value is valid.
-    unsafe {
-        let _ = libc::sigaction(signal, previous, std::ptr::null_mut());
-    }
-}
-
-pub(super) fn stop_requested() -> bool {
-    STOP_REQUESTED.load(Ordering::SeqCst)
-}
-
-fn run_probe(
-    command: &str,
-    cwd: Option<&Path>,
-    limits: ProbeLimits,
-    cancelled: &dyn Fn() -> bool,
-) -> ProbeOutput {
-    let mut process = ProcessCommand::new("sh");
-    process.arg("-c").arg(command);
-    if let Some(cwd) = cwd {
-        process.current_dir(cwd);
-    }
-    run_process(process, limits, cancelled)
-}
-
 /// A spawned probe whose stdout and stderr are read by background threads.
 struct RunningProbe {
     guard: ChildGuard,
@@ -406,6 +358,54 @@ impl RunningProbe {
 
         ProbeOutput::Failed(failure_message(&streams[1], &streams[0], status))
     }
+}
+
+#[cfg(unix)]
+extern "C" fn handle_stop_signal(_signal: libc::c_int) {
+    STOP_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(unix)]
+fn install_signal(signal: libc::c_int) -> Option<libc::sigaction> {
+    // SAFETY: `sigaction` with a plain C handler writing only an atomic bool is async-signal-safe.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = handle_stop_signal as *const () as usize;
+        libc::sigemptyset(&raw mut action.sa_mask);
+        action.sa_flags = 0;
+        let mut previous: libc::sigaction = std::mem::zeroed();
+        if libc::sigaction(signal, &raw const action, &raw mut previous) == 0 {
+            Some(previous)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
+    // SAFETY: restoring a previously retrieved `sigaction` value is valid.
+    unsafe {
+        let _ = libc::sigaction(signal, previous, std::ptr::null_mut());
+    }
+}
+
+pub(super) fn stop_requested() -> bool {
+    STOP_REQUESTED.load(Ordering::SeqCst)
+}
+
+fn run_probe(
+    command: &str,
+    cwd: Option<&Path>,
+    limits: ProbeLimits,
+    cancelled: &dyn Fn() -> bool,
+) -> ProbeOutput {
+    let mut process = ProcessCommand::new("sh");
+    process.arg("-c").arg(command);
+    if let Some(cwd) = cwd {
+        process.current_dir(cwd);
+    }
+    run_process(process, limits, cancelled)
 }
 
 pub(super) fn run_process(
