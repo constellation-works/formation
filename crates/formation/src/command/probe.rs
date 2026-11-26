@@ -268,122 +268,162 @@ fn run_probe(
     run_process(process, limits, cancelled)
 }
 
+/// A spawned probe whose stdout and stderr are read by background threads.
+struct RunningProbe {
+    guard: ChildGuard,
+    overflowed: Arc<AtomicBool>,
+    receiver: mpsc::Receiver<(usize, io::Result<Vec<u8>>)>,
+}
+
+impl RunningProbe {
+    /// Starts the probe in its own process group with both output pipes read.
+    fn spawn(mut process: ProcessCommand) -> Result<Self, ProbeOutput> {
+        process
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            process.process_group(0);
+        }
+
+        let mut child = match process.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                return Err(ProbeOutput::Failed(format!(
+                    "failed to start probe: {error}"
+                )));
+            }
+        };
+
+        let Some(stdout) = child.stdout.take() else {
+            let mut guard = ChildGuard::new(child);
+            guard.terminate_and_reap();
+            return Err(ProbeOutput::Failed("probe stdout unavailable".to_owned()));
+        };
+        let Some(stderr) = child.stderr.take() else {
+            let mut guard = ChildGuard::new(child);
+            guard.terminate_and_reap();
+            return Err(ProbeOutput::Failed("probe stderr unavailable".to_owned()));
+        };
+
+        let guard = ChildGuard::new(child);
+        let overflowed = Arc::new(AtomicBool::new(false));
+        // Bounded channel (capacity 2, one message per pipe); sends complete once EOF or cap
+        // is hit.
+        let (sender, receiver) = mpsc::sync_channel::<(usize, io::Result<Vec<u8>>)>(2);
+
+        spawn_reader(
+            stdout,
+            0,
+            MAX_STDOUT_BYTES,
+            Some(Arc::clone(&overflowed)),
+            sender.clone(),
+        );
+        spawn_reader(stderr, 1, MAX_STDERR_BYTES, None, sender);
+
+        Ok(Self {
+            guard,
+            overflowed,
+            receiver,
+        })
+    }
+
+    /// Waits for the probe to exit. Cancellation, overflow, a wait error or a deadline ends it
+    /// early, and that outcome is returned as the error.
+    fn supervise(
+        &mut self,
+        limits: ProbeLimits,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<ExitStatus, ProbeOutput> {
+        let start = Instant::now();
+        let probe_deadline = start + limits.probe_timeout;
+        let command_deadline = limits
+            .command_remaining
+            .and_then(|remaining| start.checked_add(remaining));
+
+        loop {
+            if cancelled() {
+                return Err(self.abort(ProbeOutput::Cancelled));
+            }
+            if self.overflowed.load(Ordering::SeqCst) {
+                return Err(self.abort(ProbeOutput::Failed(format!(
+                    "probe output exceeded {MAX_STDOUT_BYTES} bytes"
+                ))));
+            }
+
+            match wait_step(&mut self.guard) {
+                Ok(Some(status)) => return Ok(status),
+                Ok(None) => {}
+                Err(error) => return Err(self.abort(ProbeOutput::Failed(error.to_string()))),
+            }
+
+            let now = Instant::now();
+            if now >= probe_deadline {
+                return Err(self.abort(ProbeOutput::Failed(format!(
+                    "probe timed out after {} seconds",
+                    limits.probe_timeout.as_secs()
+                ))));
+            }
+            if command_deadline.is_some_and(|limit| now >= limit) {
+                return Err(self.abort(ProbeOutput::Cancelled));
+            }
+
+            let until_probe = probe_deadline.saturating_duration_since(now);
+            let until_limit = match command_deadline {
+                Some(limit) => until_probe.min(limit.saturating_duration_since(now)),
+                None => until_probe,
+            };
+            std::thread::sleep(POLL_SLICE.min(until_limit));
+        }
+    }
+
+    /// Ends the probe and drains its readers, then returns the outcome it ends with.
+    fn abort(&mut self, outcome: ProbeOutput) -> ProbeOutput {
+        self.guard.terminate_and_reap();
+        drain_readers(&self.receiver);
+        outcome
+    }
+
+    /// Turns an exited probe's collected output into its outcome.
+    fn collect(self, status: ExitStatus) -> ProbeOutput {
+        let streams = match collect_readers(&self.receiver) {
+            Ok(streams) => streams,
+            Err(message) => return ProbeOutput::Failed(message),
+        };
+
+        if self.overflowed.load(Ordering::SeqCst) {
+            return ProbeOutput::Failed(format!("probe output exceeded {MAX_STDOUT_BYTES} bytes"));
+        }
+
+        if status.success() {
+            return ProbeOutput::Success {
+                stdout: streams[0].clone(),
+            };
+        }
+
+        ProbeOutput::Failed(failure_message(&streams[1], &streams[0], status))
+    }
+}
+
 pub(super) fn run_process(
-    mut process: ProcessCommand,
+    process: ProcessCommand,
     limits: ProbeLimits,
     cancelled: &dyn Fn() -> bool,
 ) -> ProbeOutput {
     if cancelled() {
         return ProbeOutput::Cancelled;
     }
-    process
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        process.process_group(0);
+    let mut running = match RunningProbe::spawn(process) {
+        Ok(running) => running,
+        Err(outcome) => return outcome,
+    };
+    match running.supervise(limits, cancelled) {
+        Ok(status) => running.collect(status),
+        Err(outcome) => outcome,
     }
-
-    let mut child = match process.spawn() {
-        Ok(child) => child,
-        Err(error) => return ProbeOutput::Failed(format!("failed to start probe: {error}")),
-    };
-
-    let Some(stdout) = child.stdout.take() else {
-        let mut guard = ChildGuard::new(child);
-        guard.terminate_and_reap();
-        return ProbeOutput::Failed("probe stdout unavailable".to_owned());
-    };
-    let Some(stderr) = child.stderr.take() else {
-        let mut guard = ChildGuard::new(child);
-        guard.terminate_and_reap();
-        return ProbeOutput::Failed("probe stderr unavailable".to_owned());
-    };
-
-    let mut guard = ChildGuard::new(child);
-    let overflowed = Arc::new(AtomicBool::new(false));
-    // Bounded channel (capacity 2, one message per pipe); sends complete once EOF or cap is hit.
-    let (sender, receiver) = mpsc::sync_channel::<(usize, io::Result<Vec<u8>>)>(2);
-
-    spawn_reader(
-        stdout,
-        0,
-        MAX_STDOUT_BYTES,
-        Some(Arc::clone(&overflowed)),
-        sender.clone(),
-    );
-    spawn_reader(stderr, 1, MAX_STDERR_BYTES, None, sender);
-
-    let start = Instant::now();
-    let probe_deadline = start + limits.probe_timeout;
-    let command_deadline = limits
-        .command_remaining
-        .and_then(|remaining| start.checked_add(remaining));
-
-    let status = loop {
-        if cancelled() {
-            guard.terminate_and_reap();
-            drain_readers(&receiver);
-            return ProbeOutput::Cancelled;
-        }
-        if overflowed.load(Ordering::SeqCst) {
-            guard.terminate_and_reap();
-            drain_readers(&receiver);
-            return ProbeOutput::Failed(format!("probe output exceeded {MAX_STDOUT_BYTES} bytes"));
-        }
-
-        match wait_step(&mut guard) {
-            Ok(Some(status)) => break status,
-            Ok(None) => {}
-            Err(error) => {
-                guard.terminate_and_reap();
-                drain_readers(&receiver);
-                return ProbeOutput::Failed(error.to_string());
-            }
-        }
-
-        let now = Instant::now();
-        if now >= probe_deadline {
-            guard.terminate_and_reap();
-            drain_readers(&receiver);
-            return ProbeOutput::Failed(format!(
-                "probe timed out after {} seconds",
-                limits.probe_timeout.as_secs()
-            ));
-        }
-        if command_deadline.is_some_and(|limit| now >= limit) {
-            guard.terminate_and_reap();
-            drain_readers(&receiver);
-            return ProbeOutput::Cancelled;
-        }
-
-        let until_probe = probe_deadline.saturating_duration_since(now);
-        let until_limit = match command_deadline {
-            Some(limit) => until_probe.min(limit.saturating_duration_since(now)),
-            None => until_probe,
-        };
-        std::thread::sleep(POLL_SLICE.min(until_limit));
-    };
-
-    let streams = match collect_readers(&receiver) {
-        Ok(streams) => streams,
-        Err(message) => return ProbeOutput::Failed(message),
-    };
-
-    if overflowed.load(Ordering::SeqCst) {
-        return ProbeOutput::Failed(format!("probe output exceeded {MAX_STDOUT_BYTES} bytes"));
-    }
-
-    if status.success() {
-        return ProbeOutput::Success {
-            stdout: streams[0].clone(),
-        };
-    }
-
-    ProbeOutput::Failed(failure_message(&streams[1], &streams[0], status))
 }
 
 fn wait_step(guard: &mut ChildGuard) -> io::Result<Option<ExitStatus>> {

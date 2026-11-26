@@ -256,40 +256,7 @@ fn collect_changes(
         match verdict {
             ProbeVerdict::Ok(lines) => {
                 tx.watch().clear_failure(target_seat, probe_name)?;
-                let present: HashSet<&str> =
-                    lines.iter().map(|line| line.fingerprint.as_str()).collect();
-                let remembered = tx.watch().remembered(target_seat, probe_name)?;
-                let mut handed = HashSet::with_capacity(remembered.len());
-                for entry in remembered {
-                    if present.contains(entry.fingerprint.as_str()) {
-                        if entry.absent_reads > 0 {
-                            tx.watch().set_absent_reads(
-                                target_seat,
-                                probe_name,
-                                &entry.fingerprint,
-                                0,
-                            )?;
-                        }
-                        handed.insert(entry.fingerprint);
-                    } else {
-                        let next_absent = entry.absent_reads.saturating_add(1);
-                        if next_absent >= rule::FORGET_AFTER_ABSENT_READS {
-                            tx.watch().forget_handed(
-                                target_seat,
-                                probe_name,
-                                &entry.fingerprint,
-                            )?;
-                        } else {
-                            tx.watch().set_absent_reads(
-                                target_seat,
-                                probe_name,
-                                &entry.fingerprint,
-                                next_absent,
-                            )?;
-                            handed.insert(entry.fingerprint);
-                        }
-                    }
-                }
+                let handed = reconcile_remembered(tx, target_seat, probe_name, lines)?;
                 for line in lines {
                     if !handed.contains(&line.fingerprint) {
                         new_items.push(Item {
@@ -315,6 +282,43 @@ fn collect_changes(
     }
 
     Ok((new_items, new_failures))
+}
+
+/// Ages the fingerprints remembered for one probe against its fresh lines and returns the
+/// fingerprints still handed over, so that only unseen lines become new items.
+fn reconcile_remembered(
+    tx: &Tx<'_>,
+    target_seat: &str,
+    probe_name: &str,
+    lines: &[rule::ParsedLine],
+) -> Result<HashSet<String>, Error> {
+    let present: HashSet<&str> = lines.iter().map(|line| line.fingerprint.as_str()).collect();
+    let remembered = tx.watch().remembered(target_seat, probe_name)?;
+    let mut handed = HashSet::with_capacity(remembered.len());
+    for entry in remembered {
+        if present.contains(entry.fingerprint.as_str()) {
+            if entry.absent_reads > 0 {
+                tx.watch()
+                    .set_absent_reads(target_seat, probe_name, &entry.fingerprint, 0)?;
+            }
+            handed.insert(entry.fingerprint);
+        } else {
+            let next_absent = entry.absent_reads.saturating_add(1);
+            if next_absent >= rule::FORGET_AFTER_ABSENT_READS {
+                tx.watch()
+                    .forget_handed(target_seat, probe_name, &entry.fingerprint)?;
+            } else {
+                tx.watch().set_absent_reads(
+                    target_seat,
+                    probe_name,
+                    &entry.fingerprint,
+                    next_absent,
+                )?;
+                handed.insert(entry.fingerprint);
+            }
+        }
+    }
+    Ok(handed)
 }
 
 pub(super) fn unknown_recipient(mut joined: Vec<String>, to: &str) -> Error {
