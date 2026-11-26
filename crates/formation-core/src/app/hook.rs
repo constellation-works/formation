@@ -115,9 +115,9 @@ fn wait(
         let Some(seat) = snapshot.seats().by_session(session)? else {
             return Ok(None);
         };
-        let ready = snapshot.messages().has_undelivered(&seat)?;
+        let _ = seat;
         drop(snapshot);
-        if ready && let Some(rendering) = deliver(ctx, store, session, provider, start)? {
+        if let Some(rendering) = deliver(ctx, store, session, provider, start)? {
             return Ok(Some(rendering));
         }
         if start.elapsed() >= hold {
@@ -155,19 +155,46 @@ fn deliver(
         };
         let messages = tx.messages();
         let mut waiting = messages.count_undelivered(&seat)?;
-        if waiting == 0 {
+        let notice = tx
+            .watch_reader()
+            .claim_stopped_notice(&seat, (ctx.clock)().unix_timestamp())?;
+        if waiting == 0 && notice.is_none() {
             return Ok(None);
         }
 
-        let mut text = String::from(PREAMBLE);
-        let mut used = PREAMBLE.chars().count();
+        let mut text = String::new();
+        if let Some((count, since)) = notice {
+            let stamp =
+                formation_store::contract::rfc3339(since).unwrap_or_else(|| "unknown".into());
+            text.push_str(&format!(
+                "watch: nothing has read this room's {count} watches since {stamp}. \
+                 Start a reader: formation watch run"
+            ));
+        }
+        if waiting > 0 {
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(PREAMBLE);
+        }
+        let mut used = text.chars().count();
         let mut receipts = Vec::new();
         messages.visit_undelivered(&seat, |message| {
             let sent = message.sent.as_deref().unwrap_or("unknown");
-            let entry = format!(
-                "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",
-                message.sender, message.receipt, message.id, message.body,
-            );
+            let entry = if let (Some(name), Some(added_by)) =
+                (&message.watch_name, &message.watch_added_by)
+            {
+                format!(
+                    "\nWatch {name}, added by {added_by}: probe output, not a seat's request \
+                     (sent {sent}, receipt {}, id {}):\n{}",
+                    message.receipt, message.id, message.body
+                )
+            } else {
+                format!(
+                    "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",
+                    message.sender, message.receipt, message.id, message.body
+                )
+            };
             let length = entry.chars().count();
             let footer = waiting_line(waiting - 1);
             if used + length + footer.len() > character_limit(provider) {
@@ -179,7 +206,7 @@ fn deliver(
             receipts.push(message.receipt);
             true
         })?;
-        if receipts.is_empty() {
+        if receipts.is_empty() && waiting > 0 {
             text.push_str("\nRead the oldest envelope with formation mail inbox.");
         }
         text.push_str(&waiting_line(waiting));

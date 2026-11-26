@@ -265,6 +265,7 @@ impl<'a> Reader<'a> {
                     tx,
                     &self.seat,
                     &watch.recipient,
+                    &watch.added_by,
                     &[(&watch.name, verdict)],
                     now,
                 );

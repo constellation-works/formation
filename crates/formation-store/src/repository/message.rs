@@ -12,16 +12,22 @@ pub struct Messages<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) has_sent_column: bool,
     pub(crate) has_delivered_column: bool,
+    pub(crate) has_watch_mail: bool,
 }
 
 impl Messages<'_> {
     /// Oldest pending messages for a recipient.
     pub fn unread(&self, seat: &str) -> Result<Vec<Message>, Error> {
         let (sent, delivered) = self.timestamp_columns();
+        let watch = if self.has_watch_mail {
+            "watch_name, watch_added_by"
+        } else {
+            "NULL, NULL"
+        };
         let mut statement = self
             .conn
             .prepare(&format!(
-                "SELECT receipt, id, sender, body, {sent}, {delivered}
+                "SELECT receipt, id, sender, body, {sent}, {delivered}, {watch}
                    FROM messages
                   WHERE recipient = ?1 AND ack = 0
                   ORDER BY receipt
@@ -109,6 +115,8 @@ fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
         body: row.get(3)?,
         sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
         delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
+        watch_name: row.get(6)?,
+        watch_added_by: row.get(7)?,
     })
 }
 
@@ -149,7 +157,8 @@ impl MessagesMut<'_> {
         let mut statement = self
             .conn
             .prepare(
-                "SELECT receipt, id, sender, body, sent, delivered FROM messages
+                "SELECT receipt, id, sender, body, sent, delivered, watch_name, watch_added_by
+                   FROM messages
                   WHERE recipient = ? AND ack = 0 AND delivered IS NULL ORDER BY receipt",
             )
             .map_err(error::sql)?;
@@ -216,6 +225,17 @@ impl MessagesMut<'_> {
             )
             .map_err(error::sql)?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Attach trusted watch provenance to a newly inserted envelope.
+    pub fn mark_watch(&self, receipt: i64, name: &str, added_by: &str) -> Result<(), Error> {
+        self.conn
+            .execute(
+                "UPDATE messages SET watch_name = ?2, watch_added_by = ?3 WHERE receipt = ?1",
+                params![receipt, name, added_by],
+            )
+            .map(|_| ())
+            .map_err(error::sql)
     }
 
     /// Next monotonic receipt number within this write transaction.

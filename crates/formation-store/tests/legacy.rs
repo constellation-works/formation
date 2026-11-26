@@ -7,7 +7,10 @@ use std::os::unix::fs::PermissionsExt;
 
 fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     connection.execute_batch(
-        "ALTER TABLE seats DROP COLUMN wake_requested;
+        "DROP TABLE watch_notice;
+         ALTER TABLE messages DROP COLUMN watch_name;
+         ALTER TABLE messages DROP COLUMN watch_added_by;
+         ALTER TABLE seats DROP COLUMN wake_requested;
          ALTER TABLE seats DROP COLUMN hook_busy;
          ALTER TABLE seats DROP COLUMN hook_provider;",
     )

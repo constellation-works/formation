@@ -194,6 +194,7 @@ pub(super) fn send_changes(
     tx: &Tx<'_>,
     caller_seat: &str,
     recipient: &str,
+    added_by: &str,
     verdicts: &[(&str, ProbeVerdict)],
     now: i64,
 ) -> Result<bool, Error> {
@@ -226,8 +227,10 @@ pub(super) fn send_changes(
         }
         next_seq += 1;
 
-        tx.messages()
+        let receipt = tx
+            .messages()
             .insert(caller_seat, recipient, &message_id, &body, now)?;
+        tx.messages().mark_watch(receipt, verdicts[0].0, added_by)?;
         for entry in chunk {
             if let MailEntry::Item(item) = entry {
                 tx.watch()

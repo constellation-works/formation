@@ -13,6 +13,12 @@ pub struct Message {
     pub sender: String,
     /// Message contents.
     pub body: String,
+    /// Trusted watch producer name, if this is probe mail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watch_name: Option<String>,
+    /// Seat that added the producing watch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watch_added_by: Option<String>,
     /// When the envelope was stored, as RFC 3339 UTC. Null for envelopes stored by earlier builds.
     pub sent: Option<String>,
     /// When a hook delivered the envelope, as RFC 3339 UTC, if delivered.

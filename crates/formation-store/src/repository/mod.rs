@@ -50,6 +50,7 @@ impl Snapshot {
             conn: &self.reader,
             has_sent_column: sqlite::has_sent_column(self.reader.version()),
             has_delivered_column: sqlite::has_delivered_column(self.reader.version()),
+            has_watch_mail: sqlite::has_watch_mail(self.reader.version()),
         }
     }
 }

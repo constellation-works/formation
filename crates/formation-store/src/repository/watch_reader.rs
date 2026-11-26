@@ -93,6 +93,9 @@ impl WatchLease<'_> {
             )
             .map_err(error::sql)?;
         if claimed == 1 {
+            self.conn
+                .execute("DELETE FROM watch_notice", [])
+                .map_err(error::sql)?;
             Ok(WatchRole::Reader)
         } else {
             Ok(WatchRole::Standby)
@@ -118,6 +121,40 @@ impl WatchLease<'_> {
             .execute("DELETE FROM watch_participant WHERE id = ?1", [id])
             .map_err(error::sql)?;
         Ok(())
+    }
+
+    /// Claim one notice for an eligible seat while the reader is absent.
+    pub fn claim_stopped_notice(&self, seat: &str, now: i64) -> Result<Option<(i64, i64)>, Error> {
+        let state: Option<(i64, i64)> = self
+            .conn
+            .query_row(
+                "SELECT count(*), coalesce((SELECT p.expires_at FROM watch_participant p
+                 WHERE p.id = r.reader_id), r.released_at, min(w.added_at))
+               FROM watch_set w CROSS JOIN watch_reader r
+              WHERE w.state = 'on' AND r.stopped_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM watch_participant p
+                  WHERE p.id = r.reader_id AND p.expires_at > ?2)
+                AND EXISTS (SELECT 1 FROM watch_set eligible WHERE eligible.state = 'on'
+                  AND (eligible.recipient = ?1 OR eligible.added_by = ?1))
+              HAVING count(*) > 0",
+                params![seat, now],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(error::sql)?;
+        if let Some(state) = state {
+            let inserted = self
+                .conn
+                .execute(
+                    "INSERT OR IGNORE INTO watch_notice (seat) VALUES (?1)",
+                    [seat],
+                )
+                .map_err(error::sql)?;
+            if inserted == 1 {
+                return Ok(Some(state));
+            }
+        }
+        Ok(None)
     }
 
     /// Mark the room stopped and invalidate every existing invocation.
