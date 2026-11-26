@@ -4,7 +4,7 @@ The operator’s current mandate and the host’s permission checks bound every 
 
 | Decision | Who settles it within mandate |
 | --- | --- |
-| Retry a check, repair a session-owned PR, clear an unambiguous pilot finding, file a fix or friction, open a mechanical base-CI fix in a squad | Sergeant, otherwise captain |
+| Retry a check, repair a session-owned PR, in repair mode repair a red or conflicting PR, clear an unambiguous pilot finding, file a fix or friction, open a mechanical base-CI fix in a squad | Sergeant, otherwise captain |
 | Approve and ship a fix, approved design, non-breaking refactor, improvement or small scoped feature | Captain with the operator’s applicable shipping mandate |
 | Land a reviewed PR | Captain after verifying the accepted head and required checks |
 | Major feature, design, scope, architecture, breaking change, security, material cost or irreversible action | Operator, with the captain’s options and recommendation |

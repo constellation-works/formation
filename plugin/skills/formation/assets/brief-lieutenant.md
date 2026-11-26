@@ -39,7 +39,8 @@ Order: {order}. Task: `{task_id}` — {task_title}. Done means: {done_criteria}.
    delivery accepts only the candidate Orbit published, and a moved head leaves the task
    unsettled until Daniel runs an operator command. For such a PR, comment on the task
    with the failed test or conflicting paths, the cause and the fix. Tell the captain so
-   the captain or sergeant can submit the diagnosis through Orbit source repair.
+   the captain or sergeant can submit the diagnosis through Orbit source repair. With
+   repair mode off, the drain's repair reads the comment.
    Push a repair only to a PR a session opened. The captain lands it. For red CI on
    the base branch, open a PR against it from your worktree. Never go green by weakening a
    check: no skipped or ignored test, no loosened assertion, no removed guard, no added
