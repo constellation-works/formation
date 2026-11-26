@@ -2,14 +2,18 @@
 title: "Design: formations composed from units"
 owner: claude
 created_date: 2026-11-16
-updated_date: 2026-11-25
-status: Accepted
+updated_date: 2026-11-26
+status: Draft
 feature: formation
 doc_role: design
-summary: "Formations composed from units: seven ranks that fix a session's model and not its duty, four units (solo, duo, trio, squad) that Daniel composes per workspace in one line, a chief and an aide staffed once, standing specialists any captain can ask, the chain of command, how a captain hands out work and asks for reinforcements, what replaces the eight named formations, and what Daniel decided"
+summary: "Workspace units, staffing and authority, with a draft seat network built around watch processes and an optional dispatcher."
 ---
 
 # Design: formations composed from units
+
+The watch-based revisions to [Ranks](#ranks), [Units](#units) and [Chain of command](#chain-of-command)
+are for design review. The [seat network](references/network.md#seat-network) defines the
+proposed routes and the approval gate for their build.
 
 Bearing: a draft, written on 2026-11-16 from Daniel's proposal in the lead's chat during the
 second squad day. Daniel approved the names, settled the four questions under
@@ -52,10 +56,13 @@ can delegate the work to \"implementer\"."
 | captain | `<ws>-0-capt` | Opus, high | orchestrator | Commands one workspace per `orchestration-session`, owns its record, talks to Daniel | Its assignment |
 | lieutenant | `<ws>-1-lt` | Opus, medium | implementer, reviewer | Whatever needs the big model: implementation outside the drains, root-cause analysis, debugging, PR rescue, review | The Orbit task it claims or is ordered onto |
 | sergeant | `<ws>-1-sgt` | Sonnet, medium | resolver | Routine work: triage, re-runs, rebases, pilot warnings and holds, stuck PRs, and in a squad the mechanical red-CI fixes | A comment on each task it touches |
-| sentry | `<ws>-1-sentry` | Haiku, medium | watcher | The read of attention and of red CI on the base branch and open PRs, paced by load (every 2 to 30 minutes); reports changes only, never acts | None: one line per incident on the captain's assignment |
+| sentry, on request | `<ws>-1-sentry` | Haiku, medium | watcher | Dispatches incoming items to the appropriate sergeant or lieutenant in its squad | See the [open dispatcher question](references/network.md#open-questions) |
 | specialist | `1-spec-<subject>` | Sonnet, medium, unless Daniel names another | reviewer, in part | Answers asks on one subject from any captain; never acts ([Specialists](#specialists)) | None: a comment on the task an ask names |
 
-- The sentry keeps a duty name because it is the one session whose job never changes.
+- A `formation watch` process does the timed reading. Seats act when Daniel or an incoming
+  message wakes them. Quiet workspaces can send findings to their captain, and busy workspaces
+  can use a sergeant as the cheaper wake target. An assigned sentry receives the default
+  watch output for its squad and dispatches it. See the [seat network](references/network.md#seat-network).
 - Formation sessions use Orbit MCP when available. They select the workspace on its
   owner using the descriptor from `orbit.workspace.list`. When MCP is unavailable
   for the operation or owner, they use the Orbit CLI over SSH on that owner
@@ -67,34 +74,11 @@ can delegate the work to \"implementer\"."
   unless specified otherwise." The chief and the captains now set the override on any
   command refused without it; what is Daniel's alone, and the chief's advising role, are
   read as specified otherwise and stand.
-- The sentry also reads the forge (`scripts/ci-read.sh` in the skill). Orbit's `ci_red`
-  attention kind covers only finished runs on the base branch's current head, and no pull
-  request. Daniel (2026-11-19): "sentry should also be checking for red CI on agent-main
-  branch and PR's". Base-branch red is reported at once. A pull request is reported once
-  its check has stayed failed for 15 minutes on the same head, so that a delivery run
-  repairing its own pull request costs the sergeant no turn.
-- The sentry's sleep follows the load. It began as a fixed five minutes, which cost a turn
-  every five minutes in a workspace with nothing running and was slow when a drain was
-  failing. Daniel (2026-11-24): "we need to allow sentry to dynamically determine their
-  sleep duration depending on load. currently its every 5 min. And also have them go idle
-  when no work is expected". After each wake a script (`scripts/sentry-pace.sh`) chooses:
-  2 minutes after a wake that reported something, 5 while an Orbit run holds a task in
-  progress or a run's pull request moved in the last hour, 15 when nothing is in flight,
-  and 30 after an hour of nothing, which is idle. Hands-on work does not count, neither a
-  task nor a pull request: on the first evening each workspace had a hands-on task, and
-  both sentries stayed at five minutes. Daniel (2026-11-24): "hands-on PRs shouldn't count
-  as load either - but up to the judgement of the capt". So the captain can send
-  `watch <minutes>` for one it wants watched. A script chooses and not the sentry, so the pace is the same for
-  every sentry and a Haiku session does no arithmetic. Idle keeps a 30-minute read and
-  does not stop the timer: on the day this was adopted a drain had been running for
-  hours without its captain knowing, and a stopped sentry would not have seen it either.
-  A reader that knows work is starting sends `watch`. `rest` pauses the sentry outright,
-  with no timer, and the captain sends it whenever no work is expected. Daniel (2026-11-24):
-  "captains should be pause sentries when there is no work expected". The cost is the one
-  named above: a paused sentry sees nothing, so a drain started unannounced goes unwatched
-  until someone sends `watch`. The chief passes a drain Daniel mentions to its captain. A failed probe counts as work in flight, since a failed read is not all-clear.
-
-  Since this change, the sentry waits in `formation watch` (`scripts/attention-read.sh` and `scripts/ci-read.sh`, `--timeout 3600`), and the tiers above are history.
+- The watch runs the attention and forge probes. Orbit's `ci_red` attention kind covers
+  completed runs on the base branch's current head. The forge probe covers open pull
+  requests as well. It reports base-branch red at once and reports a pull request after
+  its check has stayed failed for 15 minutes on the same head, allowing the delivery run
+  time to repair its own candidate.
 - In a squad, red CI on the base branch is fixed by the unit and not left to Orbit's scheduled
   sweep (Daniel, 2026-11-19: "squad mode == high throughput mode"). The sergeant re-runs a
   flake and opens the fix when it is mechanical; a failure that needs diagnosis, or whose
@@ -108,24 +92,22 @@ can delegate the work to \"implementer\"."
 
 ## Units
 
-A unit is the staff of one workspace. Each has exactly one captain.
+A unit is the staff of one workspace. Each has exactly one captain. The draft keeps the
+unit names and moves each former timed reader into a watch process.
 
 | Unit | Line-up | Fits | Attention owner |
 |---|---|---|---|
-| solo | captain | A quiet workspace, or one with a resident | The resident if one is active, else the captain on its own wakes |
-| duo | captain, sentry | A workspace that needs watching and little clearing | The sentry reads; the captain acts |
-| trio | captain, sergeant, sentry | Steady traffic | The sentry reads; the sergeant clears; the captain decides |
-| squad | captain, lieutenant, sergeant, sentry | The most demanding work | As trio, with a lieutenant for heavy work |
+| solo | captain, with a watch as needed | A quiet workspace, or one with a resident | The resident if active, else the captain |
+| duo | captain and watch process | A workspace that needs watching and little clearing | The watch reads; the captain acts |
+| trio | captain, sergeant and watch process | Steady traffic | The watch reads; the sergeant clears; the captain decides |
+| squad | captain, lieutenant, sergeant and watch process | The most demanding work | As trio, with a lieutenant for heavy work |
 
-- Daniel on duo: "I am planning to have the watcher perform the loop check, and notifies
-  orc." In a duo the sentry reports to the captain, under the same filter the watcher brief
-  has today: a fingerprint once, a critical item at once, the rest in an hourly digest.
 - Daniel on residents: "if a resident is enabled, I won't be using \"duo\", I will be using
-  \"solo\"." Any unit with a sentry starts only after the workspace's resident is paused or
-  past its deadline ([overview](1_overview.md), rule 6).
-- The captain starts its own subordinates: the sergeant, then the sentry, so the sentry's
-  first report has a reader. A lieutenant is started when the first heavy piece is ordered,
-  then kept.
+  \"solo\"." A unit starts its attention watch once it owns that workspace's attention.
+  An active resident keeps ownership ([overview](1_overview.md), rule 6).
+- The captain staffs a sentry on request and after approval from the chief or Daniel.
+  A squad can also have multiple sergeants or lieutenants. A lieutenant is started when
+  the first heavy piece is ordered, then kept.
 - The sergeant and sentry are detached and report by message. A lieutenant stays attached:
   its turn end is the result the captain waits for. A lieutenant that writes code works in
   its own worktree on a task it has claimed with `context_files`.
@@ -161,13 +143,15 @@ Daniel ─┬─ 0-chief ─┬─ orbit-0-capt ──┬─ orbit-1-lt
         │           │                 └─ orbit-1-sentry
         │           └─ scribe-0-capt
         └─ 0-aide
-
-orbit-1-sentry → orbit-1-sgt → orbit-0-capt → 0-chief → Daniel   (by message, upward)
-orbit-0-capt ↔ scribe-0-capt                                     (cross-workspace asks)
-any captain ↔ 1-spec-<subject>                                   (one ask, one answer)
-Daniel ↔ any captain                                             (directly, in its chat)
 ```
 
+- The tree shows staffing. The [seat network table](references/network.md#seat-network)
+  shows message routes, including peers and the aide. A sentry in the tree is optional.
+- The chief sends work orders to captains, who propagate them through their units.
+  Sends from the chief beyond the captains are announcements such as close-out or refresh.
+  The aide exchanges requests and relays with the chief and captains.
+- Lieutenants and sergeants report to their captain. A squad's appointed sentry can exchange
+  dispatch messages with both ranks. Captains can reach their direct reports and peers.
 - A captain that is blocked, needs a decision or has finished something it was asked for
   messages the chief. The chief answers what it can: advice, a fact from another unit's
   record, coordination between units. What only Daniel may settle the chief brings to him
@@ -195,10 +179,12 @@ no row: it works under the captain's orders, and its changes ship on the captain
   parallel heavy work or a review that cannot wait.
 - **Reinforcements.** Daniel: "when things get busy, orc can request for additional units".
   A captain asks the chief for a rank, not a unit: "one more lieutenant", "a sergeant". A
-  second unit in the same workspace would bring a second captain and a second sentry,
-  against one attention owner per workspace. The chief approves up to the squad line-up plus
-  one more lieutenant per workspace, records it on the roster and tells Daniel in its next
-  message. Beyond that Daniel decides: adding a session is cost, which is his row.
+  second unit in the same workspace would bring a second captain, against one attention
+  owner per workspace. The 2026-11-16 design let the chief approve up to the squad
+  line-up plus one more lieutenant per workspace. The watch-based design calls for
+  approval from the chief or Daniel before a captain starts an additional direct
+  report. The roster records the new seat. See
+  [Captain routes and staffing approval](4_decisions.md#captain-routes-and-staffing-approval).
 - **No cap on units.** Squad was capped at two workspaces because each orchestrator split
   Daniel's attention. The chief is now the first stop, and the close-out measure "questions
   that reached Daniel" shows when there are too many.
@@ -206,6 +192,7 @@ no row: it works under the captain's orders, and its changes ship on the captain
 
 ## Specialists
 
+This section records the standing specialist design from 2026-11-16.
 Daniel, 2026-11-16, on what session messaging allows beyond a chain of command: "it just
 became a network", then "let's add standing specialists to the design." The network itself
 is outlined in [references/network.md](references/network.md).
@@ -248,7 +235,7 @@ cuts it), `security`.
 | night-watch | Step 4 of the close-out, which already files a resident per workspace with pending tasks |
 | firefight | An order from the affected workspace's captain: one lieutenant writes, everyone else holds dispatch |
 
-## Build
+## Original build
 
 The standalone repository now ships the [Formation skill](../../../plugin/skills/formation/SKILL.md). The file layout below records the original umbrella implementation.
 
@@ -294,3 +281,14 @@ design and the branch build: "Approve and build".
 ## Sources
 
 The [umbrella record](https://github.com/constellation-works/constellation/blob/agent-main/docs/design/formation/2_design.md#task-references) identifies the work behind this design.
+
+## Build
+
+File one later task per item after Daniel approves the draft and settles the relevant
+[open questions](references/network.md#open-questions).
+
+1. **Roster edges.** Record ranks, reporting parents and squad membership, including approved additions, then derive the seat table from the roster.
+2. **Mail routing.** Apply the approved edge rules in `formation mail send`. If Daniel chooses enforcement, add a one-line refusal naming reachable seats, and verify the chief's announcement route.
+3. **Watch recipient.** Select the default addressee from the roster in sentry, sergeant, captain order. Verify that probes mail findings on change and cover deliberate process stops and failed reads.
+4. **Sentry staffing and brief.** Rewrite the plugin's sentry brief and reference around the optional dispatcher, update unit defaults and role descriptions, and carry the approved dispatch rules into the brief.
+5. **Chief probes.** Replace the scheduled fallback turn with change-detecting watch probes, using the receiving seat Daniel approves. Verify that an unchanged read wakes nobody.
