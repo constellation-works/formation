@@ -77,6 +77,7 @@ units:                       # each has exactly one captain
   duo: [captain, sentry]                        # needs watching, little clearing
   trio: [captain, sergeant, sentry]             # steady traffic
   squad: [captain, lieutenant, sergeant, sentry]   # the most demanding work
+  squad_repair_off: [captain, lieutenant, sergeant]   # a squad where a drain runs with --auto-fix: the sergeant receives the watches
 
 reinforcements:              # a captain asks the chief for a rank, never for a second unit
   chief_approves: the squad line-up plus one more lieutenant, per workspace

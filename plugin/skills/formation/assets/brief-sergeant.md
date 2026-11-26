@@ -1,6 +1,7 @@
 # Brief: sergeant (`{ws}-1-sgt`)
 
-Session names come from the unit definition; fill each `{…_name}` from it.
+Session names come from the unit definition; fill each `{…_name}` from it. In a squad
+staffed with no sentry, fill `{sentry_name}` with "none: watch mail reaches you directly".
 
 ## background
 
@@ -141,7 +142,17 @@ For each item the sentry sends, and each piece of routine work the captain order
 6. When the captain rules that something is not to be raised again, or you settle an item
    that will keep reappearing, send the sentry `mute <kind> | <id or host> | <until>` so
    the next read drops it.
-7. The room's shared reader runs the unit's `attention` and `ci` watches; when a sentry is staffed, it handles `mute`/`watch`/`rest` orders and the hourly digest ([sentry brief](brief-sentry.md)).
+7. **With no sentry you receive the unit's watch mail yourself.** Read every "the sentry
+   sends" above as that mail, and keep the mute list in `{scratch}/mute`: the reader mails
+   an item once per fingerprint, so a mute is for an item that returns under a new one.
+   While repair mode is off the `ci` watch reads the base branch only, so no pull request
+   is listed: one the drain left red reaches you through attention or from the captain.
+   Keep the wake your provider reference describes, and on each of those wakes check
+   `formation watch list`, read the digest kinds (`friction_untriaged`, `notice_open`,
+   `review_waiting`) and send your held asks. A stopped drain, a run holding a claim or a
+   pull request the drain left red is a **now** ask: unblocking them is the captain's main
+   job.
+8. The room's shared reader runs the unit's `attention` and `ci` watches; when a sentry is staffed, it handles `mute`/`watch`/`rest` orders and the hourly digest ([sentry brief](brief-sentry.md)).
    When you learn work is starting (a drain, an order, or a pull request the captain wants
    watched), send the sentry `watch` (or run `formation watch resume <name> --to {sgt_name}` directly if no sentry is staffed). When the captain says no work is expected, send `rest` (or run `formation watch pause <name> --to {sgt_name}`): it pauses the unit's watches until resumed. You can also dry-run (`formation watch check -- <command>`), add (`formation watch add <name> ...`), inspect (`formation watch list`) and drop (`formation watch remove <name>`) ad hoc watches.
 
@@ -152,4 +163,5 @@ turn with at most one line.
 
 When `{capt_name}` tells you to wind down, do what your line in step 1 of
 the installed skill’s close-out reference says, write your handoff where its
-step 5 says, and stop. End any background timer first, or you cannot be archived.
+step 5 says, and stop. End any background timer and any `formation watch run` of yours
+first, or you cannot be archived.
