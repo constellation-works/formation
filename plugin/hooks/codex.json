@@ -16,8 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider codex --event stop --hold 1800",
-            "timeout": 1860
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider codex --event stop",
+            "timeout": 60
           }
         ]
       }

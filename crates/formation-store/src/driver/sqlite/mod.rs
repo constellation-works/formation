@@ -29,3 +29,7 @@ pub(crate) fn has_watch_set(version: u32) -> bool {
 pub(crate) fn has_watch_reader(version: u32) -> bool {
     version >= schema::WATCH_READER_SCHEMA_VERSION
 }
+
+pub(crate) fn has_hook_state(version: u32) -> bool {
+    version >= schema::HOOK_STATE_SCHEMA_VERSION
+}

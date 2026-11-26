@@ -218,6 +218,19 @@ pub(crate) fn compose_hook(env: &Env, session: &str) -> Result<Option<MailContex
     }))
 }
 
+pub(crate) fn is_hook_room(env: &Env, room: &str, session: &SessionId) -> Result<bool, Error> {
+    let sessions_dir = formation_home(env)?.join("sessions");
+    let Some(recorded) = Store::session_room(&sessions_dir, session)? else {
+        return Ok(false);
+    };
+    if recorded == room {
+        return Ok(true);
+    }
+    let bound = parse_room_spec(env, &recorded)?.path.canonicalize();
+    let current = parse_room_spec(env, room)?.path.canonicalize();
+    Ok(matches!((bound, current), (Ok(bound), Ok(current)) if bound == current))
+}
+
 fn resolve_session(env: &Env) -> Result<Option<SessionId>, Error> {
     let raw = env.claude_session.as_ref().or(env.codex_session.as_ref());
     let Some(raw) = raw else {

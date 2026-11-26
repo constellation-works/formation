@@ -31,6 +31,7 @@ impl Snapshot {
         SeatsRead {
             conn: &self.reader,
             has_session_column: sqlite::has_session_column(self.reader.version()),
+            has_hook_state: sqlite::has_hook_state(self.reader.version()),
         }
     }
 

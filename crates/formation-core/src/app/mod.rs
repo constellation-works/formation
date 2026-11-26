@@ -6,4 +6,6 @@ pub mod mail;
 
 pub mod roster;
 
+mod wake;
+
 pub mod watch;

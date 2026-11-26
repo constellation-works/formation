@@ -102,10 +102,10 @@ Examples:
     },
 }
 
-pub(crate) fn run(env: Env, args: Watch) -> ExitCode {
+pub(crate) fn run(env: Env, args: Watch, queue: &dyn Fn(&str) -> bool) -> ExitCode {
     let env = env.with_mail_options(args.room, args.seat);
     match args.action {
-        Action::Run => run_reader(&env),
+        Action::Run => run_reader(&env, queue),
         Action::Wait {
             probes,
             every,
@@ -134,7 +134,7 @@ pub(crate) fn run(env: Env, args: Watch) -> ExitCode {
     }
 }
 
-fn run_reader(env: &Env) -> ExitCode {
+fn run_reader(env: &Env, queue: &dyn Fn(&str) -> bool) -> ExitCode {
     let _signals = SignalGuard::install();
     let runner = ShellProbeRunner;
     reader::exec(
@@ -142,6 +142,7 @@ fn run_reader(env: &Env) -> ExitCode {
         reader::Command {
             pid: std::process::id(),
             runner: &runner,
+            queue,
         },
         |result| match result {
             Ok(out) => output::watch_exited(&out),

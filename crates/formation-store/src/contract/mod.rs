@@ -13,6 +13,15 @@ pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
 use std::fmt;
 pub use watch::{NewWatch, WatchEntry, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState};
 
+/// Provider observed in a host hook for a session binding.
+#[derive(Clone, Copy)]
+pub enum HookProvider {
+    /// Claude Code.
+    Claude,
+    /// Codex.
+    Codex,
+}
+
 /// Invalid caller session identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InvalidSessionId;

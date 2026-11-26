@@ -2,6 +2,8 @@
 
 use clap::Subcommand;
 
+pub(crate) mod codex_wake;
+
 pub(crate) mod hook;
 
 pub(crate) mod mail;

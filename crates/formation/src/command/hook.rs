@@ -16,7 +16,7 @@ const MAX_BYTES: u64 = 1024 * 1024;
     "Reads the host's JSON from stdin (maximum 1 MiB). ",
     "A Claude Stop delivery exits 2 with the mail on stderr. Errors exit 1.\n\n",
     "Examples:\n  formation hook --provider claude --event user-prompt\n",
-    "  formation hook --provider codex --event stop --hold 30"
+    "  formation hook --provider codex --event stop"
 ))]
 pub(crate) struct Hook {
     /// Host that supplies the hook input.

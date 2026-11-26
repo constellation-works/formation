@@ -56,6 +56,7 @@ pub(crate) fn exec<A: App, R>(
         },
     };
     let ctx = Ctx {
+        env,
         mail,
         actor: env.actor.as_deref(),
         cwd: env.cwd.as_deref(),

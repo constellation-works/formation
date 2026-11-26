@@ -1,5 +1,6 @@
 //! Convert clap arguments to application commands.
 
+use super::probe::SignalGuard;
 use crate::output;
 use clap::{Args, Subcommand};
 use formation_core::Env;
@@ -63,7 +64,7 @@ enum Action {
     },
 }
 
-pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
+pub(crate) fn run(env: Env, args: Mail, queue: &dyn Fn(&str) -> bool) -> ExitCode {
     let explicit_room = args.room.is_some();
     let mut env = env.with_mail_options(args.room, args.seat);
     let format = if matches!(args.action, Action::Sent { json: true, .. }) {
@@ -86,11 +87,17 @@ pub(crate) fn run(env: Env, args: Mail) -> ExitCode {
             Command::Join(name)
         }
         Action::Who => Command::Who,
-        Action::Send { to, id, body } => Command::Send { to, id, body },
+        Action::Send { to, id, body } => Command::Send {
+            to,
+            id,
+            body,
+            queue,
+        },
         Action::Inbox { wait } => Command::Inbox(Duration::from_secs(wait)),
         Action::Sent { limit, json: _ } => Command::Sent(limit),
         Action::Ack { receipt } => Command::Ack(receipt),
     };
+    let _signals = matches!(cmd, Command::Send { .. }).then(SignalGuard::install);
     mail::exec(&env, cmd, |result| match result {
         Ok(mail::Outcome::SentHistory { messages, total }) => {
             output::sent_history(&messages, total, format)

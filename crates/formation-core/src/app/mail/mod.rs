@@ -33,7 +33,7 @@ pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(500);
 pub(super) const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 /// A mail operation.
-pub enum Command {
+pub enum Command<'a> {
     /// Register a seat.
     Join(String),
     /// List every joined seat.
@@ -46,6 +46,8 @@ pub enum Command {
         id: String,
         /// Contents.
         body: String,
+        /// Queue a fixed wake for an idle Codex session.
+        queue: &'a dyn Fn(&str) -> bool,
     },
     /// Inspect the inbox with a bounded wait.
     Inbox(Duration),
@@ -135,21 +137,21 @@ fn touch(tx: &Tx<'_>, caller: SeatRef<'_>, now: i64) -> Result<String, Error> {
     }
 }
 
-struct Mail;
+struct Mail<'a>(std::marker::PhantomData<&'a ()>);
 
-impl App for Mail {
-    type Command = Command;
+impl<'a> App for Mail<'a> {
+    type Command = Command<'a>;
 
     type Outcome = Outcome;
 
-    fn preflight(cmd: &Command) -> Result<(), Error> {
+    fn preflight(cmd: &Command<'a>) -> Result<(), Error> {
         if let Command::Join(name) = cmd {
             rule::name(name)?;
         }
         Ok(())
     }
 
-    fn room_access(cmd: &Command) -> RoomAccess<'_> {
+    fn room_access<'cmd>(cmd: &'cmd Command<'a>) -> RoomAccess<'cmd> {
         match cmd {
             Command::Join(name) => RoomAccess::Join(name),
             Command::Who
@@ -160,7 +162,7 @@ impl App for Mail {
         }
     }
 
-    fn audit(cmd: &Command) -> Option<&'static str> {
+    fn audit(cmd: &Command<'a>) -> Option<&'static str> {
         match cmd {
             Command::Join(_) => Some("mail join"),
             Command::Ack(_) => Some("mail ack"),
@@ -169,7 +171,7 @@ impl App for Mail {
         }
     }
 
-    fn run(ctx: &Ctx<'_>, cmd: Command) -> Result<Outcome, Error> {
+    fn run(ctx: &Ctx<'_>, cmd: Command<'a>) -> Result<Outcome, Error> {
         let mail = ctx.mail()?;
         let now = (ctx.clock)().unix_timestamp();
 
@@ -213,7 +215,18 @@ impl App for Mail {
                 std::io::Error::other("join already handled"),
             )),
             Command::Who => who::run(&mail.store, seat, now),
-            Command::Send { to, id, body } => send::run(&mail.store, seat, now, &to, id, &body),
+            Command::Send {
+                to,
+                id,
+                body,
+                queue,
+            } => {
+                let (outcome, inserted) = send::commit(&mail.store, seat, now, &to, id, &body)?;
+                if inserted {
+                    super::wake::after_commit(ctx, &to, queue);
+                }
+                Ok(outcome)
+            }
             Command::Inbox(wait) => inbox::run(ctx, &mail.store, seat, wait),
             Command::Sent(limit) => sent::run(&mail.store, seat, limit),
             Command::Ack(receipt) => ack::run(&mail.store, seat, now, receipt),
@@ -230,8 +243,8 @@ impl App for Mail {
 }
 
 /// Run one mail operation and hand its typed outcome to the surface.
-pub fn exec<R>(env: &Env, cmd: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
-    runtime::exec::<Mail, R>(env, cmd, finish)
+pub fn exec<R>(env: &Env, cmd: Command<'_>, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
+    runtime::exec::<Mail<'_>, R>(env, cmd, finish)
 }
 
 #[cfg(test)]
