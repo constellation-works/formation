@@ -199,9 +199,10 @@ reported idle. The investigator sent each queue probe from a local shell.
 | Prompt hook | The chat was idle before it was temporarily bound to a disposable Formation room. Receipt 1 was stored with `held: false`. A queue line containing one nonce started a turn about nine seconds later (`01a215ef-724f-7211-a233-72e0ce5aabbb`). `UserPromptSubmit` injected the envelope and a second nonce as developer context at the start of that same turn. The sender's receipt changed from `stored` to `delivered`, and the reply included both nonces. The temporary binding was removed during the controlled pause before Stop. |
 | Busy chat | A second send at 03:36:36 UTC remained in the queue while the first turn was running. The first turn completed at 03:36:53.230 UTC. A separate queue-triggered turn began at 03:36:53.236 UTC and echoed the second nonce. |
 | `--resume` | The CLI accepted the submission and warned `start a local daemon or specify a server with --remote`. The explicit resume attempt failed. The already-loaded desktop chat picked up the line about two seconds after the send. |
+| Keyboard input | Daniel entered `keyboard probe c84be1` during queue-triggered turn `01a215fe-13af-7dd0-8503-ea70cb0bec53`. The input interrupted the 120-second tool wait after 16.4 seconds. The transcript recorded the line as a user message in the same turn at 03:55:20.954 UTC, and the final reply echoed it about three seconds later. |
+| App closed | The shell verified that the desktop and its bundled Codex processes had exited. The plain queue call succeeded at 03:56:06.797 UTC and stored message `01a215ff-0ef3-7fe1-917d-be57873c04e8`. The app relaunched about ten seconds later. The message remained queued for nearly two more minutes while the target chat was unloaded. The investigator opened the chat at 03:58:07 UTC without submitting input. The queue started turn `01a21600-e951-7101-a08a-2af2d083fc87` at 03:58:08.213 UTC. The chat echoed the nonce and the queued row cleared. |
 
 The loaded, idle desktop wake and prompt hook both met the one-minute criterion.
-The app-closed case and keyboard input during a queued turn remain untested.
 The proposed `mail send` integration and its turn-end race are implementation
 work beyond this trial.
 
