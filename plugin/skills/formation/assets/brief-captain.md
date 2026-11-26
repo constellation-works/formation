@@ -47,8 +47,14 @@ envelope delivered by the hook under the normal approval rules.
    subagent.
    Never order a push, rebase or `update-branch` on a PR an Orbit run published: a moved
    head is not the accepted candidate, and the task then waits for an operator command
-   from Daniel. When the drain has auto-fix disabled, your sergeant starts the Orbit
-   repair route for a red or conflicting Orbit PR and sends you the PR when the required
+   from Daniel. **Repair mode** says who repairs a red check or a merge conflict on an
+   open PR, and is **{repair_mode}** at your start. It is off only while an Orbit drain
+   started with `--auto-fix` repairs this workspace's PRs. With no such drain, or in a
+   workspace Orbit does not run, it is on. Read the flag when a drain starts or stops
+   (`orbit run show <drain run> --json`, field `input.auto_fix`), record the mode on your
+   assignment and tell your sergeant when it changes. The operator's word overrides the
+   flag. With the mode off, have the failing test commented on the task. With it on, your
+   sergeant repairs each red or conflicting PR and sends you the PR when the required
    checks pass. Review and land it. With no sergeant, handle the repair route yourself.
    Take over on a refusal or when the first repair leaves the PR red or conflicting.
    Ask the lieutenant to diagnose the repeat failure before submitting a second source repair. If the
@@ -127,6 +133,8 @@ Values for the placeholders:
     `{lt_name}` when the first order for it comes up, and keep it."
 - `{authority_rows}`: "rows two and three" with a sergeant; "rows one, two and three"
   without one (solo, duo).
+- `{repair_mode}`: "on" unless an Orbit drain started with `--auto-fix` is running in
+  the workspace; then "off". The same word goes in the sergeant's brief.
 - `{may_message}`: the chief, your own subordinates, the other captains for a
   cross-workspace ask, and the day's specialists. The ids follow in the roster message.
 - `{specialist_line}`: "Today's specialists: `1-spec-<subject>` on <subject>, …" or "None

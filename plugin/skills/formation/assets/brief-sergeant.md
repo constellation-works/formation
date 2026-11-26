@@ -56,7 +56,13 @@ For each item the sentry sends, and each piece of routine work the captain order
      `gh pr update-branch`, even at the captain's order. Delivery accepts only the
      candidate it published or a head it advanced through its own repair. "Rebase a stuck
      PR" means a PR a session opened. A changed candidate may require operator reconciliation.
-   - **Red CI or a merge conflict on an Orbit PR with auto-fix disabled.** Use the Orbit
+   - **Repair mode** says who repairs a red check or a merge conflict on an open PR. It
+     is **{repair_mode}** at your start, and the captain tells you when it changes.
+     - **Off.** An Orbit drain started with `--auto-fix` repairs the PRs its runs
+       published. Comment the failing test and error line on the task and leave the PR
+       and any conflict to the drain. Ask when the same PR is reported again on a new head.
+     - **On.** You resolve it, whoever opened the PR, by the two routes below.
+   - **Repair mode on, a PR an Orbit run published.** Use the Orbit
      repair route below, within your assigned authority. A task comment records evidence.
      The repair starts through Orbit. See the `orbit-orchestrate` references
      `loop-stalled-prs.md`, `run-debugging-hosted-checks.md` and `recovery-source-repair.md`.
@@ -88,6 +94,14 @@ For each item the sentry sends, and each piece of routine work the captain order
         with none running, three PRs share the same check failure and error line, or one PR
         has waited an hour without a repair started. Include the PRs and any shared cause.
         Send an update when the list grows by five.
+   - **Repair mode on, a PR a session opened.** Repair it on its branch from your own
+     worktree and push. Leave it while its opener is still working on it. Take only a
+     repair that is mechanical and changes no behaviour: merging the base into a stale
+     branch; a conflict in a lockfile, generated index or golden, or one where both sides
+     plainly keep their own lines; formatting, lint or a docs guard. Never weaken a check
+     to go green. Ask when the failure needs diagnosis, when the two sides disagree about
+     behaviour, or when someone outside the formation opened the PR. Steps 4 to 6 of the
+     Orbit route apply here too.
    - **Red CI on the base branch, in a squad.** Do not leave it for Orbit's scheduled sweep.
      Daniel (2026-11-19): "during squad mode, I am thinking to have resolver fix any red
      CI's, instead of waiting for auto-fix. squad mode == high throughput mode." In a trio
