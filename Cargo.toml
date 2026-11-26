@@ -64,6 +64,8 @@ cast_sign_loss = "warn"
 cast_possible_wrap = "warn"
 # STD-12 R20: top-level item order in Rust modules.
 arbitrary_source_item_ordering = "warn"
+# STD-12 R23: struct literal field order.
+inconsistent_struct_constructor = "warn"
 
 [workspace.lints.rust]
 missing_docs = "warn"

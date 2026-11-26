@@ -169,8 +169,8 @@ fn workspace_source_follows_std_12() -> Result<(), Box<dyn Error>> {
         }
 
         let mut check = Source {
-            path: &path,
             lines: source.lines().collect(),
+            path: &path,
             failures: &mut failures,
         };
         check.lines();
@@ -193,8 +193,8 @@ fn grouped_imports_and_adjacent_methods_are_reported() -> Result<(), Box<dyn Err
     );
     let mut failures = Vec::new();
     let mut check = Source {
-        path: Path::new("fixture.rs"),
         lines: fixture.lines().collect(),
+        path: Path::new("fixture.rs"),
         failures: &mut failures,
     };
     check.visit_file(&syn::parse_file(fixture)?);

@@ -260,8 +260,8 @@ impl Seats<'_> {
             .query_map([], |row| {
                 Ok(Mailbox {
                     name: row.get(0)?,
-                    seen: row.get(1)?,
                     unread: row.get(2)?,
+                    seen: row.get(1)?,
                 })
             })
             .map_err(error::sql)?
