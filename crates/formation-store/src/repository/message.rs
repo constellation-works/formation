@@ -107,19 +107,6 @@ impl Messages<'_> {
     }
 }
 
-fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
-    Ok(Message {
-        receipt: row.get(0)?,
-        id: row.get(1)?,
-        sender: row.get(2)?,
-        body: row.get(3)?,
-        sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
-        delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
-        watch_name: row.get(6)?,
-        watch_added_by: row.get(7)?,
-    })
-}
-
 /// Original values needed to distinguish a retry from a conflicting send.
 pub struct PriorDelivery {
     /// Stable receipt assigned to the original send.
@@ -260,4 +247,17 @@ impl MessagesMut<'_> {
             .map(|affected| affected == 1)
             .map_err(error::sql)
     }
+}
+
+fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
+    Ok(Message {
+        receipt: row.get(0)?,
+        id: row.get(1)?,
+        sender: row.get(2)?,
+        body: row.get(3)?,
+        sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
+        delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
+        watch_name: row.get(6)?,
+        watch_added_by: row.get(7)?,
+    })
 }

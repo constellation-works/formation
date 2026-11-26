@@ -248,17 +248,17 @@ impl App for Set {
     }
 }
 
-/// Run a watch set operation and hand its typed outcome to the CLI surface.
-pub fn exec<R>(env: &Env, cmd: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
-    runtime::exec::<Set, R>(env, cmd, finish)
-}
-
 struct Request {
     name: String,
     to: Option<String>,
     every: Duration,
     command: String,
     cwd: String,
+}
+
+/// Run a watch set operation and hand its typed outcome to the CLI surface.
+pub fn exec<R>(env: &Env, cmd: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
+    runtime::exec::<Set, R>(env, cmd, finish)
 }
 
 fn add(store: &Store, seat: SeatRef<'_>, now: i64, request: Request) -> Result<Outcome, Error> {

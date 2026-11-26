@@ -14,13 +14,6 @@ const PREAMBLE: &str =
 
 const WAITER_LEASE_SECONDS: i64 = 45;
 
-fn character_limit(provider: Provider) -> usize {
-    match provider {
-        Provider::Claude => 9_000,
-        Provider::Codex => 8_000,
-    }
-}
-
 /// Host event and its wait policy.
 #[derive(Clone, Copy)]
 pub enum Event {
@@ -109,15 +102,6 @@ impl<'a> App for Hook<'a> {
     }
 }
 
-/// Deliver available mail and return its bounded rendering, if any.
-pub fn exec<R>(
-    env: &Env,
-    cmd: Command<'_>,
-    finish: impl FnOnce(Result<Option<String>, Error>) -> R,
-) -> R {
-    runtime::exec::<Hook<'_>, R>(env, cmd, finish)
-}
-
 struct WaiterLease {
     seat: String,
     token: i64,
@@ -170,6 +154,15 @@ enum DeliverStep {
     Expired,
     Lost,
     Continue,
+}
+
+/// Deliver available mail and return its bounded rendering, if any.
+pub fn exec<R>(
+    env: &Env,
+    cmd: Command<'_>,
+    finish: impl FnOnce(Result<Option<String>, Error>) -> R,
+) -> R {
+    runtime::exec::<Hook<'_>, R>(env, cmd, finish)
 }
 
 fn wait_leased(
@@ -500,5 +493,12 @@ fn waiting_line(waiting: i64) -> String {
         0 => String::new(),
         1 => "\n1 message waiting.".into(),
         _ => format!("\n{waiting} messages waiting."),
+    }
+}
+
+fn character_limit(provider: Provider) -> usize {
+    match provider {
+        Provider::Claude => 9_000,
+        Provider::Codex => 8_000,
     }
 }

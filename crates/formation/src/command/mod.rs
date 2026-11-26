@@ -1,7 +1,5 @@
 //! Translate CLI arguments into Formation app commands.
 
-use clap::Subcommand;
-
 pub(crate) mod codex_wake;
 
 pub(crate) mod hook;
@@ -13,6 +11,8 @@ mod probe;
 pub(crate) mod roster;
 
 pub(crate) mod watch;
+
+use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub(crate) enum Command {

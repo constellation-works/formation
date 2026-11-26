@@ -114,10 +114,6 @@ pub(super) enum SeatRef<'a> {
 #[error("{0}")]
 struct Refusal(String);
 
-fn refused(code: &'static str, message: impl Into<String>) -> Error {
-    Error::new(Kind::Refused, code, Refusal(message.into()))
-}
-
 struct Watch<'a>(std::marker::PhantomData<&'a ()>);
 
 impl<'a> App for Watch<'a> {
@@ -160,4 +156,8 @@ fn caller_ref(caller: &Caller) -> Result<SeatRef<'_>, Error> {
 /// Run a watch invocation and hand its typed outcome to the CLI surface.
 pub fn exec<R>(env: &Env, cmd: Command<'_>, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
     runtime::exec::<Watch<'_>, R>(env, cmd, finish)
+}
+
+fn refused(code: &'static str, message: impl Into<String>) -> Error {
+    Error::new(Kind::Refused, code, Refusal(message.into()))
 }

@@ -2,3 +2,14 @@ min-ident-chars-threshold = 1
 allowed-idents-below-min-chars = []
 # STD-02 R51: a function takes at most seven parameters, the receiver counted.
 too-many-arguments-threshold = 7
+# STD-12 R20: top-level module item ordering without intra-group sorting.
+source-item-ordering = ["module"]
+module-items-ordered-within-groupings = "none"
+module-item-order-groupings = [
+    ["modules", ["extern_crate", "mod", "foreign_mod"]],
+    ["use", ["use"]],
+    ["macros", ["macro"]],
+    ["constants", ["static", "const"]],
+    ["types", ["ty_alias", "enum", "struct", "union", "trait", "trait_alias", "impl"]],
+    ["functions", ["fn", "global_asm"]],
+]

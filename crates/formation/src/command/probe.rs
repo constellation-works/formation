@@ -60,36 +60,6 @@ impl Drop for SignalGuard {
     }
 }
 
-#[cfg(unix)]
-extern "C" fn handle_stop_signal(_signal: libc::c_int) {
-    STOP_REQUESTED.store(true, Ordering::SeqCst);
-}
-
-#[cfg(unix)]
-fn install_signal(signal: libc::c_int) -> Option<libc::sigaction> {
-    // SAFETY: `sigaction` with a plain C handler writing only an atomic bool is async-signal-safe.
-    unsafe {
-        let mut action: libc::sigaction = std::mem::zeroed();
-        action.sa_sigaction = handle_stop_signal as *const () as usize;
-        libc::sigemptyset(&raw mut action.sa_mask);
-        action.sa_flags = 0;
-        let mut previous: libc::sigaction = std::mem::zeroed();
-        if libc::sigaction(signal, &raw const action, &raw mut previous) == 0 {
-            Some(previous)
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(unix)]
-fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
-    // SAFETY: restoring a previously retrieved `sigaction` value is valid.
-    unsafe {
-        let _ = libc::sigaction(signal, previous, std::ptr::null_mut());
-    }
-}
-
 /// Runs caller-supplied probe commands through `sh -c` in isolated process groups.
 pub(super) struct ShellProbeRunner;
 
@@ -107,10 +77,6 @@ impl ProbeRunner for ShellProbeRunner {
     fn stopped(&self) -> bool {
         stop_requested()
     }
-}
-
-pub(super) fn stop_requested() -> bool {
-    STOP_REQUESTED.load(Ordering::SeqCst)
 }
 
 struct ChildGuard {
@@ -252,6 +218,40 @@ impl Drop for ChildGuard {
             let _ = child.wait();
         }
     }
+}
+
+#[cfg(unix)]
+extern "C" fn handle_stop_signal(_signal: libc::c_int) {
+    STOP_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(unix)]
+fn install_signal(signal: libc::c_int) -> Option<libc::sigaction> {
+    // SAFETY: `sigaction` with a plain C handler writing only an atomic bool is async-signal-safe.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = handle_stop_signal as *const () as usize;
+        libc::sigemptyset(&raw mut action.sa_mask);
+        action.sa_flags = 0;
+        let mut previous: libc::sigaction = std::mem::zeroed();
+        if libc::sigaction(signal, &raw const action, &raw mut previous) == 0 {
+            Some(previous)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
+    // SAFETY: restoring a previously retrieved `sigaction` value is valid.
+    unsafe {
+        let _ = libc::sigaction(signal, previous, std::ptr::null_mut());
+    }
+}
+
+pub(super) fn stop_requested() -> bool {
+    STOP_REQUESTED.load(Ordering::SeqCst)
 }
 
 fn run_probe(

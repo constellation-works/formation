@@ -18,6 +18,29 @@ pub(super) enum ProbeVerdict {
     Failed(String),
 }
 
+impl ProbeVerdict {
+    pub(super) fn from_output(output: ProbeOutput) -> Option<Self> {
+        match output {
+            ProbeOutput::Cancelled => None,
+            ProbeOutput::Failed(message) => Some(Self::Failed(rule::first_line(&message))),
+            ProbeOutput::Success { stdout } => Some(match rule::parse_output(&stdout) {
+                Ok(lines) => Self::Ok(lines),
+                Err(message) => Self::Failed(rule::first_line(&message)),
+            }),
+        }
+    }
+
+    pub(super) fn summary(&self) -> String {
+        match self {
+            Self::Ok(lines) => {
+                let unit = if lines.len() == 1 { "item" } else { "items" };
+                format!("ok, {} {unit}", lines.len())
+            }
+            Self::Failed(_) => "read failed".to_owned(),
+        }
+    }
+}
+
 enum MailEntry {
     Item(Item),
     Failure(Failure),
@@ -138,29 +161,6 @@ fn run_probes<'a>(
     }
 
     Some(verdicts)
-}
-
-impl ProbeVerdict {
-    pub(super) fn from_output(output: ProbeOutput) -> Option<Self> {
-        match output {
-            ProbeOutput::Cancelled => None,
-            ProbeOutput::Failed(message) => Some(Self::Failed(rule::first_line(&message))),
-            ProbeOutput::Success { stdout } => Some(match rule::parse_output(&stdout) {
-                Ok(lines) => Self::Ok(lines),
-                Err(message) => Self::Failed(rule::first_line(&message)),
-            }),
-        }
-    }
-
-    pub(super) fn summary(&self) -> String {
-        match self {
-            Self::Ok(lines) => {
-                let unit = if lines.len() == 1 { "item" } else { "items" };
-                format!("ok, {} {unit}", lines.len())
-            }
-            Self::Failed(_) => "read failed".to_owned(),
-        }
-    }
 }
 
 fn commit_report(
