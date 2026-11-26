@@ -1,0 +1,9 @@
+Read unread messages or wait for up to 900 seconds
+
+Usage: formation mail inbox [OPTIONS]
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --wait <WAIT>       Seconds to wait for the first unread message [default: 0]
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

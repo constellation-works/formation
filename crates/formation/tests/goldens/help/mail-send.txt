@@ -1,0 +1,13 @@
+Send to a joined seat, present or not. Reuse the ID when retrying
+
+Usage: formation mail send [OPTIONS] --id <ID> --body <BODY> <TO>
+
+Arguments:
+  <TO>  Joined recipient seat name
+
+Options:
+      --id <ID>           Caller-generated message identifier
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+      --body <BODY>       Message text (up to 8192 bytes)
+  -h, --help              Print help

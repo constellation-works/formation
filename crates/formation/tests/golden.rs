@@ -20,7 +20,9 @@ fn run(args: &[&str], input: &[u8]) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    if !args.iter().any(|arg| matches!(*arg, "-h" | "--help")) {
+        child.stdin.take().unwrap().write_all(input).unwrap();
+    }
     child.wait_with_output().unwrap()
 }
 
@@ -29,8 +31,17 @@ fn help_and_roster_output() {
     let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
     for (name, args) in [
         ("help/root.txt", vec!["--help"]),
+        ("help/mail.txt", vec!["mail", "--help"]),
+        ("help/mail-join.txt", vec!["mail", "join", "--help"]),
+        ("help/mail-who.txt", vec!["mail", "who", "--help"]),
+        ("help/mail-send.txt", vec!["mail", "send", "--help"]),
+        ("help/mail-inbox.txt", vec!["mail", "inbox", "--help"]),
+        ("help/mail-sent.txt", vec!["mail", "sent", "--help"]),
+        ("help/mail-ack.txt", vec!["mail", "ack", "--help"]),
+        ("help/hook.txt", vec!["hook", "--help"]),
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
+        ("help/watch.txt", vec!["watch", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {

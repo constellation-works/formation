@@ -4,7 +4,7 @@
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Scaffold version 0.1.0"></a>
 </div>
 
-Formation is a standalone plugin in development. The chief and aide are the operator’s main contacts. Each captain owns a workspace and can work with headless sentries and workers. The first build checks a proposed roster offline. Message delivery and desktop wake are design proposals.
+Formation is a standalone plugin in development. The chief and aide are the operator’s main contacts. Each captain owns a workspace and can work with headless sentries and workers. Seats can join a private local room, see who has joined, send durable messages and check their inbox. Plugin hooks deliver mail to joined Claude and Codex sessions.
 
 ## Quick start
 
@@ -16,4 +16,4 @@ cargo run --locked -p formation -- roster check --json < examples/roster.json
 
 The example returns `{"version":1,"seats":4,"routes":5}`. It checks names, ownership and the direction of each proposed route. A successful check grants no permissions and starts no sessions.
 
-[Initial design and delivery criteria](docs/design/formation/1_scope.md) · [Roster format and plugin use](docs/usage.md) · [Crate boundaries](ARCHITECTURE.md) · [Development](docs/development.md) · [Feature board](docs/design/FEATURES.md) · [MIT license](LICENSE)
+[Formation overview](docs/design/formation/1_overview.md) · [Shift messaging and delivery criteria](docs/design/shift-messaging/1_scope.md) · [Inbox quick start](docs/usage.md#local-inbox) · [Roster format and plugin use](docs/usage.md) · [Crate boundaries](ARCHITECTURE.md) · [Development](docs/development.md) · [Feature board](docs/design/FEATURES.md) · [MIT license](LICENSE)

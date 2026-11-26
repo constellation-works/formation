@@ -1,0 +1,16 @@
+# Codex staffing and lifecycle
+
+Keep the chief, aide and captains in the existing user-owned desktop chats the operator assigned. A headless captain or aide is possible when the operator requests one. A collaboration subagent is a child of its spawning session. Record which type each seat actually is. Creating a new sidebar chat requires the operator’s explicit request for a new chat. A missing desktop seat stays unstaffed until bound or explicitly created.
+
+For authorized headless work use the collaboration tools exposed by the host. The captain recruits its workers, or follows the operator’s explicit chain. For example, an assigned Sol captain can brief a Terra sergeant who starts a Luna sentry if nesting and capacity allow. Respect available agent slots, depth, model choices and effort. Use the precise supported model ID and permitted fork mode when a model was specified.
+
+Otherwise inherit the configured model and effort. Report unavailable seats or models. Claude’s model ladder and detach flags do not apply.
+
+- Start with `spawn_agent`, giving each child a task name, the filled role brief, authority, provider constraints, record and reader. A fresh fork needs the full brief. Save the returned collaboration path. A subordinate reports with `send_message`; a parent can use `wait_agent` while its turn is active. Use `followup_task` to give an idle child another order. Confirm actual staffing from tool results.
+- Resolve desktop addresses from assigned chat IDs. Use an authorized same-host chat messaging tool if exposed, collaboration tools (`spawn_agent`, `send_message`, `wait_agent`, `followup_task`) inside a Codex tree, and Formation mail for cross-provider seats in the same local room.
+- Mail arrives on Codex through the plugin hooks: `UserPromptSubmit` adds unread mail to a new turn, and `Stop` holds within the turn for up to 30 minutes and continues the turn with incoming mail.
+- While the Codex `Stop` hold waits, the seat stays in its turn; after 30 minutes with no mail, the turn ends and later mail waits for the seat’s next turn.
+- A completed child or explicit child message has reached an idle Codex parent without starting another turn in the tested build. Require a new turn in that exact chat for a wake claim.
+- For an attention watch, run `formation watch` with `--timeout 3600`, or with `--to <reader>` when the reader has a mailbox, honoring `rest`, `watch` and stop. Ending the turn after starting a shell wait cannot promise autonomous resumption without `--to`. If no supported wait exists, report the coverage gap.
+- Preserve user conversation through host compaction. If context usage or self-clear is unavailable, checkpoint on the record and continue from it. Replace a worker only after the old writer has stood down. For a desktop handoff, use the host’s supported user-authorized chat operation. Keep its visible chat distinct from any replacement child.
+- At close, finish or hand back work, collect child evidence and end each assigned watch. Interrupt only a worker whose stop is authorized and whose running work is accounted for. Report which chats remain open. Desktop archiving requires the applicable operator instruction and host support. A completed subagent has no sidebar chat to archive.

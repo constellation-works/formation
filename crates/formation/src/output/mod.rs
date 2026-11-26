@@ -1,31 +1,36 @@
-//! Owns the command's output streams and exit status.
+//! Single owner of Formation's stdout, stderr, and diagnostic rendering.
 
-use formation_core::Summary;
-use std::fmt::Display;
-use std::io::{self, Write};
-use std::process::ExitCode;
+mod hook;
 
-pub(super) fn failure(error: &dyn Display) -> ExitCode {
-    let _ = writeln!(io::stderr().lock(), "formation: {error}");
-    ExitCode::FAILURE
+mod mail;
+
+mod roster;
+
+mod shared;
+
+mod watch;
+
+pub(crate) use hook::{
+    hook_error, hook_json, hook_rewake, hook_usage, prompt as hook_prompt, stop as hook_stop,
+};
+
+pub(crate) use mail::{HistoryFormat, payload as mail_payload, sent_history, write as mail_write};
+
+pub(crate) use roster::summary;
+
+pub(crate) use shared::failure;
+
+pub(crate) use watch::{payload as watch_payload, write as watch_write};
+
+pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
+    shared::write_json_error(&shared::error_payload(error))
 }
 
-pub(super) fn summary(summary: &Summary, json: bool) -> ExitCode {
-    let mut out = io::stdout().lock();
-    let result = if json {
-        serde_json::to_writer(&mut out, summary)
-            .map_err(io::Error::from)
-            .and_then(|()| writeln!(out))
-    } else {
-        writeln!(
-            out,
-            "{} seats, {} directed routes",
-            summary.seats, summary.routes
-        )
-    };
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(error) => failure(&error),
-    }
+pub(crate) fn init_logging() {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_target(false)
+        .without_time()
+        .with_max_level(tracing_subscriber::filter::LevelFilter::WARN)
+        .try_init();
 }

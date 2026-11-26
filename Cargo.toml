@@ -15,13 +15,19 @@ license = "MIT"
 repository = "https://github.com/constellation-works/formation"
 
 [workspace.dependencies]
-# Test isolation (a private temp root, an isolated child, goldens): a
-# dev-dependency only (scripts/check-dependency-direction.sh).
-cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b" }
+# Shared infrastructure pinned together at the scaffold revision. cw-testkit is dev-only.
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
+cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
+time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "env-filter"] }
 formation-store = { path = "crates/formation-store" }
 formation-core = { path = "crates/formation-core" }
 # text everywhere, which also keeps the help goldens byte-stable.
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
@@ -34,6 +40,9 @@ strip = true
 # Workspace-wide lint config. Each crate opts in via `[lints] workspace = true`.
 # Keep this list short — only rules that are mechanically true everywhere.
 [workspace.lints.clippy]
+min_ident_chars = "warn"
+wildcard_imports = "warn"
+enum_glob_use = "warn"
 await_holding_lock = "deny"
 dbg_macro = "deny"
 expect_used = "warn"

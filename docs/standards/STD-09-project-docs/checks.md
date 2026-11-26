@@ -1,7 +1,6 @@
 # Machine checks — STD-09 project docs
 
-The gate that enforces each rule in [STD-09](STD-09.md), or `review-only`. Ship a change
-with the gate its rule names, or say it is review-only.
+The gate that enforces each rule in [STD-09](STD-09.md), or `review-only`. Ship a change with the gate its rule names, or say it is review-only.
 
 | Rule | Gate |
 |---|---|
@@ -31,3 +30,4 @@ with the gate its rule names, or say it is review-only.
 | R24 | review-only |
 | R25 | review-only |
 | R26 | review-only |
+| R27 | Canon lint (`line_wrapped`) in `.orbit-plugin/lib/standards/canon.py`, run by `standards.status` and `standards.amend`. |

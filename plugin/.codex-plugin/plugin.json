@@ -1,10 +1,11 @@
 {
   "name": "formation",
   "version": "0.1.0",
-  "description": "Check proposed Formation rosters for Claude and Codex sessions.",
+  "description": "Exchange local inbox messages and check rosters for Claude and Codex sessions.",
   "author": {
     "name": "Constellation Works"
   },
   "license": "MIT",
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./hooks/codex.json"
 }

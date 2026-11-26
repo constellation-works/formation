@@ -5,6 +5,7 @@ summary: Standalone shift coordination plugin for Claude and Codex desktop sessi
 status: active
 stack: Rust
 gate: pr
+standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-11,STD-12
 agents: "—"
 ---
 

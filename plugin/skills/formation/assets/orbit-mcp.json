@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "orbit": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "r=\"${ORBIT_MCP_ROLE:-agent}\"; case \"$r\" in operator) exec orbit mcp serve --mode federated --operator ;; manager|resident|agent|reader) exec orbit mcp serve --mode federated --role \"$r\" ;; *) echo \"orbit mcp: unknown ORBIT_MCP_ROLE '$r' (operator, manager, resident, agent, reader)\" >&2; exit 64 ;; esac"
+      ]
+    }
+  }
+}

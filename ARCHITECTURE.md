@@ -1,11 +1,16 @@
 # Formation architecture
 
-Formation starts from the [Constellation Rust CLI template at b8ea03c](https://github.com/constellation-works/rust-cli-template/tree/b8ea03c). The scaffold has one executable and two library crates.
+Formation follows the app layout in the [Constellation Rust CLI template](https://github.com/constellation-works/rust-cli-template/tree/e67dfde). The workspace pins the shared kit crates to the template's satellites revision. [The dependency gate](scripts/check-dependency-direction.sh) checks crate edges, module boundaries, schema ownership and the presence of the scaffold.
 
-| Layer | Current responsibility |
-| --- | --- |
-| `formation` | Parse the command, read bounded stdin, call core, render the result and exit status. |
-| `formation-core` | Check seat uniqueness, workspace captain ownership and the endpoints of proposed routes. |
-| `formation-store` | Decode the versioned roster document and define its exchange types. |
+## Follow a message
 
-The executable depends on core, which depends on store. The template's [dependency gate](scripts/check-dependency-direction.sh) enforces the direction. The store currently works on bytes in memory. The plugin package exposes one shared roster-checking skill to its host. The [initial design](docs/design/formation/1_scope.md) describes the proposed persistence and adapter boundaries for messaging.
+1. The [executable](crates/formation/src/main.rs) captures the environment once. The [mail handler](crates/formation/src/command/mail.rs) applies `--room` and `--as` options and translates clap arguments into a typed app command. The output module owns JSON payloads, rendering and diagnostics.
+2. The [mail app](crates/formation-core/src/app/mail/mod.rs) enters through the [shared runtime](crates/formation-core/src/runtime/exec.rs). Composition resolves the room (name or path), caller session id and seat. The runtime supplies context, the clock and a guard that records the outcome of join, send and acknowledge commands. Its audit event contains command metadata and excludes message bodies.
+3. The [send flow](crates/formation-core/src/app/mail/send.rs) validates input, refreshes the sender, and resolves recipient membership, replay and `held` presence in the same write transaction that inserts the envelope. The inbox flow releases each snapshot before sleeping. Presence renewals for inbox and who calls are operational heartbeats.
+4. The [store](crates/formation-store/src/store.rs) exposes snapshots, transactions and session pointer files. Each repository owns one record's queries and mappings. The SQLite driver opens the database through `cw-sqlite`; its [schema](crates/formation-store/src/driver/sqlite/schema/mod.rs) lists append-only steps from modules for seats, messages and audit events. The session repository uses `cw-fs` to read and write private session files. Callers never receive a database connection. Existing room files retain their published table names, seats and messages, and upgrade in place for compatibility with the original inbox format (STD-12 §R1).
+
+The offline [roster app](crates/formation-core/src/app/roster/mod.rs) follows the same dispatch boundary with no room or seat. Its record types live in the store's contract module. A malformed roster or an offline check cannot create inbox state.
+
+## Adding a command
+
+Add arguments and presentation mapping in the CLI, a command, outcome and flow under the owning core app, and record operations in the appropriate store repository. Keep policy in the app and infrastructure in the shared kit. Run the dependency gate and exercise the command through its public entry point. [Development gates](docs/development.md)

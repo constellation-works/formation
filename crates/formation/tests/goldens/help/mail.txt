@@ -1,0 +1,17 @@
+Exchange messages in a private local room
+
+Usage: formation mail [OPTIONS] <COMMAND>
+
+Commands:
+  join   Register this seat, or rebind it to this session
+  who    List every joined seat, not only those seen lately: unread, held, seen
+  send   Send to a joined seat, present or not. Reuse the ID when retrying
+  inbox  Read unread messages or wait for up to 900 seconds
+  sent   List this seat's most recent sends and their delivery state
+  ack    Mark a receipt in this seat's inbox as handled
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

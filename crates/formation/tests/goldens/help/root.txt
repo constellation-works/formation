@@ -1,9 +1,12 @@
-Check a proposed roster for desktop and headless agent sessions
+Coordinate local agent inboxes and check proposed shift rosters
 
 Usage: formation <COMMAND>
 
 Commands:
   roster  Inspect a shift roster
+  mail    Exchange messages in a private local room
+  hook    Hand unread mail to a Claude Code or Codex session
+  watch   Run probes on an interval and report or mail new items
   help    Print this message or the help of the given subcommand(s)
 
 Options:

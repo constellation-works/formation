@@ -1,11 +1,8 @@
 # Machine checks — STD-11 Agent context files
 
-The gate that enforces each rule in [STD-11](STD-11.md), or `review-only`. Ship a change
-with the gate its rule names, or say it is review-only.
+The gate that enforces each rule in [STD-11](STD-11.md), or `review-only`. Ship a change with the gate its rule names, or say it is review-only.
 
-One script can carry the gates for R1, R3, R4, R8, R10, R11, R16, R17, R20 and R25: it
-walks each skill directory and each repository instruction file. "Orbit: none yet" means
-Orbit has no such gate today.
+One script can carry the gates for R1, R3, R4, R8, R10, R11, R16, R17, R20 and R25: it walks each skill directory and each repository instruction file. "Orbit: none yet" means Orbit has no such gate today.
 
 | Rule | Gate |
 |---|---|
