@@ -14,7 +14,7 @@ next: Daniel refreshes and trusts the updated Codex plugin hooks for production 
 
 # Formation — Shift messaging
 
-Daniel approved this shape on 2026-11-25 ([Decided](#decided)). A formation on 2026-11-26 showed that the Codex hold delayed typed input. Daniel approved the queue wake after trial 5 on the receiving desktop build.
+Daniel approved this shape on 2026-11-25 ([Decided](#decided)). A formation on 2026-11-26 showed that the Codex hold delayed typed input. Daniel approved the queue wake after trial 5 on the receiving desktop build. A [proposal for the Claude hold](#a-claude-seat-after-its-hold-proposed) awaits him.
 
 ## Problem
 
@@ -79,7 +79,7 @@ The plugin ships two hooks for each provider. Each is one line that calls `forma
 
 The hook marks what it hands over as delivered, which is the receipt the sender can read. The envelope is then in the session's transcript. A seat with no hook, such as a headless worker, still uses `mail inbox` and `mail ack`.
 
-Claude's Stop hook uses `asyncRewake` and exits with code 2 when mail arrives, waking the session with a system reminder. When the hold expires, later mail waits for the next hook. Both providers ignore hook input naming a subagent.
+Claude's Stop hook uses `asyncRewake` and exits with code 2 when mail arrives, waking the session with a system reminder. When the hold expires, later mail waits for the next hook, which [a proposal](#a-claude-seat-after-its-hold-proposed) addresses. Both providers ignore hook input naming a subagent.
 
 ### Typed input during a Codex hold
 
@@ -92,6 +92,37 @@ The new Codex Stop hook checks for mail and returns without a hold. The prompt h
 Ordinary sends and the leased watch reader commit mail before checking for a wake. A sender may claim one wake per idle period on the current Codex binding. Formation calls `codex queue --thread <session id> --message <text>` with a fixed line and a timeout. The receiving prompt hook reads the durable envelope. If a send crosses Stop and the hook delivers first, at most one queue line from that idle interval can arrive with an empty inbox. A failed submission leaves the receipt stored for the next normal hook.
 
 The queued line explicitly attributes itself to Formation and carries no envelope content. Apply the usual approval rules to the line and the hook-delivered envelope. Daniel refreshes and trusts the plugin hooks when adopting the cutover. [Session network](../formation/references/network.md#rules), [Plugin package](../../usage.md#plugin-package)
+
+### A Claude seat after its hold (proposed)
+
+This section is a proposal for Daniel's review. It changes no hook, and none of its trials has run.
+
+**Observed on 2026-11-26 (UTC), by the chief.** A Claude sergeant ended its turn at 03:53. Its seat was last seen at 04:02, when the 540-second hold ended. Three envelopes then sat unread until the chief sent that chat a native session message at about 05:02. Seats that take turns on a timer, such as the sentry and the chief, were not affected.
+
+**Verified in the shipped hook file.** The Claude Stop hook runs with `--hold 540` and a host timeout of 600 seconds. Nothing waits for that seat after the hold.
+
+**The 540 seconds is a choice, not a host limit.** 600 seconds is the documented default timeout of a command hook, and no maximum is documented. [Trial 1](#claude-asyncrewake-trial-2026-11-25) ran a timeout of 3,600 seconds: one waiter delivered after 1,982 seconds and two ran their full 3,300. No hold longer than 55 minutes has been tried.
+
+| Recipient | Today | Proposed |
+| --- | --- | --- |
+| Idle, a hold waiting | Woken within a second of the send (trial 1) | The same |
+| Idle, the hold ended | Mail waits for the seat's next turn | The hold spans the shift, so this is only a waiter that died |
+| Busy | The prompt hook hands the mail over, or the Stop at the turn's end finds it | The same |
+| App closed, or the chat not loaded | Mail waits for the chat's next prompt | The same. No path wakes it |
+
+1. **The hold spans the shift.** The Claude hold rises to `--hold 3300` with a timeout of 3,600, the range trial 1 observed. It rises again to a shift's length if trial 6 shows the app honours a longer timeout.
+2. **One waiter per seat.** Stop fires at every turn end and each starts a waiter. At 540 seconds that was tolerable and at an hour it is not. The waiter takes a lease on its seat in the room, as the watch reader does, and a later Stop that finds a live lease exits at once. Trial 1 showed that an older waiter still wakes the chat after turns in between.
+3. **The sender is told.** `send` already replies whether a hold is waiting. A sender whose mail to an unheld seat is still unread after ten minutes gets one line through its own hook. On 2026-11-26 nobody was told for an hour.
+4. **The fallback is a native session message.** A Claude desktop sender that reads `held: false` follows with one line to that chat, and the recipient's prompt hook hands over the mail. A Codex seat or a process has no such route: it tells the chief or the seat's captain, who sends the line.
+5. **A wake from any process, if trial 9 passes.** Claude Code documents a messaging socket for each session that a script can post to, which starts a turn in an idle session. It would do for a Claude seat what `codex queue` does for a Codex seat, for any sender including a Codex seat and the watch reader, and it covers a dead waiter. Formation would keep what it needs to reach each chat in the room. If that includes a host token, keeping it is Daniel's decision.
+
+| Passed over | Why |
+| --- | --- |
+| A scheduled wake in each seat | It fires only while the session is open and idle, and each fire is a model turn with nothing to read |
+| A background shell waiter started by the seat | A new turn on its exit is documented only for `claude -p`, and the seat must start it again every turn. The Stop hook does that by itself |
+| Channels | Research preview, set up from a terminal, enabled by an organisation's owner. Desktop support is not documented |
+| `claude --resume <id> -p` against a chat the app has open | Nothing documents two processes on one session, and the Codex equivalent failed in trial 5 |
+| Remote Control | It carries a person's messages from a phone or browser and offers a process nothing |
 
 ### Watch
 
@@ -124,6 +155,13 @@ Each trial is run on the exact desktop build and recorded here before the capabi
 4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
 5. **Codex, wake by queue.** Plain queue started a new turn and ran the prompt hook within a minute in the exact disposable chat on desktop build 26.1120.50957. A busy chat queued the line for the next idle period. With Desktop closed, the line remained queued until the app reopened and loaded the target chat. [Pinned trial record](https://github.com/constellation-works/formation/blob/f390829a1764a4aa80a05b8044f0e069d7f99e03/docs/design/shift-messaging/1_scope.md#codex-queue-wake-trial-2026-11-25)
 
+Trials 6 to 9 belong to the [Claude hold proposal](#a-claude-seat-after-its-hold-proposed). None has run, and each needs Daniel's approval. They use a disposable Claude desktop chat, a scratch room and a scratch plugin as trial 1 did, and no seat of a live shift.
+
+6. **Claude, long hold.** A timeout of 14,400 seconds, and a send 3 hours 50 minutes into the wait. Pass: one new turn in the same chat, carrying the mail. Repeated at 43,200 seconds if it passes.
+7. **Claude, one waiter.** Five turns end during one wait. Pass: one waiter process is left, and a send still wakes the chat.
+8. **Claude, app restart.** The app is quit and reopened during a hold. Recorded: whether the waiter is gone, and when the chat next receives mail.
+9. **Claude, wake by socket.** After the hold has ended, a detached shell posts one fixed line to the chat's messaging socket. Pass: one new turn in the same chat, and the prompt hook hands over the waiting mail. Recorded: what a hook sees of the socket and its token, how the line is labelled in the chat, and the result while the chat is busy and in each permission mode.
+
 Trial 5 exercised the provider queue and prompt hook. The built-executable integration tests exercise Formation's ordinary send, watch reader and turn-end ordering with a fake queue. The Linux validation host has no disposable Desktop chat for a live test of the integrated send.
 
 | Measure | 2026-11-25 | Target |
@@ -155,6 +193,12 @@ Read from the providers' documentation on 2026-11-25 through a summarising fetch
 - **Codex, no idle wake.** No documented way starts a turn in an idle chat that the desktop app owns. Two leads for trial 3: a user reports that an undocumented `wake_on_agent_messages` feature flag woke an idle parent for its own children ([report](https://github.com/openai/codex/issues/61901)), and `codex queue --thread` queues text for an existing session without saying whether it starts a turn ([CLI reference](https://learn.chatgpt.com/docs/cli/reference)).
 - **Codex source, read on 2026-11-26** at commit [`f79875c`](https://github.com/openai/codex/tree/f79875c) by a research agent. This is a reading of code, not documented behaviour, and the desktop app's own code is closed. A message sent during a running turn is pushed onto that turn's pending input (`codex-rs/core/src/session/turn_input.rs`). The Stop hook is awaited with no race against input, and the same turn then runs again with the pending message (`core/src/session/turn.rs`, `core/src/tasks/regular.rs`). `UserPromptSubmit` runs when pending input is drained (`core/src/hook_runtime.rs`). The Stop hook's input holds `session_id`, `turn_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, `stop_hook_active` and `last_assistant_message` (`hooks/src/schema.rs`). `codex queue` calls an experimental `thread/queue/add` on the shared daemon, which starts a turn if the thread is loaded and idle and otherwise at the next idle (`ext/queue/src/service.rs`). `wake_on_agent_messages` is a feature flag under development, off by default. The command-line interface labels pending input "press esc to interrupt and send immediately".
 - **Claude Code channels** can also push an event into an open session. They need a running server, so the hook is tried first. [Channels](https://code.claude.com/docs/en/channels)
+- **Claude Code, read on 2026-11-26** through a summarising agent, for the [Claude hold proposal](#a-claude-seat-after-its-hold-proposed). None of it is trialled.
+  - A command hook's timeout defaults to 600 seconds with no stated maximum, and it is enforced on an `asyncRewake` hook. An `asyncRewake` hook wakes an idle session. [Hooks reference](https://code.claude.com/docs/en/hooks)
+  - Each session binds an inbox socket. A hook or a script posts to it with `CLAUDE_CODE_MESSAGING_SOCKET` and `CLAUDE_CODE_MESSAGING_TOKEN`, and an idle receiver starts a new turn. The message counts as another session's, and a receiver in bypass mode holds it for approval. Both variables were set in a Claude desktop session's shell on 2026-11-26; their values were not read. [Cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging)
+  - A background command keeps running after the final response, and a local desktop session sets it no time limit. A new turn on its exit is documented only for `claude -p`. [Tools reference](https://code.claude.com/docs/en/tools-reference), [headless](https://code.claude.com/docs/en/headless)
+  - Scheduled tasks fire only while the session is running and idle, at intervals of a minute or more, with no catch-up. [Scheduled tasks](https://code.claude.com/docs/en/scheduled-tasks)
+  - Channels are a research preview started with `claude --channels` in a terminal, and an organisation's owner enables them. Remote Control sends a person's messages into a local session and documents no interface for a process. [Remote Control](https://code.claude.com/docs/en/remote-control)
 - **Open requests:** a [desktop external-wake API](https://github.com/openai/codex/issues/61773) and [idle chats waking on agent messages](https://github.com/openai/codex/issues/63220). Neither has a maintainer reply.
 
 ### Codex queue wake trial, 2026-11-26
