@@ -39,7 +39,7 @@ pub(crate) fn payload(out: Outcome) -> Value {
 }
 
 pub(crate) fn write(value: &Value) -> ExitCode {
-    super::shared::write_json(value)
+    super::common::json::write_json(value)
 }
 
 pub(crate) fn sent_history(
@@ -51,7 +51,7 @@ pub(crate) fn sent_history(
         let _ = writeln!(io::stderr().lock(), "No sent mail for this seat.");
     }
     if matches!(format, HistoryFormat::Json) {
-        return super::shared::write_json(&sent_history_payload(messages, total));
+        return super::common::json::write_json(&sent_history_payload(messages, total));
     }
     let stdout = io::stdout();
     let terminal = stdout.is_terminal();
@@ -69,7 +69,7 @@ pub(crate) fn sent_history(
             ExitCode::SUCCESS
         }
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(error) => super::shared::failure(&error),
+        Err(error) => super::common::error::failure(&error),
     }
 }
 

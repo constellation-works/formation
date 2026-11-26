@@ -65,7 +65,7 @@ pub(crate) fn checked(out: &check::Outcome) -> ExitCode {
 }
 
 pub(crate) fn write(value: &Value) -> ExitCode {
-    super::shared::write_json(value)
+    super::common::json::write_json(value)
 }
 
 pub(crate) fn set_payload(out: &SetOutcome) -> Value {
@@ -143,12 +143,12 @@ pub(crate) fn list(reader: &Reader, watches: &[Entry], json: bool) -> ExitCode {
         let _ = writeln!(io::stderr().lock(), "No watches in this room.");
     }
     if json {
-        return super::shared::write_json(&list_payload(reader, watches));
+        return super::common::json::write_json(&list_payload(reader, watches));
     }
     match write_list(&mut io::stdout().lock(), reader, watches) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(error) => super::shared::failure(&error),
+        Err(error) => super::common::error::failure(&error),
     }
 }
 

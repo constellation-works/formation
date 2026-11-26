@@ -1,6 +1,6 @@
 //! Decode host inputs and map the delivery outcome to the host protocol.
 
-use super::probe::{SignalGuard, stop_requested};
+use super::common::probe::{SignalGuard, stop_requested};
 use crate::output;
 use clap::{Args, ValueEnum};
 use formation_core::Env;

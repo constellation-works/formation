@@ -27,7 +27,7 @@ pub(crate) fn hook_usage(error: &clap::Error) -> ExitCode {
 }
 
 pub(crate) fn hook_error(code: &str, message: impl Display) -> ExitCode {
-    super::shared::write_json_error(&json!({"code": code, "error": message.to_string()}))
+    super::common::error::write_json_error(&json!({"code": code, "error": message.to_string()}))
 }
 
 pub(crate) fn hook_json(value: &Value) -> ExitCode {

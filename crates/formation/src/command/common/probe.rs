@@ -1,8 +1,7 @@
-//! Supervised shell probe execution and termination-signal handling.
+//! Supervised child-process execution and termination-signal handling.
 
-use formation_core::app::watch::{ProbeLimits, ProbeOutput, ProbeRunner};
+use formation_core::app::watch::{ProbeLimits, ProbeOutput};
 use std::io::{self, Read};
-use std::path::Path;
 use std::process::{Child, Command as ProcessCommand, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,7 +21,7 @@ const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 /// Guard that installs SIGTERM/SIGINT handlers and restores prior dispositions on drop.
-pub(super) struct SignalGuard {
+pub(crate) struct SignalGuard {
     #[cfg(unix)]
     previous_term: Option<libc::sigaction>,
     #[cfg(unix)]
@@ -30,7 +29,7 @@ pub(super) struct SignalGuard {
 }
 
 impl SignalGuard {
-    pub(super) fn install() -> Self {
+    pub(crate) fn install() -> Self {
         STOP_REQUESTED.store(false, Ordering::SeqCst);
         #[cfg(unix)]
         {
@@ -57,25 +56,6 @@ impl Drop for SignalGuard {
                 restore_signal(libc::SIGINT, &previous);
             }
         }
-    }
-}
-
-/// Runs caller-supplied probe commands through `sh -c` in isolated process groups.
-pub(super) struct ShellProbeRunner;
-
-impl ProbeRunner for ShellProbeRunner {
-    fn run(
-        &self,
-        command: &str,
-        cwd: Option<&Path>,
-        limits: ProbeLimits,
-        cancelled: &dyn Fn() -> bool,
-    ) -> ProbeOutput {
-        run_probe(command, cwd, limits, &|| self.stopped() || cancelled())
-    }
-
-    fn stopped(&self) -> bool {
-        stop_requested()
     }
 }
 
@@ -220,15 +200,15 @@ impl Drop for ChildGuard {
     }
 }
 
-/// A spawned probe whose stdout and stderr are read by background threads.
-struct RunningProbe {
+/// A spawned child process whose stdout and stderr are read by background threads.
+struct RunningProcess {
     guard: ChildGuard,
     overflowed: Arc<AtomicBool>,
     receiver: mpsc::Receiver<(usize, io::Result<Vec<u8>>)>,
 }
 
-impl RunningProbe {
-    /// Starts the probe in its own process group with both output pipes read.
+impl RunningProcess {
+    /// Starts the child in its own process group with both output pipes read.
     fn spawn(mut process: ProcessCommand) -> Result<Self, ProbeOutput> {
         process
             .stdin(Stdio::null())
@@ -283,7 +263,7 @@ impl RunningProbe {
         })
     }
 
-    /// Waits for the probe to exit. Cancellation, overflow, a wait error or a deadline ends it
+    /// Waits for the child to exit. Cancellation, overflow, a wait error or a deadline ends it
     /// early, and that outcome is returned as the error.
     fn supervise(
         &mut self,
@@ -332,14 +312,14 @@ impl RunningProbe {
         }
     }
 
-    /// Ends the probe and drains its readers, then returns the outcome it ends with.
+    /// Ends the child and drains its readers, then returns the outcome it ends with.
     fn abort(&mut self, outcome: ProbeOutput) -> ProbeOutput {
         self.guard.terminate_and_reap();
         drain_readers(&self.receiver);
         outcome
     }
 
-    /// Turns an exited probe's collected output into its outcome.
+    /// Turns an exited child's collected output into its outcome.
     fn collect(self, status: ExitStatus) -> ProbeOutput {
         let streams = match collect_readers(&self.receiver) {
             Ok(streams) => streams,
@@ -390,25 +370,11 @@ fn restore_signal(signal: libc::c_int, previous: &libc::sigaction) {
     }
 }
 
-pub(super) fn stop_requested() -> bool {
+pub(crate) fn stop_requested() -> bool {
     STOP_REQUESTED.load(Ordering::SeqCst)
 }
 
-fn run_probe(
-    command: &str,
-    cwd: Option<&Path>,
-    limits: ProbeLimits,
-    cancelled: &dyn Fn() -> bool,
-) -> ProbeOutput {
-    let mut process = ProcessCommand::new("sh");
-    process.arg("-c").arg(command);
-    if let Some(cwd) = cwd {
-        process.current_dir(cwd);
-    }
-    run_process(process, limits, cancelled)
-}
-
-pub(super) fn run_process(
+pub(crate) fn run_process(
     process: ProcessCommand,
     limits: ProbeLimits,
     cancelled: &dyn Fn() -> bool,
@@ -416,7 +382,7 @@ pub(super) fn run_process(
     if cancelled() {
         return ProbeOutput::Cancelled;
     }
-    let mut running = match RunningProbe::spawn(process) {
+    let mut running = match RunningProcess::spawn(process) {
         Ok(running) => running,
         Err(outcome) => return outcome,
     };

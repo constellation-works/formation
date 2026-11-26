@@ -7,7 +7,8 @@ mod command;
 mod output;
 
 use clap::Parser;
-use command::{Command, codex_wake};
+use command::Command;
+use command::common::codex_wake;
 use std::process::ExitCode;
 
 /// Run Formation using one snapshot of its environment.

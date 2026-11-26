@@ -1,12 +1,10 @@
 //! Translate CLI arguments into Formation app commands.
 
-pub(crate) mod codex_wake;
+pub(crate) mod common;
 
 pub(crate) mod hook;
 
 pub(crate) mod mail;
-
-mod probe;
 
 pub(crate) mod roster;
 
