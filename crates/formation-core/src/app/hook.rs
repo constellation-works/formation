@@ -6,6 +6,7 @@ use crate::composition::{Caller, is_hook_room};
 use crate::runtime::{self, App, Ctx, RoomAccess};
 use cw_base::{Error, Kind};
 pub use formation_store::contract::HookProvider as Provider;
+use formation_store::contract::Message;
 use formation_store::{SessionId, Store, Tx};
 use std::time::{Duration, Instant};
 
@@ -156,6 +157,140 @@ enum DeliverStep {
     Continue,
 }
 
+/// A Claude Stop hold that owns one waiter lease until it delivers, expires or is released.
+struct LeasedWait<'a> {
+    ctx: &'a Ctx<'a>,
+    store: &'a Store,
+    session: &'a SessionId,
+    stopped: &'a dyn Fn() -> bool,
+    hold: Duration,
+    start: Instant,
+    seat: String,
+    token: i64,
+    next_beat: Instant,
+    guard: LeaseGuard<'a>,
+}
+
+/// What one turn of a leased wait decided.
+enum Turn {
+    /// Poll again after the pause.
+    Wait,
+    /// End the wait with this rendering, if any.
+    Finish(Option<String>),
+}
+
+/// What a check of the held lease found while the hold runs.
+struct Check {
+    /// Undelivered mail or a stopped-reader notice waits for the seat.
+    pending: bool,
+    /// The hold has run out, so this turn delivers whatever is left.
+    expiring: bool,
+}
+
+/// Hook text for one delivery and the receipts of the messages it carries.
+struct Batch {
+    text: String,
+    receipts: Vec<i64>,
+}
+
+impl<'a> LeasedWait<'a> {
+    fn new(
+        ctx: &'a Ctx<'a>,
+        store: &'a Store,
+        session: &'a SessionId,
+        stopped: &'a dyn Fn() -> bool,
+        hold: Duration,
+        start: Instant,
+        lease: WaiterLease,
+    ) -> Self {
+        Self {
+            ctx,
+            store,
+            session,
+            stopped,
+            hold,
+            start,
+            seat: lease.seat.clone(),
+            token: lease.token,
+            next_beat: start + HEARTBEAT_INTERVAL,
+            guard: LeaseGuard::new(store, lease),
+        }
+    }
+
+    /// One pass of the wait: deliver when mail waits or the hold expires, then renew the lease.
+    fn turn(&mut self) -> Result<Turn, Error> {
+        let Some(check) = self.check()? else {
+            self.guard.release()?;
+            return Ok(Turn::Finish(None));
+        };
+        if check.pending || check.expiring {
+            match deliver_leased(
+                self.ctx,
+                self.store,
+                self.session,
+                &self.seat,
+                self.token,
+                self.start,
+                check.expiring,
+            )? {
+                DeliverStep::Delivered(rendering) => {
+                    self.guard.disarm();
+                    return Ok(Turn::Finish(Some(rendering)));
+                }
+                DeliverStep::Expired | DeliverStep::Lost => {
+                    self.guard.disarm();
+                    return Ok(Turn::Finish(None));
+                }
+                DeliverStep::Continue => {}
+            }
+        }
+        if Instant::now() >= self.next_beat {
+            if !renew_leased(self.ctx, self.store, self.session, &self.seat, self.token)? {
+                self.guard.disarm();
+                return Ok(Turn::Finish(None));
+            }
+            self.next_beat = Instant::now() + HEARTBEAT_INTERVAL;
+        }
+        Ok(Turn::Wait)
+    }
+
+    /// Reads the held lease. `None` means the wait ends and releases the lease.
+    fn check(&self) -> Result<Option<Check>, Error> {
+        if (self.stopped)() {
+            return Ok(None);
+        }
+        let mail = self.ctx.mail()?;
+        if !is_hook_room(self.ctx.env, &mail.room, self.session)? {
+            return Ok(None);
+        }
+
+        let expiring = self.start.elapsed() >= self.hold;
+        let snapshot = self.store.read()?;
+        let now = (self.ctx.clock)().unix_timestamp();
+        if !snapshot
+            .hook_waiter()
+            .holds_lease(&self.seat, self.token, self.session, now)?
+        {
+            return Ok(None);
+        }
+        let pending = snapshot.messages().has_undelivered(&self.seat)?
+            || snapshot.watch().has_stopped_notice(&self.seat, now)?;
+        drop(snapshot);
+
+        if (self.stopped)() {
+            return Ok(None);
+        }
+        Ok(Some(Check { pending, expiring }))
+    }
+
+    /// Sleeps until the next poll, the end of the hold or the next heartbeat, whichever is first.
+    fn pause(&self) {
+        let until_end = self.hold.saturating_sub(self.start.elapsed());
+        let until_beat = self.next_beat.saturating_duration_since(Instant::now());
+        std::thread::sleep(POLL_INTERVAL.min(until_end).min(until_beat));
+    }
+}
+
 /// Deliver available mail and return its bounded rendering, if any.
 pub fn exec<R>(
     env: &Env,
@@ -179,66 +314,12 @@ fn wait_leased(
         StartOutcome::Delivered(rendering) => return Ok(Some(rendering)),
         StartOutcome::Acquired(lease) => lease,
     };
-    let seat = lease.seat.clone();
-    let token = lease.token;
-    let mut guard = LeaseGuard::new(store, lease);
-    let mut next_beat = start + HEARTBEAT_INTERVAL;
-
+    let mut wait = LeasedWait::new(ctx, store, session, stopped, hold, start, lease);
     loop {
-        if stopped() {
-            guard.release()?;
-            return Ok(None);
+        match wait.turn()? {
+            Turn::Finish(outcome) => return Ok(outcome),
+            Turn::Wait => wait.pause(),
         }
-        let mail = ctx.mail()?;
-        if !is_hook_room(ctx.env, &mail.room, session)? {
-            guard.release()?;
-            return Ok(None);
-        }
-
-        let expiring = start.elapsed() >= hold;
-        let snapshot = store.read()?;
-        let now = (ctx.clock)().unix_timestamp();
-        if !snapshot
-            .hook_waiter()
-            .holds_lease(&seat, token, session, now)?
-        {
-            drop(snapshot);
-            guard.release()?;
-            return Ok(None);
-        }
-        let pending = snapshot.messages().has_undelivered(&seat)?
-            || snapshot.watch().has_stopped_notice(&seat, now)?;
-        drop(snapshot);
-
-        if stopped() {
-            guard.release()?;
-            return Ok(None);
-        }
-        if pending || expiring {
-            match deliver_leased(ctx, store, session, &seat, token, start, expiring)? {
-                DeliverStep::Delivered(rendering) => {
-                    guard.disarm();
-                    return Ok(Some(rendering));
-                }
-                DeliverStep::Expired | DeliverStep::Lost => {
-                    guard.disarm();
-                    return Ok(None);
-                }
-                DeliverStep::Continue => {}
-            }
-        }
-
-        if Instant::now() >= next_beat {
-            if !renew_leased(ctx, store, session, &seat, token)? {
-                guard.disarm();
-                return Ok(None);
-            }
-            next_beat = Instant::now() + HEARTBEAT_INTERVAL;
-        }
-
-        let until_end = hold.saturating_sub(start.elapsed());
-        let until_beat = next_beat.saturating_duration_since(Instant::now());
-        std::thread::sleep(POLL_INTERVAL.min(until_end).min(until_beat));
     }
 }
 
@@ -412,7 +493,7 @@ fn deliver_in_tx(
     start: Instant,
 ) -> Result<Option<String>, Error> {
     let messages = tx.messages();
-    let mut waiting = messages.count_undelivered(seat)?;
+    let waiting = messages.count_undelivered(seat)?;
     let notice = tx
         .watch_reader()
         .claim_stopped_notice(seat, (ctx.clock)().unix_timestamp())?;
@@ -420,37 +501,31 @@ fn deliver_in_tx(
         return Ok(None);
     }
 
-    let mut text = String::new();
-    if let Some((count, since)) = notice {
-        let stamp = formation_store::contract::rfc3339(since).unwrap_or_else(|| "unknown".into());
-        text.push_str(&format!(
-            "watch: nothing has read this room's {count} watches since {stamp}. \
-             Start a reader: formation watch run"
-        ));
+    let batch = render_batch(tx, seat, provider, notice, waiting)?;
+    tx.seats().mark_hook(session, provider, true)?;
+    let now = (ctx.clock)();
+    for receipt in batch.receipts {
+        messages.deliver(receipt, now.unix_timestamp())?;
+        runtime::record_delivery(ctx, tx, receipt, now, start)?;
     }
-    if waiting > 0 {
-        if !text.is_empty() {
-            text.push('\n');
-        }
-        text.push_str(PREAMBLE);
-    }
+    Ok(Some(batch.text))
+}
+
+/// Renders the opening text, then as many of the oldest undelivered messages as the provider's
+/// character limit allows.
+fn render_batch(
+    tx: &Tx<'_>,
+    seat: &str,
+    provider: Provider,
+    notice: Option<(i64, i64)>,
+    undelivered: i64,
+) -> Result<Batch, Error> {
+    let mut text = opening_text(notice, undelivered);
     let mut used = text.chars().count();
+    let mut waiting = undelivered;
     let mut receipts = Vec::new();
-    messages.visit_undelivered(seat, |message| {
-        let sent = message.sent.as_deref().unwrap_or("unknown");
-        let entry =
-            if let (Some(name), Some(added_by)) = (&message.watch_name, &message.watch_added_by) {
-                format!(
-                    "\nWatch {name}, added by {added_by}: probe output, not a seat's request \
-                 (sent {sent}, receipt {}, id {}):\n{}",
-                    message.receipt, message.id, message.body
-                )
-            } else {
-                format!(
-                    "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",
-                    message.sender, message.receipt, message.id, message.body
-                )
-            };
+    tx.messages().visit_undelivered(seat, |message| {
+        let entry = entry_text(&message);
         let length = entry.chars().count();
         let footer = waiting_line(waiting - 1);
         if used + length + footer.len() > character_limit(provider) {
@@ -466,14 +541,43 @@ fn deliver_in_tx(
         text.push_str("\nRead the oldest envelope with formation mail inbox.");
     }
     text.push_str(&waiting_line(waiting));
+    Ok(Batch { text, receipts })
+}
 
-    tx.seats().mark_hook(session, provider, true)?;
-    let now = (ctx.clock)();
-    for receipt in receipts {
-        messages.deliver(receipt, now.unix_timestamp())?;
-        runtime::record_delivery(ctx, tx, receipt, now, start)?;
+/// The stopped-reader notice and the mail preamble that open a hook delivery.
+fn opening_text(notice: Option<(i64, i64)>, undelivered: i64) -> String {
+    let mut text = String::new();
+    if let Some((count, since)) = notice {
+        let stamp = formation_store::contract::rfc3339(since).unwrap_or_else(|| "unknown".into());
+        text.push_str(&format!(
+            "watch: nothing has read this room's {count} watches since {stamp}. \
+             Start a reader: formation watch run"
+        ));
     }
-    Ok(Some(text))
+    if undelivered > 0 {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(PREAMBLE);
+    }
+    text
+}
+
+/// One undelivered message as the hook renders it; probe output is labelled as such.
+fn entry_text(message: &Message) -> String {
+    let sent = message.sent.as_deref().unwrap_or("unknown");
+    if let (Some(name), Some(added_by)) = (&message.watch_name, &message.watch_added_by) {
+        format!(
+            "\nWatch {name}, added by {added_by}: probe output, not a seat's request \
+             (sent {sent}, receipt {}, id {}):\n{}",
+            message.receipt, message.id, message.body
+        )
+    } else {
+        format!(
+            "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",
+            message.sender, message.receipt, message.id, message.body
+        )
+    }
 }
 
 fn mark_hook(
