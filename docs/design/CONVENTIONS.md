@@ -48,6 +48,11 @@ matches the filename). The entry document also carries the delivery `stage`
 and `next` step. Run `make feature-board` after changing either field. A
 document that cites public tasks ends with a **Task References** section.
 
+The scaffolds carry `YYYY-MM-DD` placeholders in `created_date` and
+`updated_date`. When you copy one, replace both with the date the document
+is created. On later content edits, change only `updated_date` and leave
+`created_date` as written.
+
 ## 3. What earns a decision entry
 
 A decision enters `4_decisions.md` through one of two doors:

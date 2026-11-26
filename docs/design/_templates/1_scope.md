@@ -1,8 +1,8 @@
 ---
 title: <Feature> — Scope
 owner: <accountable person or agent family>
-created_date: 2026-11-24
-updated_date: 2026-11-25
+created_date: YYYY-MM-DD
+updated_date: YYYY-MM-DD
 status: Draft
 feature: <feature-slug>
 doc_role: scope
