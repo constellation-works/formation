@@ -58,6 +58,7 @@ pub(crate) fn exec<A: App, R>(
     let ctx = Ctx {
         mail,
         actor: env.actor.as_deref(),
+        cwd: env.cwd.as_deref(),
         clock: time::OffsetDateTime::now_utc,
     };
     let mut guard = ctx

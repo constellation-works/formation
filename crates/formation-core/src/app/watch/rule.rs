@@ -10,7 +10,7 @@ pub const DEFAULT_EVERY_SECONDS: u64 = 120;
 /// Minimum allowed interval between probe polls in seconds.
 pub const MIN_EVERY_SECONDS: u64 = 10;
 
-/// Default wait timeout without `--to` in seconds.
+/// Default blocking wait timeout in seconds.
 pub const DEFAULT_WAIT_TIMEOUT_SECONDS: u64 = 300;
 
 /// Maximum wall-clock runtime for a single probe execution in seconds.
@@ -20,6 +20,8 @@ pub const PROBE_TIMEOUT_SECONDS: u64 = 60;
 pub(super) const MAX_BATCH_ITEMS: usize = 20;
 
 const MAX_PROBE_NAME_LEN: usize = 32;
+
+const MAX_COMMAND_BYTES: usize = 8192;
 
 const MAX_SEAT_NAME_LEN: usize = 96;
 
@@ -79,13 +81,29 @@ pub(super) fn parse_probes(raw: &[String]) -> Result<Vec<ProbeSpec>, Error> {
     Ok(specs)
 }
 
-pub(super) fn probe_name(name: &str) -> Result<(), Error> {
-    let valid = !name.is_empty()
+fn valid_name(name: &str) -> bool {
+    !name.is_empty()
         && name.len() <= MAX_PROBE_NAME_LEN
         && name
             .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
-    if valid {
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+pub(super) fn watch_name(name: &str) -> Result<(), Error> {
+    if valid_name(name) {
+        Ok(())
+    } else {
+        Err(refused(
+            "invalid_watch_name",
+            format!(
+                "invalid watch name `{name}` (use 1-32 lowercase ASCII letters, digits or hyphens)"
+            ),
+        ))
+    }
+}
+
+pub(super) fn probe_name(name: &str) -> Result<(), Error> {
+    if valid_name(name) {
         Ok(())
     } else {
         Err(refused(
@@ -105,6 +123,64 @@ pub(super) fn every(interval: Duration) -> Result<(), Error> {
         ));
     }
     Ok(())
+}
+
+/// The command a watch stores: one word is shell text as written, several words are one command
+/// line with each word quoted, so `-- ./probe "two words"` keeps its arguments apart.
+pub(super) fn watch_command(words: &[String]) -> Result<String, Error> {
+    let text = match words {
+        [single] => single.clone(),
+        _ => words
+            .iter()
+            .map(|word| shell_quote(word))
+            .collect::<Vec<_>>()
+            .join(" "),
+    };
+    if text.trim().is_empty() {
+        return Err(refused(
+            "invalid_command",
+            "watch command must not be empty; pass it after `--`",
+        ));
+    }
+    if text.len() > MAX_COMMAND_BYTES {
+        return Err(refused(
+            "invalid_command",
+            format!("watch command must be at most {MAX_COMMAND_BYTES} bytes"),
+        ));
+    }
+    Ok(text)
+}
+
+fn shell_quote(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'_' | b'-' | b'.' | b'/' | b':' | b'=' | b'@' | b'%' | b'+' | b','
+                )
+        });
+    if plain {
+        word.to_owned()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
+    }
+}
+
+/// The working directory a watch is stored with: absolute and valid UTF-8.
+pub(super) fn watch_cwd(cwd: Option<&std::path::Path>) -> Result<&str, Error> {
+    match cwd {
+        Some(path) if path.is_absolute() => path.to_str().ok_or_else(|| {
+            refused(
+                "invalid_cwd",
+                "the working directory is not valid UTF-8; run from another directory",
+            )
+        }),
+        _ => Err(refused(
+            "invalid_cwd",
+            "cannot read the working directory; run from an existing directory",
+        )),
+    }
 }
 
 pub(super) fn seat_name(name: &str) -> Result<(), Error> {

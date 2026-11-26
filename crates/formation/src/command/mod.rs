@@ -20,6 +20,6 @@ pub(crate) enum Command {
     Mail(mail::Mail),
     /// Hand unread mail to a Claude Code or Codex session.
     Hook(hook::Hook),
-    /// Run probes on an interval and report or mail new items.
+    /// Manage the room's watches and wait for probe results.
     Watch(watch::Watch),
 }

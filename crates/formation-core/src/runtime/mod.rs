@@ -11,6 +11,7 @@ pub(crate) use exec::{App, RoomAccess, exec};
 pub(crate) struct Ctx<'a> {
     pub(crate) mail: Option<MailContext>,
     pub(crate) actor: Option<&'a str>,
+    pub(crate) cwd: Option<&'a std::path::Path>,
     pub(crate) clock: fn() -> time::OffsetDateTime,
 }
 

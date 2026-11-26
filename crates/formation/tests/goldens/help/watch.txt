@@ -1,12 +1,19 @@
-Run probes on an interval and report or mail new items
+Manage the room's watches and wait for probe results
 
-Usage: formation watch [OPTIONS] --probe <NAME=COMMAND>
+Usage: formation watch [OPTIONS] <COMMAND>
+
+Commands:
+  add     Add a watch to the room's set, or replace the one with the same name and recipient
+  remove  Drop a watch and forget its remembered fingerprints
+  pause   Keep a watch but stop reading it
+  resume  Read a paused watch again
+  list    List every watch in the room and whether anything reads the set
+  run     Read the room's watches, or wait as a standby while another reader holds the lease
+  stop    Stop the room's reader and all its standbys
+  wait    Block until a caller-supplied probe returns new items or a read failure
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
-      --room <NAME|PATH>      Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>             Seat name for this command (default: seat recorded for this session)
-      --probe <NAME=COMMAND>  Probe to run as <name>=<command>; repeat for multiple probes
-      --to <SEAT>             Joined recipient seat to mail new items to instead of returning JSON
-      --every <SECONDS>       Seconds between polls (minimum 10) [default: 120]
-      --timeout <SECONDS>     Seconds to run before exiting (default: 300 without --to, none with --to)
-  -h, --help                  Print help
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+  -h, --help              Print help

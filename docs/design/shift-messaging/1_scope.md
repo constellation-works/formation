@@ -9,14 +9,14 @@ feature: shift-messaging
 doc_role: scope
 summary: Durable seat mail between Claude and Codex sessions, handed over by a Stop hook, with one watch command for everything that is not mail.
 stage: building
-next: Daniel decides whether to replace the Codex Stop hold after the successful idle-wake trial.
+next: Build the Codex queue wake, which replaces the Codex Stop hold.
 ---
 
 # Formation — Shift messaging
 
 Daniel approved this shape on 2026-11-25 ([Decided](#decided)). [Built today](#built-today) is in the repository. The rest is filed as tasks tagged `shift-messaging`, with the two hook trials first. The Codex hold passed on the tested build. The Claude idle-wake trial is next.
 
-A formation on 2026-11-26 showed that the Codex hold keeps typed messages from the seat. The [proposal](#typed-input-during-a-codex-hold) to replace that hold waits for Daniel.
+A formation on 2026-11-26 showed that the Codex hold keeps typed messages from the seat. Daniel approved [replacing that hold with a wake](#typed-input-during-a-codex-hold) the same day, after trial 5 passed. It is not built yet.
 
 ## Problem
 
@@ -94,7 +94,7 @@ This replaces the child that polls a mailbox. On Codex the seat still stays in i
 
 ### Typed input during a Codex hold
 
-This section is a proposal. Nothing in it is built, and it changes the third point under [Decided](#decided), so it waits for Daniel.
+Daniel approved this on 2026-11-26 after trial 5 passed. It replaces the third point under [Decided](#decided) for Codex seats. Nothing in it is built yet.
 
 Daniel, 2026-11-26, in the chief's chat: "when I talk to codex captains directly in the chat, the messages don't seem to be going through. messages via mailbox works. why?"
 
@@ -108,30 +108,32 @@ Daniel, 2026-11-26, in the chief's chat: "when I talk to codex captains directly
 
 A shorter hold only moves the delay. With a hold of H seconds, a typed message waits up to H, and mail wakes an idle seat only during the first H seconds after its turn.
 
-**Proposed: wake the Codex seat, and hold nothing.** `codex queue --thread <session id> --message <text>` queues a message for an existing session. [Trial 5](#codex-queue-wake-trial-2026-11-25) verified that it starts a turn in a loaded, idle desktop chat and that the existing prompt hook delivers mail on that turn. The proposed implementation follows.
+**Decided: wake the Codex seat, and hold nothing.** `codex queue --thread <session id> --message <text>` queues a message for an existing session. [Trial 5](#codex-queue-wake-trial-2026-11-26) verified that it starts a turn in a loaded, idle desktop chat and that the existing prompt hook delivers mail on that turn. The implementation follows.
 
 1. **The Codex Stop hook runs with no hold.** It continues the turn with mail that is already waiting, as today, and otherwise lets the turn end. The seat is idle and the operator's message starts a turn at once.
 2. **The hooks record whether the seat is in a turn.** The prompt hook marks the seat busy. The Stop hook marks it idle, and only then makes its last check for mail.
 3. **`mail send` wakes an idle Codex seat.** It stores the envelope first and reads the mark second. For a busy seat it does nothing more, and the Stop hook delivers at the end of the turn. For an idle Codex seat it runs the queue command, and the prompt hook of the turn that starts adds the mail as it does today. Because each side writes before it reads, a send that crosses a turn end costs at most one wake with no mail in it, and never loses one.
 4. **The wake line is fixed text.** For example: "Formation: mail is waiting for this seat. Formation queued this line. The operator did not type it." It never carries a mail body. Queued text enters the chat as user input, and a seat must not take it for the operator's words ([rule 1](../formation/references/network.md#rules)).
-5. **`watch --to` needs no change,** because it sends mail.
+5. **`watch --to` needs no change,** because it sends mail. The [watch set](../watch/1_scope.md#the-reader) later superseded this form.
 
 Costs: Formation runs another program's command line, so one of the wake adapters this scope [set aside](#set-aside) returns for one provider. The call behind `codex queue` is marked experimental in the Codex source and can change without notice. The hook file changes, so the operator reviews it in Codex once more. The Claude hold stays as it is.
 
-**If trial 5 fails,** the proposal is to keep the 1,800-second hold and teach the interrupt: stop the turn, then type. A held turn has no work in flight, so stopping it loses nothing, and the Stop hook of the next turn starts a new hold. A short hold would instead give up the mail wake, which is the reason the hold exists.
+**What the trial adds to the build.**
 
-**Until this is decided,** the operator stops the Codex turn and then types, or sends by mail. The skill's Codex reference and the captain brief should say so now.
+- **The wake is the plain call.** `--resume` failed with a warning about a missing daemon, while the loaded chat still picked the line up. `mail send` never passes it.
+- **A chat that is not loaded is not woken.** With the app closed, and then with the app open but the chat unloaded, the line stayed queued and ran when the chat was opened. Mail for such a seat waits until the operator opens its chat, and the reply to `mail send` says only what it knows: the envelope is stored and a wake was queued.
+- **A queued line during a turn costs a turn.** It ran as a separate turn 6 milliseconds after the running one ended. That is why `mail send` wakes only a seat marked idle and leaves a busy seat to its Stop hook.
+- **Typed input still works during a woken turn.** The operator's line entered the running turn after 16.4 seconds and was answered in it.
 
-Daniel asked to run trial 5. The remaining design choices are:
+**Where the wake fails** on some build, the fallback is the 1,800-second hold with the interrupt: stop the turn, then type. A held turn has no work in flight, so stopping it loses nothing, and the Stop hook of the next turn starts a new hold. A short hold would give up the mail wake, which is the reason the hold exists.
 
-1. Should the Codex hold be replaced by the wake above?
-2. For a deployment where wake fails, should the long hold stay with the interrupt?
+**Until it is built,** the operator stops the Codex turn and then types, or sends by mail.
 
 ### Watch
 
-`formation watch --to <seat>` is for everything that is not mail. A probe is any command that prints one line per item as `<fingerprint><TAB><text>`, the shape the skill's `ci-read.sh` already has. `watch` runs each probe on an interval and mails the seat every fingerprint it has not sent before. The fingerprints live in the room, so two watchers never send the same item, and a restarted one sends nothing twice. A probe that fails is mailed once as `read failed`, and again only after a read has succeeded.
+`formation watch add` stores a probe, its recipient and schedule in the room. `formation watch run` reads the set with a single leased reader and standby takeover. A probe is a command that prints one line per item as `<fingerprint><TAB><text>`, the shape the skill's `ci-read.sh` uses. The reader mails each new fingerprint. Handover state lives in the room across reader changes. A failed read is mailed once and becomes reportable again after a successful read.
 
-`watch` needs no model. A captain starts it as a background command, or a sentry subagent runs it where the read needs judgment before it is passed on. The binary knows nothing about GitHub or Orbit: a new thing to watch is a new script. Without `--to`, `watch` returns the new items to its caller, for use outside a formation.
+The binary runs probes without a model. New sources use new scripts. A caller that needs the result in its own turn uses `formation watch wait` to block for new items. The [watch set scope](../watch/1_scope.md) describes how seats change the set while a reader runs and how to list the reader and each watch's last result.
 
 ### What changes in the first build
 
@@ -156,7 +158,7 @@ Each trial is run on the exact desktop build and recorded here before the capabi
 2. **Codex, hold and continue.** Passed on desktop build 26.1120.41243. The same chat received three scheduled envelopes and a fourth after a half-hour hold. See the [trial record](#codex-stop-hook-trial-2026-11-25) for typed input and timeout observations.
 3. **Codex, if the hold fails.** The hold passed on the tested build, so the fallback trial is unnecessary there. If another build fails the hold, try the two leads under [Evidence](#evidence) in order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
 4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
-5. **Codex, wake by queue.** The idle-wake and prompt-hook criteria passed on desktop build 26.1120.50957. Run `codex queue --thread <its session id> --message "queue probe <nonce>"` from a shell on the same machine after the chat's turn ends without a hold. Within a minute, one turn must start in the same chat with the exact line and run the prompt hook without input from the operator. The [trial record](#codex-queue-wake-trial-2026-11-25) covers the busy-turn and `--resume` controls and the remaining cases.
+5. **Codex, wake by queue.** Passed on desktop build 26.1120.50957 for the idle wake and the prompt hook. Run `codex queue --thread <its session id> --message "queue probe <nonce>"` from a shell on the same machine after the chat's turn ends without a hold. Within a minute, one turn must start in the same chat with the exact line and run the prompt hook without input from the operator. The [trial record](#codex-queue-wake-trial-2026-11-26) covers the busy-turn and `--resume` controls and the remaining cases.
 
 | Measure | 2026-11-25 | Target |
 | --- | --- | --- |
@@ -170,10 +172,14 @@ Daniel, 2026-11-25, in the chief's chat, to the four questions this scope asked:
 
 1. **A seat is a name.** The key files go ([decision](4_decisions.md#a-seat-is-a-name-not-a-credential)).
 2. **Mail is delivered by the two hooks.** The cost is one review of the plugin's hooks in Codex, repeated whenever the hook file changes.
-3. **The hold is as long as trial 2 allows on Codex,** since a seat with no hold receives mail only at its next turn.
+3. **The hold is as long as trial 2 allows on Codex,** since a seat with no hold receives mail only at its next turn. Replaced for Codex on 2026-11-26, below.
 4. **The relay, grants and wake adapters are dropped** from this scope.
 
 He also said who runs the Codex side: "I will have astra execute them and figure out if things are working for codex."
+
+Daniel, 2026-11-26 (UTC), in the chief's chat, on the trial 5 result: "looks like we are good to go". The question put to him before the trial was whether to run it and, if it passed, replace the Codex hold with the wake.
+
+5. **A Codex seat holds nothing and is woken by `codex queue`,** as [Typed input during a Codex hold](#typed-input-during-a-codex-hold) describes. The Claude hold stays.
 
 ## Evidence
 
@@ -186,7 +192,7 @@ Read from the providers' documentation on 2026-11-25 through a summarising fetch
 - **Claude Code channels** can also push an event into an open session. They need a running server, so the hook is tried first. [Channels](https://code.claude.com/docs/en/channels)
 - **Open requests:** a [desktop external-wake API](https://github.com/openai/codex/issues/61773) and [idle chats waking on agent messages](https://github.com/openai/codex/issues/63220). Neither has a maintainer reply.
 
-### Codex queue wake trial, 2026-11-25
+### Codex queue wake trial, 2026-11-26
 
 Trial 5 used ChatGPT desktop build 26.1120.50957 on macOS, its bundled Codex CLI
 0.171.0-alpha.13.2, and Formation 0.1.0. The existing disposable “Formation test

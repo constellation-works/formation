@@ -1,8 +1,12 @@
-//! Poll external probes on an interval and report or mail new items.
+//! Watch set, leased reader and blocking probe wait.
 
 mod poll;
 
+pub mod reader;
+
 mod rule;
+
+pub mod set;
 
 use crate::Env;
 use crate::composition::Caller;
@@ -16,6 +20,7 @@ use formation_store::Store;
 pub use rule::{
     DEFAULT_EVERY_SECONDS, DEFAULT_WAIT_TIMEOUT_SECONDS, MIN_EVERY_SECONDS, PROBE_TIMEOUT_SECONDS,
 };
+use std::path::Path;
 use std::time::Duration;
 
 /// Execution bounds for a single probe run.
@@ -43,21 +48,25 @@ pub enum ProbeOutput {
 /// Host port for spawning probe commands and observing termination signals.
 pub trait ProbeRunner {
     /// Run `command` through `sh -c` under the given timeout limits.
-    fn run(&self, command: &str, limits: ProbeLimits) -> ProbeOutput;
+    fn run(
+        &self,
+        command: &str,
+        cwd: Option<&Path>,
+        limits: ProbeLimits,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ProbeOutput;
 
     /// Whether the watch process has received a termination signal.
     fn stopped(&self) -> bool;
 }
 
-/// A watch invocation.
+/// A blocking watch wait.
 pub struct Command<'a> {
     /// Probe specifications as `<name>=<command>`.
     pub probes: Vec<String>,
-    /// Optional joined recipient seat to mail instead of returning items on stdout.
-    pub to: Option<String>,
     /// Polling interval (minimum 10 seconds, default 120 seconds).
     pub every: Duration,
-    /// Optional overall command timeout (default 300 seconds without `--to`, none with `--to`).
+    /// Overall timeout in seconds (default 300, zero for a single pass).
     pub timeout: Option<Duration>,
     /// Host probe runner and signal observer.
     pub runner: &'a (dyn ProbeRunner + Sync),
@@ -81,32 +90,16 @@ pub struct Failure {
     pub error: String,
 }
 
-/// Typed watch outcomes, independent of CLI presentation.
-pub enum Outcome {
-    /// Direct return without `--to`.
-    Report {
-        /// Newly handed items (at most 20).
-        items: Vec<Item>,
-        /// Newly reported probe failures.
-        failed: Vec<Failure>,
-        /// New items not yet handed over because of the 20-item batch limit.
-        remaining: usize,
-        /// Whether the command exited because its timeout expired with nothing to report.
-        expired: bool,
-    },
-    /// Completed `--to` run after timeout or termination signal.
-    Mailed {
-        /// Recipient seat.
-        to: String,
-        /// Number of envelopes mailed during the run.
-        envelopes: usize,
-        /// Number of new items mailed during the run.
-        items: usize,
-        /// Number of failed-read notices mailed during the run.
-        failed: usize,
-        /// Whether the run ended due to `--timeout` (`false` on termination signal).
-        expired: bool,
-    },
+/// Result of a blocking wait.
+pub struct Outcome {
+    /// Newly handed items (at most 20).
+    pub items: Vec<Item>,
+    /// Newly reported probe failures.
+    pub failed: Vec<Failure>,
+    /// New items not yet handed over because of the 20-item batch limit.
+    pub remaining: usize,
+    /// Whether the command expired with nothing to report.
+    pub expired: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -133,9 +126,6 @@ impl<'a> App for Watch<'a> {
     fn preflight(cmd: &Command<'a>) -> Result<(), Error> {
         rule::parse_probes(&cmd.probes)?;
         rule::every(cmd.every)?;
-        if let Some(to) = cmd.to.as_deref() {
-            rule::seat_name(to)?;
-        }
         Ok(())
     }
 
@@ -149,18 +139,19 @@ impl<'a> App for Watch<'a> {
 
     fn run(ctx: &Ctx<'_>, cmd: Command<'a>) -> Result<Outcome, Error> {
         let mail = ctx.mail()?;
-        let seat = match &mail.caller {
-            Caller::Explicit(name) => SeatRef::Name(name),
-            Caller::Session(session) => SeatRef::Session(session),
-            Caller::Join { .. } => {
-                return Err(Error::new(
-                    Kind::Internal,
-                    "missing_context",
-                    std::io::Error::other("seat context unavailable"),
-                ));
-            }
-        };
-        poll::run(ctx, &mail.store, seat, cmd)
+        poll::run(ctx, &mail.store, caller_ref(&mail.caller)?, cmd)
+    }
+}
+
+fn caller_ref(caller: &Caller) -> Result<SeatRef<'_>, Error> {
+    match caller {
+        Caller::Explicit(name) => Ok(SeatRef::Name(name)),
+        Caller::Session(session) => Ok(SeatRef::Session(session)),
+        Caller::Join { .. } => Err(Error::new(
+            Kind::Internal,
+            "missing_context",
+            std::io::Error::other("seat context unavailable"),
+        )),
     }
 }
 

@@ -1,0 +1,21 @@
+Add a watch to the room's set, or replace the one with the same name and recipient
+
+Usage: formation watch add [OPTIONS] <NAME> -- <COMMAND>...
+
+Arguments:
+  <NAME>        Watch name (1 to 32 lowercase ASCII letters, digits or hyphens)
+  <COMMAND>...  Command to run through `sh -c` from the current directory
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --to <SEAT>         Joined seat to mail new items to (default: the calling seat)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session)
+      --every <SECONDS>   Seconds between reads (minimum 10) [default: 120]
+  -h, --help              Print help
+
+A replaced watch keeps its remembered fingerprints. One word after `--` is shell text, as
+written; several words are quoted into one command line, so each stays one argument.
+
+Examples:
+  formation watch add ci --every 300 -- ./scripts/ci-read.sh owner/name main
+  formation watch add release --to captain --every 60 -- ./scripts/release-read.sh

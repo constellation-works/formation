@@ -4,9 +4,13 @@
     reason = "failed integration fixtures should panic"
 )]
 
-use cw_testkit::{Goldens, TempRoot};
+mod support;
+
+use cw_testkit::{Goldens, TempRoot, redact_timestamps};
 use std::io::Write;
 use std::process::{Output, Stdio};
+use std::time::Duration;
+use support::SpawnedChild;
 
 const EXAMPLE: &[u8] = include_bytes!("../../../examples/roster.json");
 
@@ -42,6 +46,14 @@ fn help_and_roster_output() {
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
         ("help/watch.txt", vec!["watch", "--help"]),
+        ("help/watch-add.txt", vec!["watch", "add", "--help"]),
+        ("help/watch-remove.txt", vec!["watch", "remove", "--help"]),
+        ("help/watch-pause.txt", vec!["watch", "pause", "--help"]),
+        ("help/watch-resume.txt", vec!["watch", "resume", "--help"]),
+        ("help/watch-list.txt", vec!["watch", "list", "--help"]),
+        ("help/watch-run.txt", vec!["watch", "run", "--help"]),
+        ("help/watch-stop.txt", vec!["watch", "stop", "--help"]),
+        ("help/watch-wait.txt", vec!["watch", "wait", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {
@@ -52,6 +64,169 @@ fn help_and_roster_output() {
             .check(name, std::str::from_utf8(&result.stdout).unwrap())
             .unwrap();
     }
+}
+
+/// Run `formation <args>` against a shared room from a fixed working directory.
+fn in_room(root: &TempRoot, cwd: &std::path::Path, args: &[&str]) -> String {
+    let result = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    String::from_utf8(result.stdout).unwrap()
+}
+
+#[test]
+fn watch_list_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap().to_owned();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    let run_in_room = |args: &[&str]| in_room(&root, &cwd, args);
+
+    for seat in ["orbit-0-capt", "scribe-0-capt"] {
+        run_in_room(&["mail", "join", seat, "--room", &room]);
+    }
+    let watch = |seat: &str, args: &[&str]| {
+        let mut full = vec!["watch", "--room", &room, "--as", seat];
+        full.extend_from_slice(args);
+        run_in_room(&full)
+    };
+    watch(
+        "orbit-0-capt",
+        &["add", "attention", "--", "./attention-read.sh", "orbit"],
+    );
+    watch(
+        "orbit-0-capt",
+        &[
+            "add",
+            "ci",
+            "--every",
+            "300",
+            "--",
+            "./ci-read.sh",
+            "owner/name",
+            "main",
+        ],
+    );
+    watch(
+        "scribe-0-capt",
+        &[
+            "add",
+            "ci",
+            "--every",
+            "300",
+            "--",
+            "./ci-read.sh",
+            "owner/name",
+            "main",
+        ],
+    );
+    watch(
+        "scribe-0-capt",
+        &[
+            "add",
+            "release",
+            "--to",
+            "orbit-0-capt",
+            "--every",
+            "60",
+            "--",
+            "./release-read.sh",
+        ],
+    );
+    watch(
+        "orbit-0-capt",
+        &["pause", "release", "--to", "orbit-0-capt"],
+    );
+
+    let normalize = |text: String| redact_timestamps(&text).replace(cwd.to_str().unwrap(), "<cwd>");
+    goldens
+        .check(
+            "output/watch-list.txt",
+            &normalize(watch("scribe-0-capt", &["list"])),
+        )
+        .unwrap();
+    goldens
+        .check(
+            "output/watch-list.json",
+            &normalize(watch("scribe-0-capt", &["list", "--json"])),
+        )
+        .unwrap();
+}
+
+#[test]
+fn watch_reader_list_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for seat in ["alpha", "beta"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", room]);
+    }
+    let watch = |args: &[&str]| {
+        let mut full = vec!["watch", "--room", room, "--as", "alpha"];
+        full.extend_from_slice(args);
+        in_room(&root, &cwd, &full)
+    };
+    watch(&["add", "sample", "--", "true"]);
+
+    let start = |seat: &str| {
+        SpawnedChild::spawn(
+            root.command(env!("CARGO_BIN_EXE_formation"))
+                .current_dir(&cwd)
+                .args(["watch", "run", "--room", room, "--as", seat]),
+        )
+    };
+    let mut reader = start("alpha");
+    reader.until(Duration::from_secs(5), || {
+        let document: serde_json::Value =
+            serde_json::from_str(&watch(&["list", "--json"])).unwrap();
+        (document["watches"][0]["last_result"] == "ok, 0 items").then_some(())
+    });
+    let mut standby = start("beta");
+    let pid = standby.pid();
+    let live_json = standby.until(Duration::from_secs(5), || {
+        let json = watch(&["list", "--json"]);
+        let document: serde_json::Value = serde_json::from_str(&json).unwrap();
+        (document["reader"]["standbys"][0]["pid"] == pid).then_some(json)
+    });
+    let normalize = |text: String| {
+        let mut text = redact_timestamps(&text).replace(cwd.to_str().unwrap(), "<cwd>");
+        for (pid, fixed) in [(reader.pid(), 1), (standby.pid(), 2)] {
+            text = text
+                .replace(&format!("pid {pid},"), &format!("pid {fixed},"))
+                .replace(&format!("\"pid\":{pid},"), &format!("\"pid\":{fixed},"));
+        }
+        text
+    };
+    goldens
+        .check("output/watch-list-live.json", &normalize(live_json))
+        .unwrap();
+    goldens
+        .check("output/watch-list-live.txt", &normalize(watch(&["list"])))
+        .unwrap();
+
+    watch(&["stop"]);
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+    assert!(standby.wait_within(Duration::from_secs(5)).status.success());
+    let stopped =
+        |args: &[&str]| redact_timestamps(&watch(args)).replace(cwd.to_str().unwrap(), "<cwd>");
+    goldens
+        .check(
+            "output/watch-list-stopped.json",
+            &stopped(&["list", "--json"]),
+        )
+        .unwrap();
+    goldens
+        .check("output/watch-list-stopped.txt", &stopped(&["list"]))
+        .unwrap();
 }
 
 #[test]

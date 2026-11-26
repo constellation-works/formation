@@ -1,0 +1,6 @@
+reader: none
+NAME       TO             EVERY (s)  STATE   LAST READ  RESULT  SENT  ADDED BY
+attention  orbit-0-capt         120  on      -          -          0  orbit-0-capt
+ci         orbit-0-capt         300  on      -          -          0  orbit-0-capt
+ci         scribe-0-capt        300  on      -          -          0  scribe-0-capt
+release    orbit-0-capt          60  paused  -          -          0  scribe-0-capt

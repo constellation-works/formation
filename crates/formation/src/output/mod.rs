@@ -20,7 +20,10 @@ pub(crate) use roster::summary;
 
 pub(crate) use shared::failure;
 
-pub(crate) use watch::{payload as watch_payload, write as watch_write};
+pub(crate) use watch::{
+    exited as watch_exited, list as watch_list, payload as watch_payload,
+    set_payload as watch_set_payload, write as watch_write,
+};
 
 pub(crate) fn error(error: &formation_core::Error) -> std::process::ExitCode {
     shared::write_json_error(&shared::error_payload(error))
