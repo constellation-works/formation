@@ -19,7 +19,7 @@ Implementation lieutenants use their own persistent worktrees. A peer-initiated 
 
 Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
 
-For cross-provider routes, mail arrives through the Claude plugin hooks: `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` runs in the background with `asyncRewake` to wake the session when mail arrives. A joined seat needs no separate mail watcher.
+For cross-provider routes, `UserPromptSubmit` adds unread mail to a typed turn. `Stop` uses `asyncRewake` to wake the session if mail arrives during its background wait. Use the [manual wake procedure](mail.md#wake-an-unheld-claude-seat) for a Claude seat whose wait has expired.
 
 A background `formation watch wait` invocation may notify a live Claude sentry on exit. Confirm that capability before promising a watch.
 
