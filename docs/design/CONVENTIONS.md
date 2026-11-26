@@ -1,7 +1,8 @@
 ---
 title: Design Doc Conventions
 owner: claude
-last_updated: 2026-09-26
+created_date: 2026-11-24
+updated_date: 2026-11-25
 status: Accepted
 ---
 
