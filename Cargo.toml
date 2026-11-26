@@ -49,6 +49,9 @@ expect_used = "warn"
 print_stderr = "warn"
 print_stdout = "warn"
 unwrap_used = "warn"
+# STD-02 R51: a function takes at most seven parameters, the receiver counted.
+# The threshold is set in clippy.toml.
+too_many_arguments = "warn"
 
 # Adoptable additions beyond the baseline (STD-02 "Adoptable additions").
 # STD-02 R27: no wildcard arm on an enum match; a foreign enum that needs one
