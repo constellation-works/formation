@@ -52,6 +52,17 @@ impl Env {
         }
     }
 
+    /// Apply explicit command-line mail options over the captured environment.
+    pub fn with_mail_options(mut self, room: Option<String>, seat: Option<String>) -> Self {
+        if let Some(room) = room {
+            self.room = Some(room.into());
+        }
+        if let Some(seat) = seat {
+            self.seat = Some(seat);
+        }
+        self
+    }
+
     /// Resolve an unnamed join from the caller's open Scribe group.
     ///
     /// # Errors
@@ -67,17 +78,6 @@ impl Env {
             self.room = Some(group.into());
         }
         Ok((self, seat))
-    }
-
-    /// Apply explicit command-line mail options over the captured environment.
-    pub fn with_mail_options(mut self, room: Option<String>, seat: Option<String>) -> Self {
-        if let Some(room) = room {
-            self.room = Some(room.into());
-        }
-        if let Some(seat) = seat {
-            self.seat = Some(seat);
-        }
-        self
     }
 }
 

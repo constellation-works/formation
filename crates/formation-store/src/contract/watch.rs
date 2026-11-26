@@ -10,20 +10,20 @@ pub enum WatchState {
 }
 
 impl WatchState {
-    /// Stable token stored in the room and printed in listings.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::On => "on",
-            Self::Paused => "paused",
-        }
-    }
-
     /// Parse a stored token.
     pub fn parse(token: &str) -> Option<Self> {
         match token {
             "on" => Some(Self::On),
             "paused" => Some(Self::Paused),
             _ => None,
+        }
+    }
+
+    /// Stable token stored in the room and printed in listings.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::On => "on",
+            Self::Paused => "paused",
         }
     }
 }

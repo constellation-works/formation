@@ -21,6 +21,20 @@ impl SpawnedChild {
         self.0.as_ref().unwrap().id()
     }
 
+    #[cfg(unix)]
+    pub fn terminate(&self) -> std::io::Result<()> {
+        let pid = libc::pid_t::try_from(self.pid())
+            .ok()
+            .filter(|pid| *pid > 0)
+            .ok_or_else(|| std::io::Error::other("invalid child PID"))?;
+        // SAFETY: The fixture spawned the child and has not reaped it.
+        if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
     pub fn until<T>(&mut self, timeout: Duration, mut condition: impl FnMut() -> Option<T>) -> T {
         let deadline = Instant::now() + timeout;
         loop {
@@ -39,20 +53,6 @@ impl SpawnedChild {
 
     pub fn kill(&mut self) -> std::io::Result<()> {
         self.0.as_mut().unwrap().kill()
-    }
-
-    #[cfg(unix)]
-    pub fn terminate(&self) -> std::io::Result<()> {
-        let pid = libc::pid_t::try_from(self.pid())
-            .ok()
-            .filter(|pid| *pid > 0)
-            .ok_or_else(|| std::io::Error::other("invalid child PID"))?;
-        // SAFETY: The fixture spawned the child and has not reaped it.
-        if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
-            Ok(())
-        } else {
-            Err(std::io::Error::last_os_error())
-        }
     }
 
     pub fn wait_within(mut self, timeout: Duration) -> Output {

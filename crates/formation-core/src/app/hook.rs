@@ -171,28 +171,6 @@ struct LeasedWait<'a> {
     guard: LeaseGuard<'a>,
 }
 
-/// What one turn of a leased wait decided.
-enum Turn {
-    /// Poll again after the pause.
-    Wait,
-    /// End the wait with this rendering, if any.
-    Finish(Option<String>),
-}
-
-/// What a check of the held lease found while the hold runs.
-struct Check {
-    /// Undelivered mail or a stopped-reader notice waits for the seat.
-    pending: bool,
-    /// The hold has run out, so this turn delivers whatever is left.
-    expiring: bool,
-}
-
-/// Hook text for one delivery and the receipts of the messages it carries.
-struct Batch {
-    text: String,
-    receipts: Vec<i64>,
-}
-
 impl<'a> LeasedWait<'a> {
     fn new(
         ctx: &'a Ctx<'a>,
@@ -215,6 +193,42 @@ impl<'a> LeasedWait<'a> {
             next_beat: start + HEARTBEAT_INTERVAL,
             guard: LeaseGuard::new(store, lease),
         }
+    }
+
+    /// Reads the held lease. `None` means the wait ends and releases the lease.
+    fn check(&self) -> Result<Option<Check>, Error> {
+        if (self.stopped)() {
+            return Ok(None);
+        }
+        let mail = self.ctx.mail()?;
+        if !is_hook_room(self.ctx.env, &mail.room, self.session)? {
+            return Ok(None);
+        }
+
+        let expiring = self.start.elapsed() >= self.hold;
+        let snapshot = self.store.read()?;
+        let now = (self.ctx.clock)().unix_timestamp();
+        if !snapshot
+            .hook_waiter()
+            .holds_lease(&self.seat, self.token, self.session, now)?
+        {
+            return Ok(None);
+        }
+        let pending = snapshot.messages().has_undelivered(&self.seat)?
+            || snapshot.watch().has_stopped_notice(&self.seat, now)?;
+        drop(snapshot);
+
+        if (self.stopped)() {
+            return Ok(None);
+        }
+        Ok(Some(Check { pending, expiring }))
+    }
+
+    /// Sleeps until the next poll, the end of the hold or the next heartbeat, whichever is first.
+    fn pause(&self) {
+        let until_end = self.hold.saturating_sub(self.start.elapsed());
+        let until_beat = self.next_beat.saturating_duration_since(Instant::now());
+        std::thread::sleep(POLL_INTERVAL.min(until_end).min(until_beat));
     }
 
     /// One pass of the wait: deliver when mail waits or the hold expires, then renew the lease.
@@ -253,42 +267,28 @@ impl<'a> LeasedWait<'a> {
         }
         Ok(Turn::Wait)
     }
+}
 
-    /// Reads the held lease. `None` means the wait ends and releases the lease.
-    fn check(&self) -> Result<Option<Check>, Error> {
-        if (self.stopped)() {
-            return Ok(None);
-        }
-        let mail = self.ctx.mail()?;
-        if !is_hook_room(self.ctx.env, &mail.room, self.session)? {
-            return Ok(None);
-        }
+/// What one turn of a leased wait decided.
+enum Turn {
+    /// Poll again after the pause.
+    Wait,
+    /// End the wait with this rendering, if any.
+    Finish(Option<String>),
+}
 
-        let expiring = self.start.elapsed() >= self.hold;
-        let snapshot = self.store.read()?;
-        let now = (self.ctx.clock)().unix_timestamp();
-        if !snapshot
-            .hook_waiter()
-            .holds_lease(&self.seat, self.token, self.session, now)?
-        {
-            return Ok(None);
-        }
-        let pending = snapshot.messages().has_undelivered(&self.seat)?
-            || snapshot.watch().has_stopped_notice(&self.seat, now)?;
-        drop(snapshot);
+/// What a check of the held lease found while the hold runs.
+struct Check {
+    /// Undelivered mail or a stopped-reader notice waits for the seat.
+    pending: bool,
+    /// The hold has run out, so this turn delivers whatever is left.
+    expiring: bool,
+}
 
-        if (self.stopped)() {
-            return Ok(None);
-        }
-        Ok(Some(Check { pending, expiring }))
-    }
-
-    /// Sleeps until the next poll, the end of the hold or the next heartbeat, whichever is first.
-    fn pause(&self) {
-        let until_end = self.hold.saturating_sub(self.start.elapsed());
-        let until_beat = self.next_beat.saturating_duration_since(Instant::now());
-        std::thread::sleep(POLL_INTERVAL.min(until_end).min(until_beat));
-    }
+/// Hook text for one delivery and the receipts of the messages it carries.
+struct Batch {
+    text: String,
+    receipts: Vec<i64>,
 }
 
 /// Deliver available mail and return its bounded rendering, if any.
