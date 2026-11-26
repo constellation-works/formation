@@ -21,7 +21,7 @@ Send the roster before `detach_session`. Detach the aide, captains, specialists,
 
 For cross-provider routes, mail arrives through the Claude plugin hooks: `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` runs in the background with `asyncRewake` to wake the session when mail arrives. A joined seat needs no separate mail watcher.
 
-A background `formation watch` run may notify a live Claude sentry on exit. Confirm that capability before promising a watch.
+A background `formation watch wait` invocation may notify a live Claude sentry on exit. Confirm that capability before promising a watch.
 
 Inspect context with `get_usage` if available. The chief and any captain in active operator conversation compact. For a run-output-heavy session with a confirmed handoff, `clear_session` with self is its last act. The parent sends the restart line identifying the handoff. Re-establish any lost watch and group seat before proceeding.
 

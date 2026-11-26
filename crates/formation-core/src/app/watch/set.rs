@@ -1,12 +1,14 @@
-//! The room's watch set: add, remove, pause, resume and list.
+//! Manage and list the room's watch set, and stop its reader.
 
 use super::poll::{LISTED_SEATS, unknown_recipient};
 use super::{Error, SeatRef, caller_ref, refused, rule};
 use crate::Env;
 use crate::runtime;
 use crate::runtime::{App, Ctx, RoomAccess};
-use formation_store::contract::{NewWatch, WatchEntry, WatchState, rfc3339};
-use formation_store::{Store, Tx};
+use formation_store::contract::{
+    NewWatch, WatchEntry, WatchLeaseStatus, WatchParticipant, WatchState, rfc3339,
+};
+use formation_store::{Snapshot, Store, Tx};
 use std::time::Duration;
 
 /// A watch set operation.
@@ -45,12 +47,30 @@ pub enum Command {
     },
     /// List the room's watches.
     List,
+    /// Stop all reader invocations for the room.
+    Stop,
 }
 
 /// The state of the process that reads the set.
-pub enum Reader {
-    /// No process is recorded as reading the set.
-    None,
+pub struct Reader {
+    /// Lease holder, when it is live.
+    pub active: Option<Participant>,
+    /// Live standbys, in registration order.
+    pub standbys: Vec<Participant>,
+    /// When the room stopped being read, as RFC 3339 UTC, if known.
+    pub since: Option<String>,
+    /// Whether the room was deliberately stopped.
+    pub stopped: bool,
+}
+
+/// One live reader or standby.
+pub struct Participant {
+    /// Seat that started the process.
+    pub seat: String,
+    /// Display PID.
+    pub pid: u32,
+    /// Last heartbeat, as RFC 3339 UTC.
+    pub last_beat: Option<String>,
 }
 
 /// One watch as listed.
@@ -123,6 +143,11 @@ pub enum Outcome {
         /// The watches.
         watches: Vec<Entry>,
     },
+    /// The room was marked stopped.
+    Stopped {
+        /// Room whose reader and standbys were stopped.
+        room: String,
+    },
 }
 
 struct Set;
@@ -155,7 +180,7 @@ impl App for Set {
                     rule::seat_name(to)?;
                 }
             }
-            Command::List => {}
+            Command::List | Command::Stop => {}
         }
         Ok(())
     }
@@ -171,6 +196,7 @@ impl App for Set {
             Command::Pause { .. } => Some("watch pause"),
             Command::Resume { .. } => Some("watch resume"),
             Command::List => None,
+            Command::Stop => Some("watch stop"),
         }
     }
 
@@ -200,7 +226,14 @@ impl App for Set {
             Command::Remove { name, to } => remove(store, seat, name, to),
             Command::Pause { name, to } => set_state(store, seat, name, to, WatchState::Paused),
             Command::Resume { name, to } => set_state(store, seat, name, to, WatchState::On),
-            Command::List => list(store, seat),
+            Command::List => list(store, seat, now),
+            Command::Stop => store.write(|tx| {
+                caller_in(tx, seat)?;
+                tx.watch_reader().stop((ctx.clock)().unix_timestamp())?;
+                Ok(Outcome::Stopped {
+                    room: mail.room.clone(),
+                })
+            }),
         }
     }
 
@@ -210,6 +243,7 @@ impl App for Set {
             | Outcome::Removed { name, to, .. }
             | Outcome::State { name, to, .. } => Some(format!("{to}/{name}")),
             Outcome::Listed { .. } => None,
+            Outcome::Stopped { room } => Some(room.clone()),
         }
     }
 }
@@ -298,19 +332,50 @@ fn set_state(
     })
 }
 
-fn list(store: &Store, seat: SeatRef<'_>) -> Result<Outcome, Error> {
+fn list(store: &Store, seat: SeatRef<'_>, now: i64) -> Result<Outcome, Error> {
     let snapshot = store.read()?;
-    let joined = match seat {
-        SeatRef::Name(name) => snapshot.seats().contains(name)?,
-        SeatRef::Session(session) => snapshot.seats().by_session(session)?.is_some(),
-    };
-    if !joined {
-        return Err(unjoined(seat));
-    }
+    caller_in_snapshot(&snapshot, seat)?;
     Ok(Outcome::Listed {
-        reader: Reader::None,
+        reader: reader(snapshot.watch().readers(now)?, now),
         watches: snapshot.watch().list()?.into_iter().map(entry).collect(),
     })
+}
+
+pub(super) fn caller_in_snapshot(snapshot: &Snapshot, seat: SeatRef<'_>) -> Result<String, Error> {
+    match seat {
+        SeatRef::Name(name) if snapshot.seats().contains(name)? => Ok(name.to_owned()),
+        SeatRef::Name(_) => Err(unjoined(seat)),
+        SeatRef::Session(session) => snapshot
+            .seats()
+            .by_session(session)?
+            .ok_or_else(|| unjoined(seat)),
+    }
+}
+
+fn reader(readers: WatchLeaseStatus, now: i64) -> Reader {
+    let mut since = readers.stopped_at.or(readers.released_at);
+    let active = readers.reader.and_then(|reader| {
+        if reader.expires_at > now {
+            Some(participant(reader))
+        } else {
+            since = Some(reader.expires_at);
+            None
+        }
+    });
+    Reader {
+        active,
+        standbys: readers.standbys.into_iter().map(participant).collect(),
+        since: since.and_then(rfc3339),
+        stopped: readers.stopped_at.is_some(),
+    }
+}
+
+fn participant(entry: WatchParticipant) -> Participant {
+    Participant {
+        seat: entry.seat,
+        pid: entry.pid,
+        last_beat: rfc3339(entry.heartbeat),
+    }
 }
 
 fn entry(watch: WatchEntry) -> Entry {
@@ -329,7 +394,7 @@ fn entry(watch: WatchEntry) -> Entry {
     }
 }
 
-fn caller_in(tx: &Tx<'_>, seat: SeatRef<'_>) -> Result<String, Error> {
+pub(super) fn caller_in(tx: &Tx<'_>, seat: SeatRef<'_>) -> Result<String, Error> {
     match seat {
         SeatRef::Name(name) => match tx.seats().seen(name)? {
             Some(_) => Ok(name.to_owned()),

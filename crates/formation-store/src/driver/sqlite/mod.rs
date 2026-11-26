@@ -25,3 +25,7 @@ pub(crate) fn has_delivered_column(version: u32) -> bool {
 pub(crate) fn has_watch_set(version: u32) -> bool {
     version >= schema::WATCH_SET_SCHEMA_VERSION
 }
+
+pub(crate) fn has_watch_reader(version: u32) -> bool {
+    version >= schema::WATCH_READER_SCHEMA_VERSION
+}

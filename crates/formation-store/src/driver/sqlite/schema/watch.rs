@@ -34,3 +34,22 @@ pub(super) const SET: cw_sqlite::Step = cw_sqlite::Step::sql(
         CHECK(every >= 10)
     ) STRICT;",
 );
+
+pub(super) const READER: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE watch_set ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+     CREATE TABLE watch_participant(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seat TEXT NOT NULL,
+        pid INTEGER NOT NULL,
+        heartbeat INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+     ) STRICT;
+     CREATE TABLE watch_reader(
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        reader_id INTEGER,
+        stopped_at INTEGER,
+        released_at INTEGER,
+        revision INTEGER NOT NULL DEFAULT 0
+     ) STRICT;
+     INSERT INTO watch_reader (singleton) VALUES (1);",
+);

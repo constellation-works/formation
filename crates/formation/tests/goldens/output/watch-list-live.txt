@@ -1,0 +1,3 @@
+reader: alpha, pid 1, last beat <timestamp>; standby: beta, pid 2, last beat <timestamp>
+NAME    TO     EVERY (s)  STATE  LAST READ             RESULT       SENT  ADDED BY
+sample  alpha        120  on     <timestamp>  ok, 0 items     0  alpha

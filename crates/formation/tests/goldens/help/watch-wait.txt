@@ -1,0 +1,11 @@
+Block until a caller-supplied probe returns new items or a read failure
+
+Usage: formation watch wait [OPTIONS] --probe <NAME=COMMAND>
+
+Options:
+      --probe <NAME=COMMAND>  Probe to run as <name>=<command>; repeat for multiple probes
+      --room <NAME|PATH>      Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>             Seat name for this command (default: seat recorded for this session)
+      --every <SECONDS>       Seconds between polls (minimum 10) [default: 120]
+      --timeout <SECONDS>     Seconds to wait (zero runs a single pass) [default: 300]
+  -h, --help                  Print help

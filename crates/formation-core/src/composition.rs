@@ -92,6 +92,7 @@ pub(crate) enum Caller {
 }
 
 pub(crate) struct MailContext {
+    pub(crate) room: String,
     pub(crate) store: Store,
     pub(crate) caller: Caller,
 }
@@ -167,6 +168,7 @@ pub(crate) fn compose_join(env: &Env, seat: &str) -> Result<MailContext, Error> 
     };
     let store = Store::create(&room.path)?;
     Ok(MailContext {
+        room: room.record.clone(),
         store,
         caller: Caller::Join {
             session,
@@ -194,7 +196,11 @@ pub(crate) fn compose_existing(env: &Env) -> Result<MailContext, Error> {
         return Err(ComposeError::SeatRequired.into());
     };
 
-    Ok(MailContext { store, caller })
+    Ok(MailContext {
+        room: room.record,
+        store,
+        caller,
+    })
 }
 
 pub(crate) fn compose_hook(env: &Env, session: &str) -> Result<Option<MailContext>, Error> {
@@ -206,6 +212,7 @@ pub(crate) fn compose_hook(env: &Env, session: &str) -> Result<Option<MailContex
     let room = parse_room_spec(env, &recorded)?;
     let store = Store::open(&room.path)?;
     Ok(Some(MailContext {
+        room: room.record,
         store,
         caller: Caller::Session(session),
     }))

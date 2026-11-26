@@ -1,6 +1,6 @@
 //! The watch set, handed watch fingerprints and active probe failure records.
 
-use crate::contract::{NewWatch, WatchEntry, WatchState};
+use crate::contract::{NewWatch, WatchEntry, WatchLeaseStatus, WatchState};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::types::Type;
@@ -10,15 +10,34 @@ use cw_sqlite::rusqlite::{Connection, OptionalExtension, Row, params};
 pub struct WatchRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) has_set: bool,
+    pub(crate) has_reader: bool,
 }
 
 impl WatchRead<'_> {
+    /// Reader state and standbys as of `now`, without upgrading older rooms.
+    pub fn readers(&self, now: i64) -> Result<WatchLeaseStatus, Error> {
+        if self.has_reader {
+            super::watch_reader::readers(self.conn, now)
+        } else {
+            Ok(WatchLeaseStatus::default())
+        }
+    }
+
+    /// Whether the invocation still owns a live reader lease.
+    pub fn holds_lease(&self, id: i64, now: i64) -> Result<bool, Error> {
+        if self.has_reader {
+            super::watch_reader::holds_lease(self.conn, id, now)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Every watch, ordered by name and then recipient.
     ///
     /// A room that predates the watch set has none.
     pub fn list(&self) -> Result<Vec<WatchEntry>, Error> {
         if self.has_set {
-            list(self.conn)
+            list(self.conn, self.has_reader)
         } else {
             Ok(Vec::new())
         }
@@ -33,7 +52,29 @@ pub struct Watch<'a> {
 impl Watch<'_> {
     /// Every watch, ordered by name and then recipient.
     pub fn list(&self) -> Result<Vec<WatchEntry>, Error> {
-        list(self.conn)
+        list(self.conn, true)
+    }
+
+    /// Record a read if the watch still has the definition the reader ran.
+    pub fn record_read(&self, watch: &WatchEntry, now: i64, result: &str) -> Result<bool, Error> {
+        self.conn
+            .execute(
+                "UPDATE watch_set SET last_read = ?4, last_result = ?5
+                   WHERE recipient = ?1 AND name = ?2 AND revision = ?3 AND state = 'on'",
+                params![watch.recipient, watch.name, watch.revision, now, result],
+            )
+            .map(|affected| affected == 1)
+            .map_err(error::sql)
+    }
+
+    fn next_revision(&self) -> Result<i64, Error> {
+        self.conn
+            .query_row(
+                "UPDATE watch_reader SET revision = revision + 1 RETURNING revision",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(error::sql)
     }
 
     /// Set a watch, replacing one with the same recipient and name in place.
@@ -51,11 +92,12 @@ impl Watch<'_> {
             .optional()
             .map_err(error::sql)?
             .is_some();
+        let revision = self.next_revision()?;
         self.conn
             .execute(
                 "INSERT INTO watch_set
-                    (recipient, name, command, cwd, every, state, added_by, added_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, 'on', ?6, ?7)
+                    (recipient, name, command, cwd, every, state, added_by, added_at, revision)
+                 VALUES (?1, ?2, ?3, ?4, ?5, 'on', ?6, ?7, ?8)
                  ON CONFLICT(recipient, name) DO UPDATE SET
                     command = excluded.command,
                     cwd = excluded.cwd,
@@ -64,7 +106,8 @@ impl Watch<'_> {
                     added_by = excluded.added_by,
                     added_at = excluded.added_at,
                     last_read = NULL,
-                    last_result = NULL",
+                    last_result = NULL,
+                    revision = excluded.revision",
                 params![
                     watch.recipient,
                     watch.name,
@@ -73,6 +116,7 @@ impl Watch<'_> {
                     watch.every,
                     watch.added_by,
                     watch.added_at,
+                    revision,
                 ],
             )
             .map_err(error::sql)?;
@@ -113,12 +157,13 @@ impl Watch<'_> {
         name: &str,
         state: WatchState,
     ) -> Result<Option<bool>, Error> {
+        let revision = self.next_revision()?;
         let changed = self
             .conn
             .execute(
-                "UPDATE watch_set SET state = ?3
+                "UPDATE watch_set SET state = ?3, revision = ?4
                   WHERE recipient = ?1 AND name = ?2 AND state != ?3",
-                params![recipient, name, state.as_str()],
+                params![recipient, name, state.as_str(), revision],
             )
             .map_err(error::sql)?;
         if changed == 1 {
@@ -204,15 +249,16 @@ impl Watch<'_> {
     }
 }
 
-fn list(conn: &Connection) -> Result<Vec<WatchEntry>, Error> {
+fn list(conn: &Connection, has_reader: bool) -> Result<Vec<WatchEntry>, Error> {
+    let revision = if has_reader { "revision" } else { "0" };
     let mut statement = conn
-        .prepare(
+        .prepare(&format!(
             "SELECT recipient, name, command, cwd, every, state, added_by, added_at,
                     last_read, last_result,
                     (SELECT count(*) FROM watch_handover
-                      WHERE seat = watch_set.recipient AND probe = watch_set.name)
-               FROM watch_set ORDER BY name, recipient",
-        )
+                      WHERE seat = watch_set.recipient AND probe = watch_set.name), {revision}
+               FROM watch_set ORDER BY name, recipient"
+        ))
         .map_err(error::sql)?;
     statement
         .query_map([], entry)
@@ -242,5 +288,6 @@ fn entry(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<WatchEntry> {
         last_read: row.get(8)?,
         last_result: row.get(9)?,
         remembered: row.get(10)?,
+        revision: row.get(11)?,
     })
 }

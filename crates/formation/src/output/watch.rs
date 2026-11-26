@@ -1,51 +1,36 @@
 //! Watch command output: wire shape and JSON write.
 
 use formation_core::app::watch::Outcome as WatchOutcome;
-use formation_core::app::watch::set::{Entry, Outcome as SetOutcome, Reader};
+use formation_core::app::watch::reader;
+use formation_core::app::watch::set::{Entry, Outcome as SetOutcome, Participant, Reader};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::process::ExitCode;
 
 pub(crate) fn payload(out: WatchOutcome) -> Value {
-    match out {
-        WatchOutcome::Report {
-            items,
-            failed,
-            remaining,
-            expired,
-        } => json!({
-            "items": items
-                .into_iter()
-                .map(|item| json!({
-                    "probe": item.probe,
-                    "fingerprint": item.fingerprint,
-                    "text": item.text,
-                }))
-                .collect::<Vec<_>>(),
-            "failed": failed
-                .into_iter()
-                .map(|failure| json!({
-                    "probe": failure.probe,
-                    "error": failure.error,
-                }))
-                .collect::<Vec<_>>(),
-            "remaining": remaining,
-            "expired": expired,
-        }),
-        WatchOutcome::Mailed {
-            to,
-            envelopes,
-            items,
-            failed,
-            expired,
-        } => json!({
-            "to": to,
-            "envelopes": envelopes,
-            "items": items,
-            "failed": failed,
-            "expired": expired,
-        }),
-    }
+    json!({
+        "items": out.items
+            .into_iter()
+            .map(|item| json!({
+                "probe": item.probe,
+                "fingerprint": item.fingerprint,
+                "text": item.text,
+            }))
+            .collect::<Vec<_>>(),
+        "failed": out.failed
+            .into_iter()
+            .map(|failure| json!({
+                "probe": failure.probe,
+                "error": failure.error,
+            }))
+            .collect::<Vec<_>>(),
+        "remaining": out.remaining,
+        "expired": out.expired,
+    })
+}
+
+pub(crate) fn exited(out: &reader::Outcome) -> ExitCode {
+    write(&json!({"room": out.room, "state": "exited"}))
 }
 
 pub(crate) fn write(value: &Value) -> ExitCode {
@@ -82,13 +67,22 @@ pub(crate) fn set_payload(out: &SetOutcome) -> Value {
             changed,
         } => json!({"name": name, "to": to, "state": state.as_str(), "changed": changed}),
         SetOutcome::Listed { reader, watches } => list_payload(reader, watches),
+        SetOutcome::Stopped { room } => json!({"room": room, "state": "stopped"}),
     }
 }
 
 fn list_payload(reader: &Reader, watches: &[Entry]) -> Value {
+    let state = match (reader.stopped, &reader.active) {
+        (true, _) => "stopped",
+        (false, Some(_)) => "live",
+        (false, None) => "none",
+    };
     json!({
-        "reader": match reader {
-            Reader::None => json!({"state": "none"}),
+        "reader": {
+            "state": state,
+            "active": reader.active.as_ref().map(participant_payload),
+            "standbys": reader.standbys.iter().map(participant_payload).collect::<Vec<_>>(),
+            "since": reader.since,
         },
         "watches": watches
             .iter()
@@ -107,6 +101,10 @@ fn list_payload(reader: &Reader, watches: &[Entry]) -> Value {
             }))
             .collect::<Vec<_>>(),
     })
+}
+
+fn participant_payload(participant: &Participant) -> Value {
+    json!({"seat": participant.seat, "pid": participant.pid, "last_beat": participant.last_beat})
 }
 
 pub(crate) fn list(reader: &Reader, watches: &[Entry], json: bool) -> ExitCode {
@@ -138,9 +136,7 @@ const HEADER: [&str; 8] = [
 const NUMERIC: [usize; 2] = [2, 6];
 
 fn write_list(out: &mut impl Write, reader: &Reader, watches: &[Entry]) -> io::Result<()> {
-    match reader {
-        Reader::None => writeln!(out, "reader: none")?,
-    }
+    write_reader(out, reader)?;
     if watches.is_empty() {
         return Ok(());
     }
@@ -184,6 +180,34 @@ fn write_list(out: &mut impl Write, reader: &Reader, watches: &[Entry]) -> io::R
             }
         }
         writeln!(out, "{line}")?;
+    }
+    Ok(())
+}
+
+fn write_reader(out: &mut impl Write, reader: &Reader) -> io::Result<()> {
+    if let Some(active) = &reader.active {
+        write_participant(out, "reader: ", active)?;
+    } else {
+        let state = if reader.stopped { "stopped" } else { "none" };
+        write!(out, "reader: {state}")?;
+        if let Some(since) = &reader.since {
+            write!(out, " since {since}")?;
+        }
+    }
+    for standby in &reader.standbys {
+        write_participant(out, "; standby: ", standby)?;
+    }
+    writeln!(out)
+}
+
+fn write_participant(
+    out: &mut impl Write,
+    label: &str,
+    participant: &Participant,
+) -> io::Result<()> {
+    write!(out, "{label}{}, pid {}", participant.seat, participant.pid)?;
+    if let Some(beat) = &participant.last_beat {
+        write!(out, ", last beat {beat}")?;
     }
     Ok(())
 }
