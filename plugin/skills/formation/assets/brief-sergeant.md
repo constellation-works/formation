@@ -54,10 +54,40 @@ For each item the sentry sends, and each piece of routine work the captain order
      what the task delivers. That one is an ask (step 3).
    - **Never move the branch of a PR an Orbit run published** (branch `orbit/<task>-…`): no push, no rebase, no
      `gh pr update-branch`, even at the captain's order. Delivery accepts only the
-     candidate Orbit published. For a red check there, comment the failing test and the
-     error line on the task, so the run repairs its own candidate; if the failure comes
-     from the base branch, fix the base. "Rebase a stuck PR" means a PR a session opened.
-     A changed candidate may require operator reconciliation.
+     candidate it published or a head it advanced through its own repair. "Rebase a stuck
+     PR" means a PR a session opened. A changed candidate may require operator reconciliation.
+   - **Red CI or a merge conflict on an Orbit PR with auto-fix disabled.** Use the Orbit
+     repair route below, within your assigned authority. A task comment records evidence.
+     The repair starts through Orbit. See the `orbit-orchestrate` references
+     `loop-stalled-prs.md`, `run-debugging-hosted-checks.md` and `recovery-source-repair.md`.
+     1. Read the task, its publishing and later runs, and the PR's exact head, mergeability
+        and required checks. Leave it with the current owner when a run is live, the kept
+        candidate is already queued in backlog, or a decision or completion hold owns the wait.
+     2. Compare the failed job with the same job on the base before choosing a repair.
+        - For a transient or infrastructure failure, rerun the failed jobs once on the same
+          head (`gh run rerun <run> --failed`). Investigate a repeat failure.
+        - For an inherited failure, fix the base using the rule below, then refresh.
+        - For a stale base, use the owning workspace's `orbit.workflow` action `refresh` with
+          `task_id`. Orbit updates the candidate and starts checks. If refresh refuses a
+          conflict, record the conflicting paths.
+        - For a candidate failure or conflict, inspect the publishing run with `orbit.run`
+          action `resume` and `source_repair: {"action":"inspect","task_id":"<id>"}`.
+          Follow the source repair reference to submit on the owner. Use the inspected binding
+          and policy digest unchanged, a fresh request key, the diagnosis and the unmet
+          acceptance evidence. Check the task's plan first. Orbit repairs the kept candidate
+          on the same PR and returns it to review.
+     3. Requeue a blocked task only when the kept head is green and conflict-free. Supply the
+        reason. A refusal goes to the captain. Candidate discard needs the captain's decision,
+        and `resume_delivery` belongs to a resident cycle.
+     4. Record the failure, action and returned run ID on the task. Send the PR to the
+        captain for landing when the required checks pass.
+     5. Start at most one governed repair per PR. Escalate a refusal you cannot clear or
+        a PR still red or conflicting after that repair, with the receipt or run ID.
+        The captain obtains the diagnosis before a second repair.
+     6. Send the captain one immediate **overwhelmed** message when five PRs need repair
+        with none running, three PRs share the same check failure and error line, or one PR
+        has waited an hour without a repair started. Include the PRs and any shared cause.
+        Send an update when the list grows by five.
    - **Red CI on the base branch, in a squad.** Do not leave it for Orbit's scheduled sweep.
      Daniel (2026-11-19): "during squad mode, I am thinking to have resolver fix any red
      CI's, instead of waiting for auto-fix. squad mode == high throughput mode." In a trio

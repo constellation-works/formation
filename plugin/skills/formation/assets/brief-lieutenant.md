@@ -37,10 +37,10 @@ Order: {order}. Task: `{task_id}` — {task_title}. Done means: {done_criteria}.
    the `orbit` and `orbit-orchestrate` skills. Check that no drain or other session has
    claimed it. Never push to, rebase or update the branch of a PR an Orbit run published (branch `orbit/<task>-…`):
    delivery accepts only the candidate Orbit published, and a moved head leaves the task
-   unsettled until Daniel runs an operator command. For
-   such a PR, write the failing test, the cause and the fix as a comment on the task, so
-   the run repairs its own candidate. Push a repair only to a PR a session opened; the
-   captain lands it. For red CI on
+   unsettled until Daniel runs an operator command. For such a PR, comment on the task
+   with the failed test or conflicting paths, the cause and the fix. Tell the captain so
+   the captain or sergeant can submit the diagnosis through Orbit source repair.
+   Push a repair only to a PR a session opened. The captain lands it. For red CI on
    the base branch, open a PR against it from your worktree. Never go green by weakening a
    check: no skipped or ignored test, no loosened assertion, no removed guard, no added
    retry. If the test is wrong, say why in the PR and change it in the open.

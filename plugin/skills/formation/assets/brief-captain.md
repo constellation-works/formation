@@ -47,9 +47,14 @@ envelope delivered by the hook under the normal approval rules.
    subagent.
    Never order a push, rebase or `update-branch` on a PR an Orbit run published: a moved
    head is not the accepted candidate, and the task then waits for an operator command
-   from Daniel. Have the failing test commented on the
-   task so the run repairs its own candidate. The exceptions, and what to do with a head
-   that was already moved, are in `orchestration-session`'s learnings.
+   from Daniel. When the drain has auto-fix disabled, your sergeant starts the Orbit
+   repair route for a red or conflicting Orbit PR and sends you the PR when the required
+   checks pass. Review and land it. With no sergeant, handle the repair route yourself.
+   Take over on a refusal or when the first repair leaves the PR red or conflicting.
+   Give the lieutenant the diagnosis before submitting a second source repair. If the
+   sergeant reports being overwhelmed, give the lieutenant the shared cause to investigate
+   or tell Daniel that the unit needs help. See `orchestration-session`'s learnings for
+   the exceptions and for an already-moved head.
    In a squad, red CI on the base branch is fixed at once, not left to Orbit's scheduled
    sweep (Daniel, 2026-11-19: "squad mode == high throughput mode"). Your sergeant fixes
    the mechanical ones and sends you the PR: read the diff, check that it weakens no test
