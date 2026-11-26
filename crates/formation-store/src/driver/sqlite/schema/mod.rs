@@ -22,6 +22,8 @@ pub(crate) const HOOK_STATE_SCHEMA_VERSION: u32 = 10;
 
 pub(crate) const WATCH_MAIL_SCHEMA_VERSION: u32 = 11;
 
+pub(crate) const HOOK_WAITER_SCHEMA_VERSION: u32 = 13;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -35,4 +37,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::HOOK_STATE,
     message::WATCH_MAIL,
     watch::ABSENCE,
+    seat::HOOK_WAITER,
 ];

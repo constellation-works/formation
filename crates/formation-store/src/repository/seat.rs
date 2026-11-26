@@ -158,9 +158,18 @@ impl Seats<'_> {
                     params![session_value, name],
                 )
                 .map_err(error::sql)?;
+            self.conn
+                .execute(
+                    "UPDATE hook_waiter
+                        SET session_id = NULL, pid = NULL, heartbeat = NULL, expires_at = NULL
+                      WHERE session_id = ?1 AND seat != ?2",
+                    params![session_value, name],
+                )
+                .map_err(error::sql)?;
         }
 
-        self.conn
+        let changed = self
+            .conn
             .execute(
                 "INSERT INTO seats (name, session_id, seen) VALUES (?1, ?2, 0)
                  ON CONFLICT(name) DO UPDATE SET session_id = excluded.session_id,
@@ -169,6 +178,16 @@ impl Seats<'_> {
                 params![name, session_str],
             )
             .map_err(error::sql)?;
+        if changed == 1 {
+            self.conn
+                .execute(
+                    "UPDATE hook_waiter
+                        SET session_id = NULL, pid = NULL, heartbeat = NULL, expires_at = NULL
+                      WHERE seat = ?1 AND session_id IS NOT ?2",
+                    params![name, session_str],
+                )
+                .map_err(error::sql)?;
+        }
 
         let replaced = match (prior, session_str) {
             (Some(old), Some(new)) if old == new => None,

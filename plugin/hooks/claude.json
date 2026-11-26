@@ -16,9 +16,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider claude --event stop --hold 540",
+            "command": "command -v formation >/dev/null 2>&1 || exit 0; exec formation hook --provider claude --event stop --hold 3300",
             "asyncRewake": true,
-            "timeout": 600
+            "timeout": 3600
           }
         ]
       }

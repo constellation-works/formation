@@ -1,5 +1,6 @@
 //! Decode host inputs and map the delivery outcome to the host protocol.
 
+use super::probe::{SignalGuard, stop_requested};
 use crate::output;
 use clap::{Args, ValueEnum};
 use formation_core::Env;
@@ -80,12 +81,15 @@ pub(crate) fn run(env: &Env, args: Hook) -> ExitCode {
         Provider::Claude => hook::Provider::Claude,
         Provider::Codex => hook::Provider::Codex,
     };
+    let _signals = (args.hold > 0).then(SignalGuard::install);
     hook::exec(
         env,
         Command {
             provider,
             event,
             session,
+            pid: std::process::id(),
+            stopped: &stop_requested,
         },
         |result| match result {
             Ok(None) => ExitCode::SUCCESS,

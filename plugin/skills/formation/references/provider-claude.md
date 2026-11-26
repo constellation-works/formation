@@ -19,7 +19,7 @@ Implementation lieutenants use their own persistent worktrees. A peer-initiated 
 
 Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
 
-For shared watches and cross-provider routes, join Formation mail once (`formation mail join`). `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` uses `asyncRewake` (540s hold, 600s host timeout) to wake the session if mail arrives while waiting. After the hold expires, mail waits for the next hook or [manual wake](mail.md#wake-an-unheld-claude-seat).
+For shared watches and cross-provider routes, join Formation mail once (`formation mail join`). `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` uses `asyncRewake` (3300s hold, 3600s host timeout, one live waiter per seat) to wake the session if mail arrives while waiting. After the hold expires, mail waits for the next hook or [manual wake](mail.md#wake-an-unheld-claude-seat).
 
 Each attention-owning captain registers `attention` and `ci` with `formation watch add` and starts `formation watch run` in a background shell; extra captains join as standbys. Only one reader holds the 45s lease (15s heartbeat); `formation watch list [--json]` shows the active reader, standbys (`reader.state`: `live`, `none` or `stopped`), and per-watch `last_result` (`ok, ...` or `read failed`).
 
