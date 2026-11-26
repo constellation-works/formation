@@ -9,14 +9,14 @@ feature: shift-messaging
 doc_role: scope
 summary: Durable seat mail between Claude and Codex sessions, handed over by a Stop hook, with one watch command for everything that is not mail.
 stage: building
-next: Daniel reviews the proposal for typed input during a Codex hold, then the wake-by-queue trial runs.
+next: Build the Codex queue wake, which replaces the Codex Stop hold.
 ---
 
 # Formation — Shift messaging
 
 Daniel approved this shape on 2026-11-25 ([Decided](#decided)). [Built today](#built-today) is in the repository. The rest is filed as tasks tagged `shift-messaging`, with the two hook trials first. The Codex hold passed on the tested build. The Claude idle-wake trial is next.
 
-A formation on 2026-11-26 showed that the Codex hold keeps typed messages from the seat. The [proposal](#typed-input-during-a-codex-hold) to replace that hold waits for Daniel.
+A formation on 2026-11-26 showed that the Codex hold keeps typed messages from the seat. Daniel approved [replacing that hold with a wake](#typed-input-during-a-codex-hold) the same day, after trial 5 passed. It is not built yet.
 
 ## Problem
 
@@ -94,7 +94,7 @@ This replaces the child that polls a mailbox. On Codex the seat still stays in i
 
 ### Typed input during a Codex hold
 
-This section is a proposal. Nothing in it is built, and it changes the third point under [Decided](#decided), so it waits for Daniel.
+Daniel approved this on 2026-11-26 after trial 5 passed. It replaces the third point under [Decided](#decided) for Codex seats. Nothing in it is built yet.
 
 Daniel, 2026-11-26, in the chief's chat: "when I talk to codex captains directly in the chat, the messages don't seem to be going through. messages via mailbox works. why?"
 
@@ -108,7 +108,7 @@ Daniel, 2026-11-26, in the chief's chat: "when I talk to codex captains directly
 
 A shorter hold only moves the delay. With a hold of H seconds, a typed message waits up to H, and mail wakes an idle seat only during the first H seconds after its turn.
 
-**Proposed: wake the Codex seat, and hold nothing.** `codex queue --thread <session id> --message <text>` queues a message for an existing session. In the same source reading it starts a turn when the session is loaded and idle, and at the next idle otherwise. The documentation does not say so, and nobody has tried it on a chat the desktop app owns. [Trial 5](#verification) settles that. If it passes:
+**Decided: wake the Codex seat, and hold nothing.** `codex queue --thread <session id> --message <text>` queues a message for an existing session. [Trial 5](#codex-queue-wake-trial-2026-11-26) verified that it starts a turn in a loaded, idle desktop chat and that the existing prompt hook delivers mail on that turn. The implementation follows.
 
 1. **The Codex Stop hook runs with no hold.** It continues the turn with mail that is already waiting, as today, and otherwise lets the turn end. The seat is idle and the operator's message starts a turn at once.
 2. **The hooks record whether the seat is in a turn.** The prompt hook marks the seat busy. The Stop hook marks it idle, and only then makes its last check for mail.
@@ -118,15 +118,16 @@ A shorter hold only moves the delay. With a hold of H seconds, a typed message w
 
 Costs: Formation runs another program's command line, so one of the wake adapters this scope [set aside](#set-aside) returns for one provider. The call behind `codex queue` is marked experimental in the Codex source and can change without notice. The hook file changes, so the operator reviews it in Codex once more. The Claude hold stays as it is.
 
-**If trial 5 fails,** the proposal is to keep the 1,800-second hold and teach the interrupt: stop the turn, then type. A held turn has no work in flight, so stopping it loses nothing, and the Stop hook of the next turn starts a new hold. A short hold would instead give up the mail wake, which is the reason the hold exists.
+**What the trial adds to the build.**
 
-**Until this is decided,** the operator stops the Codex turn and then types, or sends by mail. The skill's Codex reference and the captain brief should say so now.
+- **The wake is the plain call.** `--resume` failed with a warning about a missing daemon, while the loaded chat still picked the line up. `mail send` never passes it.
+- **A chat that is not loaded is not woken.** With the app closed, and then with the app open but the chat unloaded, the line stayed queued and ran when the chat was opened. Mail for such a seat waits until the operator opens its chat, and the reply to `mail send` says only what it knows: the envelope is stored and a wake was queued.
+- **A queued line during a turn costs a turn.** It ran as a separate turn 6 milliseconds after the running one ended. That is why `mail send` wakes only a seat marked idle and leaves a busy seat to its Stop hook.
+- **Typed input still works during a woken turn.** The operator's line entered the running turn after 16.4 seconds and was answered in it.
 
-Daniel is asked three things:
+**Where the wake fails** on some build, the fallback is the 1,800-second hold with the interrupt: stop the turn, then type. A held turn has no work in flight, so stopping it loses nothing, and the Stop hook of the next turn starts a new hold. A short hold would give up the mail wake, which is the reason the hold exists.
 
-1. Should trial 5 run? It needs someone watching an idle Codex desktop chat.
-2. If it passes, should the Codex hold be replaced by the wake above?
-3. If it fails, should the long hold stay with the interrupt, as proposed, and not become a short hold?
+**Until it is built,** the operator stops the Codex turn and then types, or sends by mail.
 
 ### Watch
 
@@ -157,7 +158,7 @@ Each trial is run on the exact desktop build and recorded here before the capabi
 2. **Codex, hold and continue.** Passed on desktop build 26.1120.41243. The same chat received three scheduled envelopes and a fourth after a half-hour hold. See the [trial record](#codex-stop-hook-trial-2026-11-25) for typed input and timeout observations.
 3. **Codex, if the hold fails.** The hold passed on the tested build, so the fallback trial is unnecessary there. If another build fails the hold, try the two leads under [Evidence](#evidence) in order. If neither works, a Codex seat receives mail at its next turn only, and the scope says so.
 4. **Build:** the mailbox changes, then `formation hook`, then `watch`. Then one formation day with a Codex captain, read against the table below.
-5. **Codex, wake by queue.** Not run. On the desktop build, a Codex seat ends its turn with no hold. From a shell on the same machine, run `codex queue --thread <its session id> --message "queue probe <nonce>"`. Pass: within a minute, one new turn starts in the same desktop chat with that line, nobody touches the app, and the turn's prompt hook runs. Record also what the same call does while a turn is running, with the app closed, and with `--resume`; how the chat shows the line; and whether a message typed during the queued turn is handled as usual.
+5. **Codex, wake by queue.** Passed on desktop build 26.1120.50957 for the idle wake and the prompt hook. Run `codex queue --thread <its session id> --message "queue probe <nonce>"` from a shell on the same machine after the chat's turn ends without a hold. Within a minute, one turn must start in the same chat with the exact line and run the prompt hook without input from the operator. The [trial record](#codex-queue-wake-trial-2026-11-26) covers the busy-turn and `--resume` controls and the remaining cases.
 
 | Measure | 2026-11-25 | Target |
 | --- | --- | --- |
@@ -171,10 +172,14 @@ Daniel, 2026-11-25, in the chief's chat, to the four questions this scope asked:
 
 1. **A seat is a name.** The key files go ([decision](4_decisions.md#a-seat-is-a-name-not-a-credential)).
 2. **Mail is delivered by the two hooks.** The cost is one review of the plugin's hooks in Codex, repeated whenever the hook file changes.
-3. **The hold is as long as trial 2 allows on Codex,** since a seat with no hold receives mail only at its next turn.
+3. **The hold is as long as trial 2 allows on Codex,** since a seat with no hold receives mail only at its next turn. Replaced for Codex on 2026-11-26, below.
 4. **The relay, grants and wake adapters are dropped** from this scope.
 
 He also said who runs the Codex side: "I will have astra execute them and figure out if things are working for codex."
+
+Daniel, 2026-11-26 (UTC), in the chief's chat, on the trial 5 result: "looks like we are good to go". The question put to him before the trial was whether to run it and, if it passed, replace the Codex hold with the wake.
+
+5. **A Codex seat holds nothing and is woken by `codex queue`,** as [Typed input during a Codex hold](#typed-input-during-a-codex-hold) describes. The Claude hold stays.
 
 ## Evidence
 
@@ -186,6 +191,26 @@ Read from the providers' documentation on 2026-11-25 through a summarising fetch
 - **Codex source, read on 2026-11-26** at commit [`f79875c`](https://github.com/openai/codex/tree/f79875c) by a research agent. This is a reading of code, not documented behaviour, and the desktop app's own code is closed. A message sent during a running turn is pushed onto that turn's pending input (`codex-rs/core/src/session/turn_input.rs`). The Stop hook is awaited with no race against input, and the same turn then runs again with the pending message (`core/src/session/turn.rs`, `core/src/tasks/regular.rs`). `UserPromptSubmit` runs when pending input is drained (`core/src/hook_runtime.rs`). The Stop hook's input holds `session_id`, `turn_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, `stop_hook_active` and `last_assistant_message` (`hooks/src/schema.rs`). `codex queue` calls an experimental `thread/queue/add` on the shared daemon, which starts a turn if the thread is loaded and idle and otherwise at the next idle (`ext/queue/src/service.rs`). `wake_on_agent_messages` is a feature flag under development, off by default. The command-line interface labels pending input "press esc to interrupt and send immediately".
 - **Claude Code channels** can also push an event into an open session. They need a running server, so the hook is tried first. [Channels](https://code.claude.com/docs/en/channels)
 - **Open requests:** a [desktop external-wake API](https://github.com/openai/codex/issues/61773) and [idle chats waking on agent messages](https://github.com/openai/codex/issues/63220). Neither has a maintainer reply.
+
+### Codex queue wake trial, 2026-11-26
+
+Trial 5 used ChatGPT desktop build 26.1120.50957 on macOS, its bundled Codex CLI
+0.171.0-alpha.13.2, and Formation 0.1.0. The existing disposable “Formation test
+captain” chat (`01a210e7-decf-7e03-b35a-50660ca46d82`) finished its setup turn and
+reported idle. The investigator sent each queue probe from a local shell.
+
+| Case | Observation |
+| --- | --- |
+| Idle wake | The plain queue call returned at 03:35:10 UTC. One turn with trigger `queue` began in the same chat at 03:35:13.640 UTC (`01a215eb-efdf-7893-8aa3-b820887296f5`). Desktop history showed `queue probe pr26-idle-3c7f1b` as a user message. The chat replied with the exact nonce while unattended. |
+| Prompt hook | The chat was idle before it was temporarily bound to a disposable Formation room. Receipt 1 was stored with `held: false`. A queue line containing one nonce started a turn about nine seconds later (`01a215ef-724f-7211-a233-72e0ce5aabbb`). `UserPromptSubmit` injected the envelope and a second nonce as developer context at the start of that same turn. The sender's receipt changed from `stored` to `delivered`, and the reply included both nonces. The temporary binding was removed during the controlled pause before Stop. |
+| Busy chat | A second send at 03:36:36 UTC remained in the queue while the first turn was running. The first turn completed at 03:36:53.230 UTC. A separate queue-triggered turn began at 03:36:53.236 UTC and echoed the second nonce. |
+| `--resume` | The CLI accepted the submission and warned `start a local daemon or specify a server with --remote`. The explicit resume attempt failed. The already-loaded desktop chat picked up the line about two seconds after the send. |
+| Keyboard input | Daniel entered `keyboard probe c84be1` during queue-triggered turn `01a215fe-13af-7dd0-8503-ea70cb0bec53`. The input interrupted the 120-second tool wait after 16.4 seconds. The transcript recorded the line as a user message in the same turn at 03:55:20.954 UTC, and the final reply echoed it about three seconds later. |
+| App closed | The shell verified that the desktop and its bundled Codex processes had exited. The plain queue call succeeded at 03:56:06.797 UTC and stored message `01a215ff-0ef3-7fe1-917d-be57873c04e8`. The app relaunched about ten seconds later. The message remained queued for nearly two more minutes while the target chat was unloaded. The investigator opened the chat at 03:58:07 UTC without submitting input. The queue started turn `01a21600-e951-7101-a08a-2af2d083fc87` at 03:58:08.213 UTC. The chat echoed the nonce and the queued row cleared. |
+
+The loaded, idle desktop wake and prompt hook both met the one-minute criterion.
+The proposed `mail send` integration and its turn-end race are implementation
+work beyond this trial.
 
 ### Local sentry trial, 2026-11-24
 
