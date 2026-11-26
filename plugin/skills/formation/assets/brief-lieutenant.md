@@ -37,7 +37,7 @@ Order: {order}. Task: `{task_id}` — {task_title}. Done means: {done_criteria}.
    the `orbit` and `orbit-orchestrate` skills. Check that no drain or other session has
    claimed it. Never push to, rebase or update the branch of a PR an Orbit run published (branch `orbit/<task>-…`):
    delivery accepts only the candidate Orbit published, and a moved head leaves the task
-   unsettled until Daniel runs an operator command. For such a PR, comment on the task
+   unsettled until the operator runs an operator command. For such a PR, comment on the task
    with the failed test or conflicting paths, the cause and the fix. Tell the captain so
    the captain or sergeant can submit the diagnosis through Orbit source repair. With
    repair mode off, the drain's repair reads the comment.
