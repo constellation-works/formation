@@ -18,3 +18,10 @@ pub(super) const SESSION_BINDING: cw_sqlite::Step = cw_sqlite::Step::sql(
             DROP TABLE seats;
             ALTER TABLE seats_next RENAME TO seats;",
 );
+
+pub(super) const HOOK_STATE: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE seats ADD COLUMN hook_provider TEXT CHECK(hook_provider IN ('claude', 'codex'));
+     ALTER TABLE seats ADD COLUMN hook_busy INTEGER CHECK(hook_busy IN (0, 1));
+     ALTER TABLE seats ADD COLUMN wake_requested INTEGER NOT NULL DEFAULT 0
+         CHECK(wake_requested IN (0, 1));",
+);

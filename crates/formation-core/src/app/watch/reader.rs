@@ -14,7 +14,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread::Scope;
 use std::time::{Duration, Instant};
-use time::OffsetDateTime;
 
 const HEARTBEAT: Duration = Duration::from_secs(15);
 
@@ -28,6 +27,8 @@ pub struct Command<'a> {
     pub pid: u32,
     /// Host probe runner and signal observer.
     pub runner: &'a (dyn ProbeRunner + Sync),
+    /// Queue a fixed wake for an idle Codex session.
+    pub queue: &'a dyn Fn(&str) -> bool,
 }
 
 /// A reader invocation exited.
@@ -70,7 +71,8 @@ impl<'a> App for ReaderApp<'a> {
                 store,
                 seat,
                 id,
-                clock,
+                ctx,
+                queue: cmd.queue,
                 runner: cmd.runner,
                 jobs: HashMap::new(),
                 role,
@@ -112,7 +114,8 @@ struct Reader<'a> {
     store: &'a Store,
     seat: String,
     id: i64,
-    clock: fn() -> OffsetDateTime,
+    ctx: &'a Ctx<'a>,
+    queue: &'a dyn Fn(&str) -> bool,
     runner: &'a (dyn ProbeRunner + Sync),
     jobs: HashMap<WatchKey, Job>,
     role: WatchRole,
@@ -123,26 +126,16 @@ impl<'a> Reader<'a> {
         let mut next_beat = Instant::now() + HEARTBEAT;
         while !self.runner.stopped() {
             let pass_start = Instant::now();
-            let beat_due = pass_start >= next_beat;
-            if beat_due || matches!(self.role, WatchRole::Standby) {
-                let role = self.store.write(|tx| {
-                    let now = (self.clock)().unix_timestamp();
-                    let renewal = beat_due.then_some(now + LEASE_SECONDS);
-                    tx.watch_reader().pulse(self.id, now, renewal)
-                })?;
-                let Some(role) = role else {
-                    break;
-                };
-                self.role = role;
-                if beat_due {
-                    next_beat = pass_start + HEARTBEAT;
-                }
+            if !self.pulse(&mut next_beat)? {
+                break;
             }
 
             if matches!(self.role, WatchRole::Reader) {
-                self.commit_completed()?;
+                if !self.commit_completed(&mut next_beat)? {
+                    break;
+                }
                 let snapshot = self.store.read()?;
-                let now = (self.clock)().unix_timestamp();
+                let now = (self.ctx.clock)().unix_timestamp();
                 if !snapshot.watch().holds_lease(self.id, now)? {
                     break;
                 }
@@ -157,7 +150,28 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    fn commit_completed(&mut self) -> Result<(), Error> {
+    fn pulse(&mut self, next_beat: &mut Instant) -> Result<bool, Error> {
+        let start = Instant::now();
+        let beat_due = start >= *next_beat;
+        if !beat_due && matches!(self.role, WatchRole::Reader) {
+            return Ok(true);
+        }
+        let role = self.store.write(|tx| {
+            let now = (self.ctx.clock)().unix_timestamp();
+            let renewal = beat_due.then_some(now + LEASE_SECONDS);
+            tx.watch_reader().pulse(self.id, now, renewal)
+        })?;
+        let Some(role) = role else {
+            return Ok(false);
+        };
+        self.role = role;
+        if beat_due {
+            *next_beat = start + HEARTBEAT;
+        }
+        Ok(true)
+    }
+
+    fn commit_completed(&mut self, next_beat: &mut Instant) -> Result<bool, Error> {
         let mut results = Vec::new();
         self.jobs.retain(|_, job| match job.result.try_recv() {
             Ok(result) => {
@@ -172,9 +186,14 @@ impl<'a> Reader<'a> {
                 && !self.runner.stopped()
             {
                 self.commit(&watch, verdict)?;
+                // A batch can contain multiple bounded queue calls. Keep the lease
+                // renewed between them.
+                if !self.pulse(next_beat)? {
+                    return Ok(false);
+                }
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     fn schedule<'scope>(
@@ -237,20 +256,24 @@ impl<'a> Reader<'a> {
     }
 
     fn commit(&self, watch: &WatchEntry, verdict: ProbeVerdict) -> Result<(), Error> {
-        self.store.write(|tx| {
-            let now = (self.clock)().unix_timestamp();
+        let inserted = self.store.write(|tx| {
+            let now = (self.ctx.clock)().unix_timestamp();
             if tx.watch_reader().holds_lease(self.id, now)?
                 && tx.watch().record_read(watch, now, &verdict.summary())?
             {
-                send_changes(
+                return send_changes(
                     tx,
                     &self.seat,
                     &watch.recipient,
                     &[(&watch.name, verdict)],
                     now,
-                )?;
+                );
             }
-            Ok(())
-        })
+            Ok(false)
+        })?;
+        if inserted {
+            crate::app::wake::after_commit(self.ctx, &watch.recipient, self.queue);
+        }
+        Ok(())
     }
 }

@@ -1,10 +1,15 @@
 //! Host hook and delivery receipts exercised through the built CLI.
 #![expect(clippy::unwrap_used, reason = "fixture failures should panic")]
 
+#[cfg(unix)]
+mod support;
+
 use cw_testkit::TempRoot;
 use serde_json::{Value, json};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
+#[cfg(unix)]
+use support::SpawnedChild;
 
 const PROVIDERS: [&str; 2] = ["claude", "codex"];
 
@@ -52,6 +57,15 @@ impl Room {
         self.mail("sender", &["send", "captain", "--id", id, "--body", body])
     }
 
+    #[cfg(unix)]
+    fn send_command(&self, id: &str, body: &str) -> Command {
+        let mut command = self.command();
+        command
+            .env("CODEX_THREAD_ID", "sender")
+            .args(["mail", "send", "captain", "--id", id, "--body", body]);
+        command
+    }
+
     fn hook(&self, provider: &str, event: &str, input: &Value) -> Output {
         self.spawn_hook(provider, event, 0, input)
             .wait_with_output()
@@ -72,6 +86,76 @@ impl Room {
         serde_json::to_writer(process.stdin.take().unwrap(), input).unwrap();
         process
     }
+}
+
+#[cfg(unix)]
+const WAKE_LINE: &str = "Formation: mail is waiting for this seat. \
+    Formation queued this line. The operator did not type it.";
+
+#[cfg(unix)]
+fn link_formation(room: &Room) {
+    std::os::unix::fs::symlink(
+        env!("CARGO_BIN_EXE_formation"),
+        room.0.bin().join("formation"),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn stub_queue(room: &Room, last_command: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    link_formation(room);
+    let path = room.0.bin().join("codex");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh
+set -eu
+dir=${{0%/*}}
+FORMATION_HOME=\"$HOME/..\" formation mail sent --room trial --as chief --json > \"$dir/history\"
+printf '%s\\n' \"$@\" >> \"$dir/wake\"
+{last_command}\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+#[cfg(unix)]
+fn assert_wake(room: &Room, session: &str) -> Value {
+    let args = std::fs::read_to_string(room.0.bin().join("wake")).unwrap();
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        ["queue", "--thread", session, "--message", WAKE_LINE]
+    );
+    serde_json::from_slice(&std::fs::read(room.0.bin().join("history")).unwrap()).unwrap()
+}
+
+#[cfg(unix)]
+fn assert_no_wake(room: &Room) {
+    assert!(!room.0.bin().join("wake").exists());
+}
+
+#[cfg(unix)]
+fn shipped_hook(room: &Room, event: &str, input: &Value) -> Output {
+    let config: Value =
+        serde_json::from_str(include_str!("../../../plugin/hooks/codex.json")).unwrap();
+    let hook = &config["hooks"][event][0]["hooks"][0];
+    let command = hook["command"].as_str().unwrap();
+    assert!(!command.contains("--hold"));
+    let mut child = room
+        .0
+        .command("sh")
+        .env("FORMATION_HOME", room.0.path())
+        .args(["-c", command])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    serde_json::to_writer(child.stdin.take().unwrap(), input).unwrap();
+    child.wait_with_output().unwrap()
 }
 
 fn fixture(event: &str, session: &str) -> Value {
@@ -203,6 +287,279 @@ fn stop_uses_the_host_continuation_protocol() {
         assert!(inbox["messages"][0]["delivered"].is_string());
         silent(&room.hook(provider, "stop", &input));
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn shipped_codex_stop_publishes_idle_before_checking_mail() {
+    let room = Room::new();
+    stub_queue(&room, "exit 0");
+    let prompt = fixture("user-prompt", "receiver");
+    let stop = fixture("stop", "receiver");
+    silent(&shipped_hook(&room, "UserPromptSubmit", &prompt));
+
+    // The fixture meters a send at the idle update itself. A check before
+    // that update would miss this envelope and incorrectly return silence.
+    let sql = "CREATE TRIGGER send_at_idle AFTER UPDATE OF hook_busy ON seats
+        WHEN OLD.hook_busy = 1 AND NEW.hook_busy = 0
+             AND NEW.name = 'captain' AND NOT EXISTS (SELECT 1 FROM messages)
+        BEGIN
+            INSERT INTO messages(sender, recipient, id, body, ack, sent)
+            VALUES('chief', 'captain', 'at-idle', 'Arrived at idle.', 0, 100);
+        END;";
+    let out = room
+        .0
+        .command("python3")
+        .args([
+            "-c",
+            "import sqlite3, sys; sqlite3.connect(sys.argv[1]).executescript(sys.argv[2])",
+        ])
+        .arg(room.0.path().join("rooms/trial/inbox.sqlite3"))
+        .arg(sql)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let delivery = shipped_hook(&room, "Stop", &stop);
+    let text = rendered("codex", "stop", &delivery);
+    assert_eq!(text.matches("Arrived at idle.").count(), 1);
+
+    // A continuation is busy again and handles the next send at Stop.
+    room.send("continuation", "Arrived during continuation.");
+    assert_no_wake(&room);
+    let delivery = shipped_hook(&room, "Stop", &stop);
+    let text = rendered("codex", "stop", &delivery);
+    assert_eq!(text.matches("Arrived during continuation.").count(), 1);
+    assert!(!text.contains("Arrived at idle."));
+
+    let start = Instant::now();
+    silent(&shipped_hook(&room, "Stop", &stop));
+    assert!(start.elapsed() < Duration::from_secs(5));
+    let sent = room.send("idle", "Only the Prompt hook carries this body.");
+    let history = assert_wake(&room, "receiver");
+    assert_eq!(history["messages"][0]["receipt"], sent["receipt"]);
+    assert_eq!(history["messages"][0]["state"], "stored");
+    let delivery = shipped_hook(&room, "UserPromptSubmit", &prompt);
+    let text = rendered("codex", "user-prompt", &delivery);
+    assert_eq!(
+        text.matches("Only the Prompt hook carries this body.")
+            .count(),
+        1
+    );
+    silent(&shipped_hook(&room, "UserPromptSubmit", &prompt));
+}
+
+#[cfg(unix)]
+#[test]
+fn concurrent_sends_before_stop_are_delivered_once_without_queueing() {
+    let room = Room::new();
+    stub_queue(&room, "exit 0");
+    let stop = fixture("stop", "receiver");
+    silent(&room.hook("codex", "stop", &stop));
+    silent(&room.hook("codex", "user-prompt", &fixture("user-prompt", "receiver")));
+
+    let first = SpawnedChild::spawn(&mut room.send_command("first", "First busy envelope."));
+    let second = SpawnedChild::spawn(&mut room.send_command("second", "Second busy envelope."));
+    for child in [first, second] {
+        let out = child.wait_within(Duration::from_secs(5));
+        assert!(out.status.success(), "{out:?}");
+    }
+    assert_no_wake(&room);
+    let text = rendered("codex", "stop", &room.hook("codex", "stop", &stop));
+    assert_eq!(text.matches("First busy envelope.").count(), 1);
+    assert_eq!(text.matches("Second busy envelope.").count(), 1);
+    silent(&room.hook("codex", "stop", &stop));
+    assert_no_wake(&room);
+}
+
+#[cfg(unix)]
+#[test]
+fn send_after_idle_and_concurrent_send_share_one_wake_even_if_stop_delivers_first() {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let room = Room::new();
+    let release = room.0.bin().join("release");
+    let out = room.0.command("mkfifo").arg(&release).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    stub_queue(&room, "read -r release < \"$dir/release\"");
+    let stop = fixture("stop", "receiver");
+    silent(&room.hook("codex", "stop", &stop));
+
+    let mut first =
+        SpawnedChild::spawn(&mut room.send_command("first", "First crossing envelope."));
+    let mut gate = first.until(Duration::from_secs(3), || {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&release)
+            .ok()
+    });
+    let history = assert_wake(&room, "receiver");
+    assert_eq!(history["messages"][0]["state"], "stored");
+
+    room.send("second", "Second crossing envelope.");
+    assert_wake(&room, "receiver");
+    let text = rendered("codex", "stop", &room.hook("codex", "stop", &stop));
+    assert_eq!(text.matches("First crossing envelope.").count(), 1);
+    assert_eq!(text.matches("Second crossing envelope.").count(), 1);
+    writeln!(gate, "release").unwrap();
+    let send = first.wait_within(Duration::from_secs(5));
+    assert!(send.status.success(), "{send:?}");
+    silent(&room.hook("codex", "user-prompt", &fixture("user-prompt", "receiver")));
+    assert_wake(&room, "receiver");
+
+    let sent: Value = serde_json::from_slice(&send.stdout).unwrap();
+    silent(&room.hook("codex", "stop", &stop));
+    let replay = room.send("first", "First crossing envelope.");
+    assert_eq!(sent["receipt"], replay["receipt"]);
+    assert_wake(&room, "receiver");
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_or_unavailable_queue_leaves_the_receipt_for_a_normal_prompt() {
+    for behavior in [None, Some("exit 42"), Some("exec sleep 60")] {
+        let room = Room::new();
+        if let Some(behavior) = behavior {
+            stub_queue(&room, behavior);
+        }
+        silent(&room.hook("codex", "stop", &fixture("stop", "receiver")));
+        let mut command = room.send_command("notice", "Retained after queue failure.");
+        if behavior.is_none() {
+            command.env("PATH", room.0.bin());
+        }
+        let send = SpawnedChild::spawn(&mut command).wait_within(Duration::from_secs(8));
+        assert!(send.status.success(), "{send:?}");
+        let sent: Value = serde_json::from_slice(&send.stdout).unwrap();
+        let history = room.mail("sender", &["sent", "--json"]);
+        assert_eq!(history["messages"][0]["receipt"], sent["receipt"]);
+        assert_eq!(history["messages"][0]["state"], "stored");
+        if behavior.is_some() {
+            assert_wake(&room, "receiver");
+        }
+        let input = fixture("user-prompt", "receiver");
+        let delivery = room.hook("codex", "user-prompt", &input);
+        assert_eq!(
+            rendered("codex", "user-prompt", &delivery)
+                .matches("Retained after queue failure.")
+                .count(),
+            1
+        );
+        silent(&room.hook("codex", "user-prompt", &input));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn wake_requires_the_current_room_binding_and_a_top_level_codex_hook() {
+    let room = Room::new();
+    stub_queue(&room, "exit 0");
+    let old_stop = fixture("stop", "receiver");
+    silent(&room.hook("codex", "stop", &old_stop));
+    room.mail("receiver", &["join", "captain", "--room", "second-room"]);
+    room.send("old-room", "No wake from a previous room.");
+    assert_no_wake(&room);
+
+    let out = room
+        .command()
+        .args(["mail", "join", "headless", "--room", "trial"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    room.mail(
+        "sender",
+        &[
+            "send",
+            "headless",
+            "--id",
+            "unbound",
+            "--body",
+            "Headless mail.",
+        ],
+    );
+    assert_no_wake(&room);
+
+    room.mail("replacement", &["join", "captain", "--room", "trial"]);
+    room.send("unknown", "New binding has no observed provider.");
+    assert_no_wake(&room);
+    let mut subagent = fixture("stop", "replacement");
+    subagent["agent_id"] = json!("child");
+    silent(&room.hook("codex", "stop", &subagent));
+    room.send("child", "A subagent cannot mark its parent idle.");
+    assert_no_wake(&room);
+
+    let stop = fixture("stop", "replacement");
+    let out = room.hook("claude", "stop", &stop);
+    assert_eq!(out.status.code(), Some(2));
+    silent(&room.hook("claude", "stop", &stop));
+    room.send("claude", "Claude uses its own hook.");
+    assert_no_wake(&room);
+
+    let out = room.hook("codex", "stop", &stop);
+    assert!(rendered("codex", "stop", &out).contains("Claude uses its own hook."));
+    silent(&room.hook("codex", "stop", &stop));
+    room.send("replacement", "Wake the replacement only.");
+    assert_wake(&room, "replacement");
+}
+
+#[cfg(unix)]
+#[test]
+fn watch_reader_persists_mail_before_queueing_and_deduplicates_the_handover() {
+    let room = Room::new();
+    stub_queue(&room, "exit 0");
+    let stop = fixture("stop", "receiver");
+    silent(&room.hook("codex", "stop", &stop));
+    let watch = |args: &[&str]| {
+        let mut command = room.command();
+        command
+            .env("CODEX_THREAD_ID", "sender")
+            .arg("watch")
+            .args(args);
+        command
+    };
+    let add = [
+        "add",
+        "ci",
+        "--to",
+        "captain",
+        "--",
+        "printf 'build\\tWatch payload.\\n'",
+    ];
+    let out = watch(&add).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let mut reader = SpawnedChild::spawn(&mut watch(&["run"]));
+    reader.until(Duration::from_secs(8), || {
+        std::fs::read_to_string(room.0.bin().join("wake"))
+            .ok()
+            .filter(|args| args.lines().last() == Some(WAKE_LINE))
+    });
+    let history = assert_wake(&room, "receiver");
+    assert_eq!(history["total"], 1);
+    assert_eq!(history["messages"][0]["state"], "stored");
+    let input = fixture("user-prompt", "receiver");
+    let out = room.hook("codex", "user-prompt", &input);
+    assert_eq!(
+        rendered("codex", "user-prompt", &out)
+            .matches("Watch payload.")
+            .count(),
+        1
+    );
+    silent(&room.hook("codex", "user-prompt", &input));
+    silent(&room.hook("codex", "stop", &stop));
+
+    let out = watch(&add).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    reader.until(Duration::from_secs(8), || {
+        let out = watch(&["list", "--json"]).output().unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let status: Value = serde_json::from_slice(&out.stdout).unwrap();
+        status["watches"][0]["last_read"].is_string().then_some(())
+    });
+    let out = watch(&["stop"]).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert!(reader.wait_within(Duration::from_secs(5)).status.success());
+    assert_eq!(room.mail("sender", &["sent", "--json"])["total"], 1);
+    assert_wake(&room, "receiver");
 }
 
 #[test]

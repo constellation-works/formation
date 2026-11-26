@@ -12,4 +12,4 @@ Reads the host's JSON from stdin (maximum 1 MiB). A Claude Stop delivery exits 2
 
 Examples:
   formation hook --provider claude --event user-prompt
-  formation hook --provider codex --event stop --hold 30
+  formation hook --provider codex --event stop

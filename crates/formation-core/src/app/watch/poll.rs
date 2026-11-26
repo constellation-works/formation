@@ -196,14 +196,14 @@ pub(super) fn send_changes(
     recipient: &str,
     verdicts: &[(&str, ProbeVerdict)],
     now: i64,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     let (new_items, new_failures) = collect_changes(tx, recipient, verdicts, now)?;
     let mut entries = Vec::with_capacity(new_items.len() + new_failures.len());
     entries.extend(new_items.into_iter().map(MailEntry::Item));
     entries.extend(new_failures.into_iter().map(MailEntry::Failure));
 
     if entries.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
 
     let mut next_seq = tx.messages().next_receipt()?;
@@ -236,7 +236,7 @@ pub(super) fn send_changes(
         }
     }
 
-    Ok(())
+    Ok(true)
 }
 
 fn collect_changes(

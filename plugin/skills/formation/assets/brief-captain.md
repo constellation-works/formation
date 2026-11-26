@@ -13,9 +13,9 @@ Your questions, blockers and results go to the chief first. Handoff from the las
 in this workspace: {handoff_summary}. Open items: {open_items}. The chief read only
 attention counts; read the items yourself.
 
-If this is a Codex seat, Daniel’s typed input can wait up to 30 minutes while the Stop
-hook holds the turn. He can stop the held turn before typing, or use Formation mail
-during the hold.
+If this is a Codex seat, Daniel can type directly in this chat. Formation can queue a
+fixed wake line for an idle seat. Treat that line as Formation input and read the
+envelope delivered by the hook under the normal approval rules.
 
 ## prompt
 

@@ -1,6 +1,6 @@
 //! Seat bindings and last-seen timestamps.
 
-use crate::contract::{Mailbox, SessionId};
+use crate::contract::{HookProvider, Mailbox, SessionId};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension, params};
@@ -9,6 +9,7 @@ use cw_sqlite::rusqlite::{Connection, OptionalExtension, params};
 pub struct SeatsRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) has_session_column: bool,
+    pub(crate) has_hook_state: bool,
 }
 
 impl SeatsRead<'_> {
@@ -36,6 +37,24 @@ impl SeatsRead<'_> {
                 |row| row.get(0),
             )
             .optional()
+            .map_err(error::sql)
+    }
+
+    /// Current idle Codex binding when no wake has been requested for this idle period.
+    pub fn idle_codex(&self, name: &str) -> Result<Option<SessionId>, Error> {
+        if !self.has_hook_state {
+            return Ok(None);
+        }
+        self.conn
+            .query_row(
+                "SELECT session_id FROM seats
+                 WHERE name = ?1 AND session_id IS NOT NULL
+                   AND hook_provider = 'codex' AND hook_busy = 0 AND wake_requested = 0",
+                [name],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map(|session| session.and_then(|id| SessionId::try_new(id).ok()))
             .map_err(error::sql)
     }
 
@@ -73,8 +92,45 @@ impl Seats<'_> {
         SeatsRead {
             conn: self.conn,
             has_session_column: true,
+            has_hook_state: true,
         }
         .by_session(session)
+    }
+
+    /// Record a lifecycle event only for the session that still holds a seat.
+    pub fn mark_hook(
+        &self,
+        session: &SessionId,
+        provider: HookProvider,
+        busy: bool,
+    ) -> Result<bool, Error> {
+        let provider = match provider {
+            HookProvider::Claude => "claude",
+            HookProvider::Codex => "codex",
+        };
+        self.conn
+            .execute(
+                "UPDATE seats SET hook_provider = ?2, hook_busy = ?3,
+                     wake_requested = CASE WHEN hook_provider = ?2 AND hook_busy = 0 AND ?3 = 0
+                                           THEN wake_requested ELSE 0 END
+                 WHERE session_id = ?1",
+                params![session.as_str(), provider, busy],
+            )
+            .map(|affected| affected == 1)
+            .map_err(error::sql)
+    }
+
+    /// Reserve one wake if the observed binding is still current and idle.
+    pub fn claim_codex_wake(&self, name: &str, session: &SessionId) -> Result<bool, Error> {
+        self.conn
+            .execute(
+                "UPDATE seats SET wake_requested = 1
+                 WHERE name = ?1 AND session_id = ?2
+                   AND hook_provider = 'codex' AND hook_busy = 0 AND wake_requested = 0",
+                params![name, session.as_str()],
+            )
+            .map(|affected| affected == 1)
+            .map_err(error::sql)
     }
 
     /// Bind or rebind a seat to an optional session, returning any replaced session id.
@@ -96,7 +152,9 @@ impl Seats<'_> {
         if let Some(session_value) = session_str {
             self.conn
                 .execute(
-                    "UPDATE seats SET session_id = NULL WHERE session_id = ?1 AND name != ?2",
+                    "UPDATE seats SET session_id = NULL, hook_provider = NULL,
+                                      hook_busy = NULL, wake_requested = 0
+                     WHERE session_id = ?1 AND name != ?2",
                     params![session_value, name],
                 )
                 .map_err(error::sql)?;
@@ -105,7 +163,9 @@ impl Seats<'_> {
         self.conn
             .execute(
                 "INSERT INTO seats (name, session_id, seen) VALUES (?1, ?2, 0)
-                 ON CONFLICT(name) DO UPDATE SET session_id = excluded.session_id",
+                 ON CONFLICT(name) DO UPDATE SET session_id = excluded.session_id,
+                     hook_provider = NULL, hook_busy = NULL, wake_requested = 0
+                 WHERE seats.session_id IS NOT excluded.session_id",
                 params![name, session_str],
             )
             .map_err(error::sql)?;

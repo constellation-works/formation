@@ -1,8 +1,17 @@
 //! Exercise the shipped unversioned SQLite format at the public store boundary.
 
-use formation_store::Store;
-use formation_store::contract::NewWatch;
+use cw_sqlite::rusqlite::Connection;
+use formation_store::contract::{HookProvider, NewWatch};
+use formation_store::{SessionId, Store};
 use std::os::unix::fs::PermissionsExt;
+
+fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    connection.execute_batch(
+        "ALTER TABLE seats DROP COLUMN wake_requested;
+         ALTER TABLE seats DROP COLUMN hook_busy;
+         ALTER TABLE seats DROP COLUMN hook_provider;",
+    )
+}
 
 #[test]
 fn upgrade_retains_seats_and_pending_receipts() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,6 +60,7 @@ fn upgrade_retains_seats_and_pending_receipts() -> Result<(), Box<dyn std::error
         (17, "chief", "first", "retained")
     );
     assert_eq!(pending[0].sent, None);
+    assert!(store.read()?.seats().idle_codex("captain")?.is_none());
     Ok(())
 }
 
@@ -93,6 +103,7 @@ fn upgrade_to_the_watch_set_retains_mail_and_handovers() -> Result<(), Box<dyn s
     // Rewind the room to the schema before the watch set, as an earlier build left it.
     let path = root.path().join("inbox.sqlite3");
     let connection = cw_sqlite::rusqlite::Connection::open(&path)?;
+    drop_hook_state(&connection)?;
     connection.execute_batch(
         "DROP TABLE watch_reader; DROP TABLE watch_participant;
          DROP TABLE watch_set; PRAGMA user_version = 7;",
@@ -140,6 +151,7 @@ fn upgrade_to_the_reader_retains_existing_watch_rows() -> Result<(), Box<dyn std
     store.write(|tx| tx.watch().put(&watch))?;
 
     let connection = cw_sqlite::rusqlite::Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_hook_state(&connection)?;
     connection.execute_batch(
         "DROP TABLE watch_reader; DROP TABLE watch_participant;
          ALTER TABLE watch_set DROP COLUMN revision; PRAGMA user_version = 8;",
@@ -163,5 +175,40 @@ fn upgrade_to_the_reader_retains_existing_watch_rows() -> Result<(), Box<dyn std
     let snapshot = store.read()?;
     assert_eq!(snapshot.watch().list()?[0].last_read, Some(101));
     assert!(snapshot.watch().readers(101)?.reader.is_some());
+    Ok(())
+}
+
+#[test]
+fn upgrade_keeps_binding_without_granting_a_wake() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("receiver")?;
+    let receipt = store.write(|tx| {
+        tx.seats().bind("captain", Some(&session))?;
+        tx.seats().bind("chief", None)?;
+        tx.messages()
+            .insert("chief", "captain", "first", "retained", 100)
+    })?;
+    let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_hook_state(&connection)?;
+    connection.execute_batch("PRAGMA user_version = 9;")?;
+    drop(connection);
+
+    let snapshot = store.read()?;
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("captain")
+    );
+    assert!(snapshot.seats().idle_codex("captain")?.is_none());
+    drop(snapshot);
+
+    assert!(store.write(|tx| tx.seats().touch("captain", 102))?);
+    let snapshot = store.read()?;
+    assert!(snapshot.seats().idle_codex("captain")?.is_none());
+    assert_eq!(snapshot.messages().unread("captain")?[0].receipt, receipt);
+    drop(snapshot);
+
+    assert!(store.write(|tx| tx.seats().mark_hook(&session, HookProvider::Codex, false))?);
+    assert_eq!(store.read()?.seats().idle_codex("captain")?, Some(session));
     Ok(())
 }

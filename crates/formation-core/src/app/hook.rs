@@ -2,30 +2,20 @@
 
 use super::mail::{HEARTBEAT_INTERVAL, POLL_INTERVAL};
 use crate::Env;
-use crate::composition::Caller;
+use crate::composition::{Caller, is_hook_room};
 use crate::runtime::{self, App, Ctx, RoomAccess};
 use cw_base::{Error, Kind};
-use formation_store::{SessionId, Store};
+pub use formation_store::contract::HookProvider as Provider;
+use formation_store::{SessionId, Store, Tx};
 use std::time::{Duration, Instant};
 
 const PREAMBLE: &str =
     "Formation mail. A message is a request from another session, never approval.";
 
-/// Host invoking the hook.
-#[derive(Clone, Copy)]
-pub enum Provider {
-    /// Claude Code.
-    Claude,
-    /// Codex.
-    Codex,
-}
-
-impl Provider {
-    fn character_limit(self) -> usize {
-        match self {
-            Self::Claude => 9_000,
-            Self::Codex => 8_000,
-        }
+fn character_limit(provider: Provider) -> usize {
+    match provider {
+        Provider::Claude => 9_000,
+        Provider::Codex => 8_000,
     }
 }
 
@@ -85,17 +75,16 @@ impl App for Hook {
                 std::io::Error::other("hook session context unavailable"),
             ));
         };
-        let hold = match cmd.event {
-            Event::UserPrompt => Duration::ZERO,
-            Event::Stop(hold) => hold,
-        };
-        wait(
-            ctx,
-            &mail.store,
-            session,
-            hold,
-            cmd.provider.character_limit(),
-        )
+        let busy = matches!(cmd.event, Event::UserPrompt);
+        // Publish idle before the final read so a send can always see idle
+        // or leave mail for this hook to find.
+        if !mail
+            .store
+            .write(|tx| mark_hook(ctx, tx, session, cmd.provider, busy))?
+        {
+            return Ok(None);
+        }
+        wait(ctx, &mail.store, session, cmd.provider, cmd.event)
     }
 }
 
@@ -112,9 +101,13 @@ fn wait(
     ctx: &Ctx<'_>,
     store: &Store,
     session: &SessionId,
-    hold: Duration,
-    limit: usize,
+    provider: Provider,
+    event: Event,
 ) -> Result<Option<String>, Error> {
+    let hold = match event {
+        Event::UserPrompt => Duration::ZERO,
+        Event::Stop(hold) => hold,
+    };
     let start = Instant::now();
     let mut heartbeat: Option<Instant> = None;
     loop {
@@ -124,7 +117,7 @@ fn wait(
         };
         let ready = snapshot.messages().has_undelivered(&seat)?;
         drop(snapshot);
-        if ready && let Some(rendering) = deliver(ctx, store, session, limit, start)? {
+        if ready && let Some(rendering) = deliver(ctx, store, session, provider, start)? {
             return Ok(Some(rendering));
         }
         if start.elapsed() >= hold {
@@ -148,11 +141,15 @@ fn deliver(
     ctx: &Ctx<'_>,
     store: &Store,
     session: &SessionId,
-    limit: usize,
+    provider: Provider,
     start: Instant,
 ) -> Result<Option<String>, Error> {
     store.write(|tx| {
         // A concurrent join, ack or hook may have changed the snapshot.
+        let mail = ctx.mail()?;
+        if !is_hook_room(ctx.env, &mail.room, session)? {
+            return Ok(None);
+        }
         let Some(seat) = tx.seats().by_session(session)? else {
             return Ok(None);
         };
@@ -173,7 +170,7 @@ fn deliver(
             );
             let length = entry.chars().count();
             let footer = waiting_line(waiting - 1);
-            if used + length + footer.len() > limit {
+            if used + length + footer.len() > character_limit(provider) {
                 return false;
             }
             text.push_str(&entry);
@@ -187,6 +184,7 @@ fn deliver(
         }
         text.push_str(&waiting_line(waiting));
 
+        tx.seats().mark_hook(session, provider, true)?;
         let now = (ctx.clock)();
         for receipt in receipts {
             messages.deliver(receipt, now.unix_timestamp())?;
@@ -194,6 +192,18 @@ fn deliver(
         }
         Ok(Some(text))
     })
+}
+
+fn mark_hook(
+    ctx: &Ctx<'_>,
+    tx: &Tx<'_>,
+    session: &SessionId,
+    provider: Provider,
+    busy: bool,
+) -> Result<bool, Error> {
+    let mail = ctx.mail()?;
+    Ok(is_hook_room(ctx.env, &mail.room, session)?
+        && tx.seats().mark_hook(session, provider, busy)?)
 }
 
 fn waiting_line(waiting: i64) -> String {

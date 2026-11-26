@@ -105,8 +105,12 @@ impl ProbeRunner for ShellProbeRunner {
     }
 
     fn stopped(&self) -> bool {
-        STOP_REQUESTED.load(Ordering::SeqCst)
+        stop_requested()
     }
+}
+
+pub(super) fn stop_requested() -> bool {
+    STOP_REQUESTED.load(Ordering::SeqCst)
 }
 
 struct ChildGuard {
@@ -256,19 +260,26 @@ fn run_probe(
     limits: ProbeLimits,
     cancelled: &dyn Fn() -> bool,
 ) -> ProbeOutput {
-    if cancelled() {
-        return ProbeOutput::Cancelled;
-    }
     let mut process = ProcessCommand::new("sh");
-    process
-        .arg("-c")
-        .arg(command)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    process.arg("-c").arg(command);
     if let Some(cwd) = cwd {
         process.current_dir(cwd);
     }
+    run_process(process, limits, cancelled)
+}
+
+pub(super) fn run_process(
+    mut process: ProcessCommand,
+    limits: ProbeLimits,
+    cancelled: &dyn Fn() -> bool,
+) -> ProbeOutput {
+    if cancelled() {
+        return ProbeOutput::Cancelled;
+    }
+    process
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     #[cfg(unix)]
     {
