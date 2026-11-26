@@ -11,6 +11,7 @@ pub struct WatchRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) has_set: bool,
     pub(crate) has_reader: bool,
+    pub(crate) has_notice: bool,
 }
 
 impl WatchRead<'_> {
@@ -27,6 +28,15 @@ impl WatchRead<'_> {
     pub fn holds_lease(&self, id: i64, now: i64) -> Result<bool, Error> {
         if self.has_reader {
             super::watch_reader::holds_lease(self.conn, id, now)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Whether an unclaimed stopped-reader notice is waiting for `seat` at `now`.
+    pub fn has_stopped_notice(&self, seat: &str, now: i64) -> Result<bool, Error> {
+        if self.has_set && self.has_reader && self.has_notice {
+            super::watch_reader::has_stopped_notice(self.conn, seat, now)
         } else {
             Ok(false)
         }

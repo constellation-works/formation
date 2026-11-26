@@ -184,6 +184,25 @@ pub(super) fn holds_lease(conn: &Connection, id: i64, now: i64) -> Result<bool, 
     .map_err(error::sql)
 }
 
+pub(super) fn has_stopped_notice(conn: &Connection, seat: &str, now: i64) -> Result<bool, Error> {
+    conn.query_row(
+        "SELECT EXISTS (
+            SELECT 1
+              FROM watch_set w CROSS JOIN watch_reader r
+             WHERE w.state = 'on' AND r.stopped_at IS NULL
+               AND (w.recipient = ?1 OR w.added_by = ?1)
+               AND NOT EXISTS (SELECT 1 FROM watch_notice WHERE seat = ?1)
+               AND NOT EXISTS (
+                   SELECT 1 FROM watch_participant p
+                    WHERE p.id = r.reader_id AND p.expires_at > ?2
+               )
+         )",
+        params![seat, now],
+        |row| row.get(0),
+    )
+    .map_err(error::sql)
+}
+
 pub(super) fn readers(conn: &Connection, now: i64) -> Result<WatchLeaseStatus, Error> {
     let (reader_id, stopped_at, released_at) = conn
         .query_row(

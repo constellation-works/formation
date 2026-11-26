@@ -7,7 +7,8 @@ use std::os::unix::fs::PermissionsExt;
 
 fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     connection.execute_batch(
-        "ALTER TABLE watch_handover DROP COLUMN absent_reads;
+        "DROP TABLE hook_waiter;
+         ALTER TABLE watch_handover DROP COLUMN absent_reads;
          DROP TABLE watch_notice;
          ALTER TABLE messages DROP COLUMN watch_name;
          ALTER TABLE messages DROP COLUMN watch_added_by;
@@ -238,7 +239,8 @@ fn upgrade_to_watch_absence_retains_handovers_with_zero_missed_reads()
 
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
     connection.execute_batch(
-        "ALTER TABLE watch_handover DROP COLUMN absent_reads;
+        "DROP TABLE hook_waiter;
+         ALTER TABLE watch_handover DROP COLUMN absent_reads;
          PRAGMA user_version = 11;",
     )?;
     let snapshot = store.read()?;
@@ -258,5 +260,61 @@ fn upgrade_to_watch_absence_retains_handovers_with_zero_missed_reads()
             absent_reads: 0,
         }]
     );
+    Ok(())
+}
+
+#[test]
+fn upgrade_to_hook_waiter_retains_mail_and_seat_links() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("claude-receiver")?;
+    let receipt = store.write(|tx| {
+        tx.seats().bind("captain", Some(&session))?;
+        tx.seats().bind("chief", None)?;
+        tx.seats()
+            .mark_hook(&session, HookProvider::Claude, false)?;
+        tx.messages()
+            .insert("chief", "captain", "first", "retained", 100)
+    })?;
+
+    let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    connection.execute_batch(
+        "DROP TABLE hook_waiter;
+         PRAGMA user_version = 12;",
+    )?;
+    let snapshot = store.read()?;
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("captain")
+    );
+    assert!(
+        !snapshot
+            .hook_waiter()
+            .holds_lease("captain", 1, &session, 100)?
+    );
+    assert_eq!(snapshot.messages().unread("captain")?[0].receipt, receipt);
+    assert_eq!(
+        connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?,
+        12
+    );
+    drop(snapshot);
+    drop(connection);
+
+    let token = store.write(|tx| tx.hook_waiter().claim("captain", &session, 42, 101, 146))?;
+    assert_eq!(token, Some(1));
+    let snapshot = store.read()?;
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("captain")
+    );
+    assert!(
+        snapshot
+            .hook_waiter()
+            .holds_lease("captain", 1, &session, 145)?
+    );
+    let unread = snapshot.messages().unread("captain")?;
+    assert_eq!(unread.len(), 1);
+    assert_eq!(unread[0].receipt, receipt);
+    assert_eq!(unread[0].body, "retained");
     Ok(())
 }

@@ -25,3 +25,19 @@ pub(super) const HOOK_STATE: cw_sqlite::Step = cw_sqlite::Step::sql(
      ALTER TABLE seats ADD COLUMN wake_requested INTEGER NOT NULL DEFAULT 0
          CHECK(wake_requested IN (0, 1));",
 );
+
+pub(super) const HOOK_WAITER: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "CREATE TABLE hook_waiter(
+        seat TEXT PRIMARY KEY,
+        token INTEGER NOT NULL CHECK(token >= 1),
+        session_id TEXT,
+        pid INTEGER,
+        heartbeat INTEGER,
+        expires_at INTEGER,
+        CHECK(
+            (session_id IS NULL AND pid IS NULL AND heartbeat IS NULL AND expires_at IS NULL)
+            OR (session_id IS NOT NULL AND pid IS NOT NULL
+                AND heartbeat IS NOT NULL AND expires_at IS NOT NULL)
+        )
+    ) STRICT;",
+);

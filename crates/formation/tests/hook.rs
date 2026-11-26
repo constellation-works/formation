@@ -808,3 +808,502 @@ fn watch_metadata_and_ordinary_body_are_distinct_for_both_hooks() {
         }
     }
 }
+
+#[cfg(unix)]
+struct HookProcess(Option<Child>);
+
+#[cfg(unix)]
+impl HookProcess {
+    fn spawn_command(cmd: &mut Command, input: &Value) -> Self {
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        serde_json::to_writer(child.stdin.take().unwrap(), input).unwrap();
+        Self(Some(child))
+    }
+
+    fn spawn(room: &Room, provider: &str, event: &str, hold: u64, input: &Value) -> Self {
+        let mut cmd = room.command();
+        cmd.env("CODEX_THREAD_ID", "sender")
+            .args(["hook", "--provider", provider, "--event", event])
+            .args(["--hold", &hold.to_string()]);
+        Self::spawn_command(&mut cmd, input)
+    }
+
+    fn pid(&self) -> u32 {
+        self.0.as_ref().unwrap().id()
+    }
+
+    fn is_alive(&mut self) -> bool {
+        self.0.as_mut().unwrap().try_wait().unwrap().is_none()
+    }
+
+    fn signal(&self, sig: libc::c_int) {
+        let pid = libc::pid_t::try_from(self.pid()).unwrap();
+        // SAFETY: The fixture spawned this child and has not reaped it yet.
+        assert_eq!(unsafe { libc::kill(pid, sig) }, 0);
+    }
+
+    fn kill(&mut self) {
+        self.0.as_mut().unwrap().kill().unwrap();
+    }
+
+    fn until<T>(&mut self, timeout: Duration, mut condition: impl FnMut() -> Option<T>) -> T {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let status = self.0.as_mut().unwrap().try_wait().unwrap();
+            assert!(status.is_none(), "hook exited while waiting: {status:?}");
+            if let Some(value) = condition() {
+                return value;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "condition not met within {timeout:?}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn wait_within(mut self, timeout: Duration) -> Output {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if self.0.as_mut().unwrap().try_wait().unwrap().is_some() {
+                return self.0.take().unwrap().wait_with_output().unwrap();
+            }
+            assert!(
+                Instant::now() < deadline,
+                "hook did not exit within {timeout:?}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for HookProcess {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            if matches!(child.try_wait(), Ok(None)) {
+                let _ = child.kill();
+            }
+            let _ = child.wait();
+        }
+    }
+}
+
+#[cfg(unix)]
+fn run_room_sql(room: &Room, sql: &str) {
+    let db = room.0.path().join("rooms/trial/inbox.sqlite3");
+    let out = room
+        .0
+        .command("python3")
+        .args([
+            "-c",
+            "import sqlite3 as s,sys; s.connect(sys.argv[1]).executescript(sys.argv[2])",
+        ])
+        .arg(db)
+        .arg(sql)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+}
+
+#[cfg(unix)]
+fn waiter_row(room: &Room, seat: &str) -> Option<(i64, Option<String>, Option<u32>)> {
+    let db = room.0.path().join("rooms/trial/inbox.sqlite3");
+    let query = "SELECT token, session_id, pid FROM hook_waiter WHERE seat = ?";
+    let script = "import json, sqlite3, sys; \
+                  conn = sqlite3.connect(sys.argv[1]); \
+                  row = conn.execute(sys.argv[2], (sys.argv[3],)).fetchone(); \
+                  print(json.dumps(list(row) if row is not None else None))";
+    let out = room
+        .0
+        .command("python3")
+        .args(["-c", script])
+        .arg(db)
+        .arg(query)
+        .arg(seat)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let row = value.as_array()?;
+    Some((
+        row[0].as_i64().unwrap(),
+        row[1].as_str().map(str::to_owned),
+        row[2].as_u64().map(|pid| u32::try_from(pid).unwrap()),
+    ))
+}
+
+#[cfg(unix)]
+fn spawn_shipped_claude_hook(room: &Room, event: &str, input: &Value) -> HookProcess {
+    let config: Value =
+        serde_json::from_str(include_str!("../../../plugin/hooks/claude.json")).unwrap();
+    let command = config["hooks"][event][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    let mut cmd = room.0.command("sh");
+    cmd.env("FORMATION_HOME", room.0.path())
+        .args(["-c", command]);
+    HookProcess::spawn_command(&mut cmd, input)
+}
+
+#[cfg(unix)]
+#[test]
+fn shipped_claude_hooks_use_3300_second_rewake_hold_and_single_waiter() {
+    let config: Value =
+        serde_json::from_str(include_str!("../../../plugin/hooks/claude.json")).unwrap();
+    let prompt_hook = &config["hooks"]["UserPromptSubmit"][0]["hooks"][0];
+    assert_eq!(prompt_hook["timeout"], 60);
+    assert!(prompt_hook.get("asyncRewake").is_none());
+    let prompt_cmd = prompt_hook["command"].as_str().unwrap();
+    assert!(prompt_cmd.contains("formation hook --provider claude --event user-prompt"));
+    assert!(!prompt_cmd.contains("--hold"));
+
+    let stop_hook = &config["hooks"]["Stop"][0]["hooks"][0];
+    assert_eq!(stop_hook["asyncRewake"], true);
+    assert_eq!(stop_hook["timeout"], 3600);
+    let stop_cmd = stop_hook["command"].as_str().unwrap();
+    assert!(stop_cmd.contains("formation hook --provider claude --event stop --hold 3300"));
+
+    let room = Room::new();
+    link_formation(&room);
+    let stop = fixture("stop", "receiver");
+    let mut first = spawn_shipped_claude_hook(&room, "Stop", &stop);
+    let first_pid = first.pid();
+    first.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((1, Some("receiver".into()), Some(first_pid))))
+            .then_some(())
+    });
+
+    let duplicate = spawn_shipped_claude_hook(&room, "Stop", &stop);
+    silent(&duplicate.wait_within(Duration::from_secs(5)));
+    assert!(first.is_alive());
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((1, Some("receiver".into()), Some(first_pid)))
+    );
+
+    room.send("shipped-stop", "Wake via shipped Claude Stop.");
+    let out = first.wait_within(Duration::from_secs(5));
+    let text = rendered("claude", "stop", &out);
+    assert_eq!(text.matches("Wake via shipped Claude Stop.").count(), 1);
+    assert_eq!(waiter_row(&room, "captain"), Some((1, None, None)));
+
+    room.send("shipped-prompt", "Immediate prompt delivery.");
+    let prompt_out = spawn_shipped_claude_hook(
+        &room,
+        "UserPromptSubmit",
+        &fixture("user-prompt", "receiver"),
+    )
+    .wait_within(Duration::from_secs(5));
+    let prompt_text = rendered("claude", "user-prompt", &prompt_out);
+    assert_eq!(prompt_text.matches("Immediate prompt delivery.").count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn claude_stop_keeps_one_live_waiter_across_repeated_turn_ends_and_independent_seats() {
+    let room = Room::new();
+    room.mail("second", &["join", "sergeant", "--room", "trial"]);
+    let captain_stop = fixture("stop", "receiver");
+    let sergeant_stop = fixture("stop", "second");
+    let captain_prompt = fixture("user-prompt", "receiver");
+
+    let mut captain_waiter = HookProcess::spawn(&room, "claude", "stop", 30, &captain_stop);
+    let captain_pid = captain_waiter.pid();
+    captain_waiter.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((1, Some("receiver".into()), Some(captain_pid))))
+            .then_some(())
+    });
+
+    // Repeated turn ends and concurrent Stops exit immediately without replacing the live waiter.
+    silent(&room.hook("claude", "user-prompt", &captain_prompt));
+    let turn_two = HookProcess::spawn(&room, "claude", "stop", 30, &captain_stop);
+    silent(&turn_two.wait_within(Duration::from_secs(5)));
+    let concurrent_a = HookProcess::spawn(&room, "claude", "stop", 30, &captain_stop);
+    let concurrent_b = HookProcess::spawn(&room, "claude", "stop", 30, &captain_stop);
+    silent(&concurrent_a.wait_within(Duration::from_secs(5)));
+    silent(&concurrent_b.wait_within(Duration::from_secs(5)));
+    assert!(captain_waiter.is_alive());
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((1, Some("receiver".into()), Some(captain_pid)))
+    );
+
+    // An independent seat in the same room holds its own live waiter simultaneously.
+    let mut sergeant_waiter = HookProcess::spawn(&room, "claude", "stop", 30, &sergeant_stop);
+    let sergeant_pid = sergeant_waiter.pid();
+    sergeant_waiter.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "sergeant") == Some((1, Some("second".into()), Some(sergeant_pid))))
+            .then_some(())
+    });
+    assert!(captain_waiter.is_alive());
+
+    // UserPromptSubmit remains immediate and reads pending mail without displacing the Stop waiter.
+    captain_waiter.signal(libc::SIGSTOP);
+    room.send("prompt-read", "Prompt hook takes this first.");
+    let prompt_out = room.hook("claude", "user-prompt", &captain_prompt);
+    assert_eq!(
+        rendered("claude", "user-prompt", &prompt_out)
+            .matches("Prompt hook takes this first.")
+            .count(),
+        1
+    );
+
+    // A later Stop seeing a live lease does not consume waiting mail.
+    room.send("live-only", "Only the active waiter delivers this.");
+    let blocked_stop = HookProcess::spawn(&room, "claude", "stop", 30, &captain_stop);
+    silent(&blocked_stop.wait_within(Duration::from_secs(5)));
+    let history = room.mail("sender", &["sent", "--json"]);
+    assert_eq!(history["messages"][0]["id"], "live-only");
+    assert_eq!(history["messages"][0]["state"], "stored");
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((1, Some("receiver".into()), Some(captain_pid)))
+    );
+
+    captain_waiter.signal(libc::SIGCONT);
+    let captain_out = captain_waiter.wait_within(Duration::from_secs(5));
+    let captain_text = rendered("claude", "stop", &captain_out);
+    assert_eq!(
+        captain_text
+            .matches("Only the active waiter delivers this.")
+            .count(),
+        1
+    );
+    assert!(!captain_text.contains("Prompt hook takes this first."));
+    assert_eq!(waiter_row(&room, "captain"), Some((1, None, None)));
+
+    // Sergeant's waiter stayed live throughout and delivers sergeant's mail once.
+    assert!(sergeant_waiter.is_alive());
+    room.mail(
+        "sender",
+        &[
+            "send",
+            "sergeant",
+            "--id",
+            "sergeant-mail",
+            "--body",
+            "Independent seat wake.",
+        ],
+    );
+    let sergeant_out = sergeant_waiter.wait_within(Duration::from_secs(5));
+    let sergeant_text = rendered("claude", "stop", &sergeant_out);
+    assert_eq!(sergeant_text.matches("Independent seat wake.").count(), 1);
+    assert_eq!(waiter_row(&room, "sergeant"), Some((1, None, None)));
+}
+
+#[cfg(unix)]
+#[test]
+fn claude_stop_releases_lease_on_ordinary_outcomes_and_recovers_after_process_loss() {
+    let room = Room::new();
+    let stop = fixture("stop", "receiver");
+
+    // 1. Ordinary release on delivery.
+    let mut first = HookProcess::spawn(&room, "claude", "stop", 30, &stop);
+    let first_pid = first.pid();
+    first.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((1, Some("receiver".into()), Some(first_pid))))
+            .then_some(())
+    });
+    room.send("ordinary-1", "Delivered normally.");
+    assert!(
+        rendered("claude", "stop", &first.wait_within(Duration::from_secs(5)))
+            .contains("Delivered normally.")
+    );
+    assert_eq!(waiter_row(&room, "captain"), Some((1, None, None)));
+
+    // 2. Ordinary release on hold expiry.
+    let second = HookProcess::spawn(&room, "claude", "stop", 1, &stop);
+    silent(&second.wait_within(Duration::from_secs(5)));
+    assert_eq!(waiter_row(&room, "captain"), Some((2, None, None)));
+
+    // 3. Ordinary release on SIGTERM.
+    let mut third = HookProcess::spawn(&room, "claude", "stop", 30, &stop);
+    let third_pid = third.pid();
+    third.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((3, Some("receiver".into()), Some(third_pid))))
+            .then_some(())
+    });
+    third.signal(libc::SIGTERM);
+    silent(&third.wait_within(Duration::from_secs(5)));
+    assert_eq!(waiter_row(&room, "captain"), Some((3, None, None)));
+
+    // 4. Process loss (SIGKILL) leaves lease until bounded expiry, then a successor takes over.
+    let mut crashed = HookProcess::spawn(&room, "claude", "stop", 30, &stop);
+    let crashed_pid = crashed.pid();
+    crashed.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((4, Some("receiver".into()), Some(crashed_pid))))
+            .then_some(())
+    });
+    crashed.kill();
+    let crashed_out = crashed.wait_within(Duration::from_secs(5));
+    assert!(!crashed_out.status.success());
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((4, Some("receiver".into()), Some(crashed_pid)))
+    );
+
+    // Before expiry, a new Stop sees the unexpired lease and does not take over.
+    let before_expiry = HookProcess::spawn(&room, "claude", "stop", 30, &stop);
+    silent(&before_expiry.wait_within(Duration::from_secs(5)));
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((4, Some("receiver".into()), Some(crashed_pid)))
+    );
+
+    // Expire the abandoned lease deterministically and verify clean takeover.
+    run_room_sql(
+        &room,
+        "UPDATE hook_waiter SET expires_at = 1 WHERE seat = 'captain';",
+    );
+    let mut successor = HookProcess::spawn(&room, "claude", "stop", 30, &stop);
+    let successor_pid = successor.pid();
+    successor.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((5, Some("receiver".into()), Some(successor_pid))))
+            .then_some(())
+    });
+    room.send("after-crash", "Delivered by successor.");
+    let out = successor.wait_within(Duration::from_secs(5));
+    assert_eq!(
+        rendered("claude", "stop", &out)
+            .matches("Delivered by successor.")
+            .count(),
+        1
+    );
+    assert_eq!(waiter_row(&room, "captain"), Some((5, None, None)));
+}
+
+#[cfg(unix)]
+#[test]
+fn stale_claude_waiter_cannot_displace_successor_or_consume_mail_after_expiry_or_rebind() {
+    let room = Room::new();
+    let original_stop = fixture("stop", "receiver");
+
+    // Part A: stale waiter resumes after expiry and successor takeover.
+    let mut stale = HookProcess::spawn(&room, "claude", "stop", 30, &original_stop);
+    let stale_pid = stale.pid();
+    stale.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((1, Some("receiver".into()), Some(stale_pid))))
+            .then_some(())
+    });
+    stale.signal(libc::SIGSTOP);
+    run_room_sql(
+        &room,
+        "UPDATE hook_waiter SET expires_at = 1 WHERE seat = 'captain';",
+    );
+
+    let mut successor = HookProcess::spawn(&room, "claude", "stop", 30, &original_stop);
+    let successor_pid = successor.pid();
+    successor.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((2, Some("receiver".into()), Some(successor_pid))))
+            .then_some(())
+    });
+    successor.signal(libc::SIGSTOP);
+    room.send("takeover-mail", "Only the live successor may deliver.");
+
+    // Resumed stale waiter must exit silently without consuming mail or releasing token 2.
+    stale.signal(libc::SIGCONT);
+    silent(&stale.wait_within(Duration::from_secs(5)));
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((2, Some("receiver".into()), Some(successor_pid)))
+    );
+    assert_eq!(
+        room.mail("sender", &["sent", "--json"])["messages"][0]["state"],
+        "stored"
+    );
+
+    successor.signal(libc::SIGCONT);
+    let successor_out = successor.wait_within(Duration::from_secs(5));
+    assert_eq!(
+        rendered("claude", "stop", &successor_out)
+            .matches("Only the live successor may deliver.")
+            .count(),
+        1
+    );
+    assert_eq!(waiter_row(&room, "captain"), Some((2, None, None)));
+
+    // Part B: stale waiter resumes after seat rebinding to a replacement session.
+    let mut old_session_waiter = HookProcess::spawn(&room, "claude", "stop", 30, &original_stop);
+    let old_pid = old_session_waiter.pid();
+    old_session_waiter.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((3, Some("receiver".into()), Some(old_pid))))
+            .then_some(())
+    });
+    old_session_waiter.signal(libc::SIGSTOP);
+
+    room.mail("replacement", &["join", "captain", "--room", "trial"]);
+    let replacement_stop = fixture("stop", "replacement");
+    let mut new_session_waiter = HookProcess::spawn(&room, "claude", "stop", 30, &replacement_stop);
+    let new_pid = new_session_waiter.pid();
+    new_session_waiter.until(Duration::from_secs(5), || {
+        (waiter_row(&room, "captain") == Some((4, Some("replacement".into()), Some(new_pid))))
+            .then_some(())
+    });
+    new_session_waiter.signal(libc::SIGSTOP);
+    room.send("rebind-mail", "Only the rebound session may deliver.");
+
+    // Resumed old-session waiter must exit silently without consuming mail or displacing token 4.
+    old_session_waiter.signal(libc::SIGCONT);
+    silent(&old_session_waiter.wait_within(Duration::from_secs(5)));
+    assert_eq!(
+        waiter_row(&room, "captain"),
+        Some((4, Some("replacement".into()), Some(new_pid)))
+    );
+    assert_eq!(
+        room.mail("sender", &["sent", "--json"])["messages"][0]["state"],
+        "stored"
+    );
+
+    new_session_waiter.signal(libc::SIGCONT);
+    let rebound_out = new_session_waiter.wait_within(Duration::from_secs(5));
+    assert_eq!(
+        rendered("claude", "stop", &rebound_out)
+            .matches("Only the rebound session may deliver.")
+            .count(),
+        1
+    );
+    assert_eq!(waiter_row(&room, "captain"), Some((4, None, None)));
+}
+
+#[cfg(unix)]
+#[test]
+fn send_between_waiter_release_and_next_claim_remains_available() {
+    let room = Room::new();
+    let stop = fixture("stop", "receiver");
+
+    // Inject mail at the exact moment a waiter releases its lease on expiry.
+    run_room_sql(
+        &room,
+        "CREATE TRIGGER send_on_waiter_release AFTER UPDATE OF session_id ON hook_waiter
+         WHEN OLD.session_id IS NOT NULL AND NEW.session_id IS NULL
+              AND NEW.seat = 'captain' AND NOT EXISTS (SELECT 1 FROM messages)
+         BEGIN
+             INSERT INTO messages(sender, recipient, id, body, ack, sent)
+             VALUES('chief', 'captain', 'at-release', 'Arrived right at release.', 0, 100);
+         END;",
+    );
+
+    let expiring = HookProcess::spawn(&room, "claude", "stop", 1, &stop);
+    silent(&expiring.wait_within(Duration::from_secs(5)));
+    assert_eq!(waiter_row(&room, "captain"), Some((1, None, None)));
+    let history = room.mail("sender", &["sent", "--json"]);
+    assert_eq!(history["messages"][0]["id"], "at-release");
+    assert_eq!(history["messages"][0]["state"], "stored");
+
+    // The next positive-duration Claude Stop claims, delivers once, and releases immediately.
+    let next = HookProcess::spawn(&room, "claude", "stop", 5, &stop);
+    let out = next.wait_within(Duration::from_secs(5));
+    assert_eq!(
+        rendered("claude", "stop", &out)
+            .matches("Arrived right at release.")
+            .count(),
+        1
+    );
+    assert_eq!(waiter_row(&room, "captain"), Some((2, None, None)));
+}

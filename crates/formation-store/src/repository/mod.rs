@@ -2,6 +2,8 @@
 
 mod audit;
 
+mod hook_waiter;
+
 mod message;
 
 mod seat;
@@ -15,6 +17,7 @@ mod watch_reader;
 use crate::driver::sqlite;
 pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
+pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
 pub use seat::{Seats, SeatsRead};
 pub use watch::{Watch, WatchRead};
@@ -41,6 +44,15 @@ impl Snapshot {
             conn: &self.reader,
             has_set: sqlite::has_watch_set(self.reader.version()),
             has_reader: sqlite::has_watch_reader(self.reader.version()),
+            has_notice: sqlite::has_watch_mail(self.reader.version()),
+        }
+    }
+
+    /// Hook waiter leases visible at the snapshot.
+    pub fn hook_waiter(&self) -> HookWaiterRead<'_> {
+        HookWaiterRead {
+            conn: &self.reader,
+            has_table: sqlite::has_hook_waiter(self.reader.version()),
         }
     }
 
@@ -64,6 +76,11 @@ impl Tx<'_> {
     /// Seat records in this transaction.
     pub fn seats(&self) -> Seats<'_> {
         Seats { conn: self.conn }
+    }
+
+    /// Per-seat hook waiter lease records in this transaction.
+    pub fn hook_waiter(&self) -> HookWaiter<'_> {
+        HookWaiter { conn: self.conn }
     }
 
     /// Message records in this transaction.
