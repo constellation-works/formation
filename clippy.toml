@@ -1,2 +1,4 @@
 min-ident-chars-threshold = 1
 allowed-idents-below-min-chars = []
+# STD-02 R51: a function takes at most seven parameters, the receiver counted.
+too-many-arguments-threshold = 7
