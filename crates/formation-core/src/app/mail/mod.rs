@@ -112,31 +112,6 @@ pub(super) enum SeatRef<'a> {
 #[error("{0}")]
 struct Refusal(String);
 
-fn refused(code: &'static str, message: impl Into<String>) -> Error {
-    Error::new(Kind::Refused, code, Refusal(message.into()))
-}
-
-fn touch(tx: &Tx<'_>, caller: SeatRef<'_>, now: i64) -> Result<String, Error> {
-    match caller {
-        SeatRef::Name(name) => {
-            if tx.seats().touch(name, now)? {
-                Ok(name.to_owned())
-            } else {
-                Err(refused(
-                    "unknown_seat",
-                    "seat has not joined this room; run `formation mail join` first",
-                ))
-            }
-        }
-        SeatRef::Session(session) => tx.seats().touch_session(session, now)?.ok_or_else(|| {
-            refused(
-                "seat_required",
-                "seat required: pass --as <seat> or join this room from your session",
-            )
-        }),
-    }
-}
-
 struct Mail<'a>(std::marker::PhantomData<&'a ()>);
 
 impl<'a> App for Mail<'a> {
@@ -245,6 +220,31 @@ impl<'a> App for Mail<'a> {
 /// Run one mail operation and hand its typed outcome to the surface.
 pub fn exec<R>(env: &Env, cmd: Command<'_>, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
     runtime::exec::<Mail<'_>, R>(env, cmd, finish)
+}
+
+fn refused(code: &'static str, message: impl Into<String>) -> Error {
+    Error::new(Kind::Refused, code, Refusal(message.into()))
+}
+
+fn touch(tx: &Tx<'_>, caller: SeatRef<'_>, now: i64) -> Result<String, Error> {
+    match caller {
+        SeatRef::Name(name) => {
+            if tx.seats().touch(name, now)? {
+                Ok(name.to_owned())
+            } else {
+                Err(refused(
+                    "unknown_seat",
+                    "seat has not joined this room; run `formation mail join` first",
+                ))
+            }
+        }
+        SeatRef::Session(session) => tx.seats().touch_session(session, now)?.ok_or_else(|| {
+            refused(
+                "seat_required",
+                "seat required: pass --as <seat> or join this room from your session",
+            )
+        }),
+    }
 }
 
 #[cfg(test)]

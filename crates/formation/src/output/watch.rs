@@ -8,6 +8,20 @@ use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::process::ExitCode;
 
+const HEADER: [&str; 8] = [
+    "NAME",
+    "TO",
+    "EVERY (s)",
+    "STATE",
+    "LAST READ",
+    "RESULT",
+    "SENT",
+    "ADDED BY",
+];
+
+/// Columns that hold numbers are right-aligned.
+const NUMERIC: [usize; 2] = [2, 6];
+
 pub(crate) fn payload(out: WatchOutcome) -> Value {
     json!({
         "items": out.items
@@ -137,20 +151,6 @@ pub(crate) fn list(reader: &Reader, watches: &[Entry], json: bool) -> ExitCode {
         Err(error) => super::shared::failure(&error),
     }
 }
-
-const HEADER: [&str; 8] = [
-    "NAME",
-    "TO",
-    "EVERY (s)",
-    "STATE",
-    "LAST READ",
-    "RESULT",
-    "SENT",
-    "ADDED BY",
-];
-
-/// Columns that hold numbers are right-aligned.
-const NUMERIC: [usize; 2] = [2, 6];
 
 fn write_list(out: &mut impl Write, reader: &Reader, watches: &[Entry]) -> io::Result<()> {
     write_reader(out, reader)?;

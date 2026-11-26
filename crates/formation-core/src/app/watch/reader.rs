@@ -89,11 +89,6 @@ impl<'a> App for ReaderApp<'a> {
     }
 }
 
-/// Run the leased reader and hand its typed outcome to the CLI.
-pub fn exec<R>(env: &Env, cmd: Command<'_>, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
-    runtime::exec::<ReaderApp<'_>, R>(env, cmd, finish)
-}
-
 type WatchKey = (String, String);
 
 type Completed = (WatchEntry, Option<ProbeVerdict>);
@@ -277,4 +272,9 @@ impl<'a> Reader<'a> {
         }
         Ok(())
     }
+}
+
+/// Run the leased reader and hand its typed outcome to the CLI.
+pub fn exec<R>(env: &Env, cmd: Command<'_>, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
+    runtime::exec::<ReaderApp<'_>, R>(env, cmd, finish)
 }

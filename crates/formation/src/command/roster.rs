@@ -7,6 +7,8 @@ use formation_core::app::roster;
 use std::io::{self, Read};
 use std::process::ExitCode;
 
+const MAX_BYTES: u64 = 256 * 1024;
+
 #[derive(Args)]
 pub(crate) struct Roster {
     #[command(subcommand)]
@@ -23,8 +25,6 @@ enum RosterAction {
         json: bool,
     },
 }
-
-const MAX_BYTES: u64 = 256 * 1024;
 
 pub(crate) fn run(env: &Env, args: Roster) -> ExitCode {
     let RosterAction::Check { json } = args.action;
