@@ -9,14 +9,14 @@ pub(super) fn run(store: &Store, caller: SeatRef<'_>, now: i64) -> Result<Outcom
             .mailboxes()?
             .into_iter()
             .map(|mailbox| SeatStatus {
+                name: mailbox.name,
+                unread: mailbox.unread,
                 held: rule::held(mailbox.seen, now),
                 seen: if mailbox.seen > 0 {
                     rfc3339(mailbox.seen)
                 } else {
                     None
                 },
-                name: mailbox.name,
-                unread: mailbox.unread,
             })
             .collect();
         Ok(Outcome::Seats(seats))

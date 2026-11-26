@@ -18,8 +18,8 @@ impl<'a> AuditGuard<'a> {
     pub(super) fn new(store: &'a Store, command: &str, ctx: &Ctx<'_>) -> Self {
         Self {
             store,
-            start: Instant::now(),
             event: event(ctx, command, (ctx.clock)()),
+            start: Instant::now(),
         }
     }
 

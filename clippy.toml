@@ -13,3 +13,5 @@ module-item-order-groupings = [
     ["types", ["ty_alias", "enum", "struct", "union", "trait", "trait_alias", "impl"]],
     ["functions", ["fn", "global_asm"]],
 ]
+# STD-12 R23: struct literals list fields in declaration order (named or shorthand).
+check-inconsistent-struct-field-initializers = true

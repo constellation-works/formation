@@ -255,9 +255,9 @@ fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
         id: row.get(1)?,
         sender: row.get(2)?,
         body: row.get(3)?,
-        sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
-        delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
         watch_name: row.get(6)?,
         watch_added_by: row.get(7)?,
+        sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
+        delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
     })
 }
