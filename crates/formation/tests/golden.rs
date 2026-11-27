@@ -45,6 +45,7 @@ fn help_and_roster_output() {
         ("help/hook.txt", vec!["hook", "--help"]),
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
+        ("help/roster-apply.txt", vec!["roster", "apply", "--help"]),
         ("help/watch.txt", vec!["watch", "--help"]),
         ("help/watch-add.txt", vec!["watch", "add", "--help"]),
         ("help/watch-remove.txt", vec!["watch", "remove", "--help"]),
@@ -261,7 +262,7 @@ fn watch_reader_list_output() {
 fn invalid_drafts_fail_before_reporting_success() {
     let roster: serde_json::Value = serde_json::from_slice(EXAMPLE).unwrap();
     for (pointer, replacement, diagnostic) in [
-        ("/version", serde_json::json!(2), "version"),
+        ("/version", serde_json::json!(3), "version"),
         ("/seats/1/name", serde_json::json!("chief"), "unique"),
         ("/seats/2/workspace", serde_json::Value::Null, "workspace"),
         ("/routes/0/to", serde_json::json!("missing"), "unknown seat"),
@@ -289,4 +290,110 @@ fn duplicate_workspace_ownership_fails() {
     let result = run(&["roster", "check"], &serde_json::to_vec(&roster).unwrap());
     assert_eq!(result.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&result.stderr).contains("more than one captain"));
+}
+
+#[test]
+fn roster_versions_and_parent_errors() {
+    let mut roster: serde_json::Value = serde_json::from_slice(EXAMPLE).unwrap();
+    assert!(run(&["roster", "check"], EXAMPLE).status.success());
+    roster["version"] = 2.into();
+    roster["seats"][1]["role"] = "advisor".into();
+    roster["seats"][1]["reports_to"] = "chief".into();
+    let encode = |roster: &serde_json::Value| serde_json::to_vec(roster).unwrap();
+    assert!(run(&["roster", "check"], &encode(&roster)).status.success());
+    roster["seats"][1]["reports_to"] = "missing".into();
+    let result = run(&["roster", "check"], &encode(&roster));
+    assert!(String::from_utf8_lossy(&result.stderr).contains("unknown_parent"));
+    roster["seats"][1]["reports_to"] = "chief".into();
+    roster["seats"][0]["reports_to"] = roster["seats"][1]["name"].clone();
+    let result = run(&["roster", "check"], &encode(&roster));
+    assert!(String::from_utf8_lossy(&result.stderr).contains("roster_cycle"));
+}
+
+#[test]
+fn roster_apply_replaces_without_changing_joined_seats() {
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().join("room");
+    let room_arg = room.to_str().unwrap();
+    in_room(
+        &root,
+        root.path(),
+        &["mail", "join", "chief", "--room", room_arg],
+    );
+    let apply = |input: &[u8], json: bool| {
+        let mut command = root.command(env!("CARGO_BIN_EXE_formation"));
+        command.args(["roster", "apply", "--room", room_arg]);
+        if json {
+            command.arg("--json");
+        }
+        let mut child = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let refused = apply(EXAMPLE, false);
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("roster_version_required"));
+    let mut roster: serde_json::Value = serde_json::from_slice(EXAMPLE).unwrap();
+    roster["version"] = 2.into();
+    roster["seats"][1]["reports_to"] = "chief".into();
+    let result = apply(&serde_json::to_vec(&roster).unwrap(), true);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap()["seats"],
+        4
+    );
+    {
+        let store = formation_store::Store::open(&room).unwrap();
+        let seats = store.read().unwrap().roster().seats().unwrap();
+        let aide = seats
+            .iter()
+            .find(|seat| seat.name == roster["seats"][1]["name"])
+            .unwrap();
+        assert_eq!(aide.reports_to.as_deref(), Some("chief"));
+    }
+    roster["seats"] = serde_json::json!([{
+        "name": "new", "role": "advisor", "host": "headless", "workspace": "orbit"
+    }]);
+    roster["routes"] = serde_json::json!([]);
+    let result = apply(&serde_json::to_vec(&roster).unwrap(), false);
+    assert!(result.status.success());
+    assert!(String::from_utf8_lossy(&result.stdout).contains("1 seats"));
+    let store = formation_store::Store::open(&room).unwrap();
+    let snapshot = store.read().unwrap();
+    let seats = snapshot.roster().seats().unwrap();
+    assert_eq!(seats.len(), 1);
+    assert_eq!(
+        (
+            &*seats[0].name,
+            &*seats[0].role,
+            seats[0].workspace.as_deref()
+        ),
+        ("new", "advisor", Some("orbit"))
+    );
+    assert!(snapshot.seats().contains("chief").unwrap());
+}
+
+#[test]
+fn roster_check_creates_no_room() {
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().join("missing-room");
+    let mut child = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .env("FORMATION_ROOM", &room)
+        .args(["roster", "check"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(EXAMPLE).unwrap();
+    assert!(child.wait_with_output().unwrap().status.success());
+    assert!(!room.exists());
 }

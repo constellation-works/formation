@@ -9,6 +9,7 @@ pub(crate) enum RoomAccess<'a> {
     None,
     Join(&'a str),
     Existing,
+    Room,
     Hook(&'a str),
 }
 
@@ -43,6 +44,10 @@ pub(crate) fn exec<A: App, R>(
     let mail = match A::room_access(&cmd) {
         RoomAccess::None => None,
         RoomAccess::Join(seat) => match composition::compose_join(env, seat) {
+            Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
+        RoomAccess::Room => match composition::compose_room(env) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },

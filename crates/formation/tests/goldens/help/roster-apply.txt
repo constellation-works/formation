@@ -1,0 +1,8 @@
+Apply a version 2 JSON roster to an existing room
+
+Usage: formation roster apply [OPTIONS] --room <ROOM>
+
+Options:
+      --room <ROOM>  Room name or directory path
+      --json         Print the result as JSON
+  -h, --help         Print help

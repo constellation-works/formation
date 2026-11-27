@@ -23,7 +23,7 @@ const ENV_HOME: &str = "HOME";
 const MAX_IDENTIFIER_LEN: usize = 96;
 
 /// Host inputs for one invocation.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Env {
     home: Option<OsString>,
     user_home: Option<PathBuf>,
@@ -175,6 +175,16 @@ pub(crate) fn compose_join(env: &Env, seat: &str) -> Result<MailContext, Error> 
             sessions_dir,
             room_record: room.record,
         },
+    })
+}
+
+pub(crate) fn compose_room(env: &Env) -> Result<MailContext, Error> {
+    let room = resolve_room(env, None)?;
+    let store = Store::open(&room.path)?;
+    Ok(MailContext {
+        room: room.record,
+        store,
+        caller: Caller::Explicit(String::new()),
     })
 }
 

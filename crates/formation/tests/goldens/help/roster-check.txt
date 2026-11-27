@@ -1,4 +1,4 @@
-Validate one version-1 JSON roster on stdin (maximum 256 KiB)
+Validate one version 1 or 2 JSON roster on stdin (maximum 256 KiB)
 
 Usage: formation roster check [OPTIONS]
 

@@ -41,3 +41,10 @@ pub(super) const HOOK_WAITER: cw_sqlite::Step = cw_sqlite::Step::sql(
         )
     ) STRICT;",
 );
+
+/// Applied roster, independent of joined session bindings.
+pub(super) const ROSTER: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "CREATE TABLE IF NOT EXISTS roster_seat(
+        name TEXT PRIMARY KEY, role TEXT NOT NULL, workspace TEXT, reports_to TEXT
+    ) STRICT;",
+);

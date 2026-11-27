@@ -8,6 +8,8 @@ mod message;
 
 mod seat;
 
+mod roster;
+
 pub(crate) mod seat_dir;
 
 pub(crate) mod session;
@@ -21,6 +23,7 @@ pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
+pub use roster::{RosterRead, RosterSeat, RosterSeats};
 pub use seat::{Seats, SeatsRead};
 pub use session::{SessionPointer, SessionRoute};
 pub use watch::{Watch, WatchRead};
@@ -32,6 +35,14 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// Applied roster visible at the snapshot.
+    pub fn roster(&self) -> RosterRead<'_> {
+        RosterRead {
+            conn: &self.reader,
+            available: self.reader.version() >= 14,
+        }
+    }
+
     /// Seats visible at the snapshot.
     pub fn seats(&self) -> SeatsRead<'_> {
         SeatsRead {
@@ -76,6 +87,11 @@ pub struct Tx<'a> {
 }
 
 impl Tx<'_> {
+    /// Applied roster records in this transaction.
+    pub fn roster(&self) -> RosterSeats<'_> {
+        RosterSeats { conn: self.conn }
+    }
+
     /// Seat records in this transaction.
     pub fn seats(&self) -> Seats<'_> {
         Seats { conn: self.conn }
