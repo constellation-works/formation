@@ -29,6 +29,8 @@ pub struct Seat {
     pub host: Host,
     /// Workspace whose work this seat covers.
     pub workspace: Option<String>,
+    /// Parent seat, or None for the admiral.
+    pub reports_to: Option<String>,
 }
 
 /// Duties that a seat can hold.
@@ -49,8 +51,27 @@ pub enum Role {
     Sentry,
     /// Advises on a subject across units.
     Specialist,
+    /// Advises the chief or admiral.
+    Advisor,
     /// Executes assigned work.
     Worker,
+}
+
+impl Role {
+    /// Stable wire name of this role.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Chief => "chief",
+            Self::Aide => "aide",
+            Self::Captain => "captain",
+            Self::Lieutenant => "lieutenant",
+            Self::Sergeant => "sergeant",
+            Self::Sentry => "sentry",
+            Self::Specialist => "specialist",
+            Self::Advisor => "advisor",
+            Self::Worker => "worker",
+        }
+    }
 }
 
 /// Expected user interface or worker process.

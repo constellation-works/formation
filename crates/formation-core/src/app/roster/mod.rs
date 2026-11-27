@@ -13,6 +13,8 @@ pub use rule::{Error, Summary, check};
 pub enum Command {
     /// Check a versioned roster.
     Check(Vec<u8>),
+    /// Apply a version 2 roster to an existing room.
+    Apply(Vec<u8>),
 }
 
 /// A successful roster check.
@@ -25,17 +27,39 @@ impl App for Roster {
 
     type Outcome = Outcome;
 
-    fn room_access(_: &Command) -> RoomAccess<'_> {
-        RoomAccess::None
+    fn room_access(cmd: &Command) -> RoomAccess<'_> {
+        match cmd {
+            Command::Check(_) => RoomAccess::None,
+            Command::Apply(_) => RoomAccess::Room,
+        }
     }
 
-    fn audit(_: &Command) -> Option<&'static str> {
-        None
+    fn audit(cmd: &Command) -> Option<&'static str> {
+        match cmd {
+            Command::Check(_) => None,
+            Command::Apply(_) => Some("roster apply"),
+        }
     }
 
-    fn run(_: &Ctx<'_>, Command::Check(bytes): Command) -> Result<Outcome, cw_base::Error> {
-        check(&bytes)
-            .map_err(|error| cw_base::Error::new(cw_base::Kind::Usage, "invalid_roster", error))
+    fn run(ctx: &Ctx<'_>, cmd: Command) -> Result<Outcome, cw_base::Error> {
+        let (bytes, apply) = match cmd {
+            Command::Check(bytes) => (bytes, false),
+            Command::Apply(bytes) => (bytes, true),
+        };
+        let roster =
+            formation_store::decode(&bytes).map_err(|error| roster_error(Error::Decode(error)))?;
+        let summary = rule::validate(&roster).map_err(roster_error)?;
+        if apply {
+            if roster.version != 2 {
+                return Err(cw_base::Error::new(
+                    cw_base::Kind::Usage,
+                    "roster_version_required",
+                    std::io::Error::other("apply requires roster version 2"),
+                ));
+            }
+            ctx.mail()?.store.write(|tx| tx.roster().replace(&roster))?;
+        }
+        Ok(summary)
     }
 }
 
@@ -46,4 +70,13 @@ pub fn exec<R>(
     finish: impl FnOnce(Result<Outcome, cw_base::Error>) -> R,
 ) -> R {
     runtime::exec::<Roster, R>(env, cmd, finish)
+}
+
+fn roster_error(error: Error) -> cw_base::Error {
+    let code = match error {
+        Error::UnknownParent => "unknown_parent",
+        Error::ParentCycle => "roster_cycle",
+        Error::Decode(_) | Error::Invalid(_) => "invalid_roster",
+    };
+    cw_base::Error::new(cw_base::Kind::Usage, code, error)
 }

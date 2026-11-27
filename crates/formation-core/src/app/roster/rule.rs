@@ -3,7 +3,7 @@
 use formation_store::contract;
 use formation_store::contract::roster::Role;
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 /// Successful roster check. Counts describe a draft only.
@@ -23,6 +23,12 @@ pub enum Error {
     /// Invalid wire document.
     #[error("invalid roster JSON: {0}")]
     Decode(#[from] formation_store::DecodeError),
+    /// Parent seat is unknown.
+    #[error("reports_to names an unknown seat")]
+    UnknownParent,
+    /// Reporting lines contain a cycle.
+    #[error("reports_to forms a cycle")]
+    ParentCycle,
     /// Unsupported schema or inconsistent draft entries.
     #[error("{0}")]
     Invalid(&'static str),
@@ -34,8 +40,22 @@ pub enum Error {
 /// Returns a diagnostic when the draft is malformed or inconsistent.
 pub fn check(bytes: &[u8]) -> Result<Summary, Error> {
     let roster = formation_store::decode(bytes)?;
-    if roster.version != 1 {
-        return Err(Error::Invalid("expected roster version 1"));
+    validate(&roster)
+}
+
+pub(super) fn validate(roster: &formation_store::Roster) -> Result<Summary, Error> {
+    if !matches!(roster.version, 1 | 2) {
+        return Err(Error::Invalid("expected roster version 1 or 2"));
+    }
+    if roster.version == 1
+        && roster
+            .seats
+            .iter()
+            .any(|seat| seat.reports_to.is_some() || seat.role == Role::Advisor)
+    {
+        return Err(Error::Invalid(
+            "version 1 does not support reports_to or advisor",
+        ));
     }
     if roster.seats.is_empty() {
         return Err(Error::Invalid("expected at least one seat"));
@@ -62,6 +82,26 @@ pub fn check(bytes: &[u8]) -> Result<Summary, Error> {
                 return Err(Error::Invalid("a workspace has more than one captain"));
             }
         }
+    }
+    let parents: HashMap<_, _> = roster
+        .seats
+        .iter()
+        .map(|seat| (seat.name.as_str(), seat.reports_to.as_deref()))
+        .collect();
+    let mut complete = HashSet::new();
+    for seat in &roster.seats {
+        let mut visited = HashSet::new();
+        let mut current = seat.name.as_str();
+        while !complete.contains(current) {
+            if !visited.insert(current) {
+                return Err(Error::ParentCycle);
+            }
+            match parents.get(current).ok_or(Error::UnknownParent)? {
+                Some(parent) => current = parent,
+                None => break,
+            }
+        }
+        complete.extend(visited);
     }
     let mut routes = HashSet::new();
     for route in &roster.routes {

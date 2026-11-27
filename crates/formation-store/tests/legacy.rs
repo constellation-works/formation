@@ -318,3 +318,36 @@ fn upgrade_to_hook_waiter_retains_mail_and_seat_links() -> Result<(), Box<dyn st
     assert_eq!(unread[0].body, "retained");
     Ok(())
 }
+
+#[test]
+fn upgrade_to_roster_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("session")?;
+    store.write(|tx| {
+        tx.seats().bind("chief", Some(&session))?;
+        tx.messages().insert("chief", "chief", "id", "body", 100)?;
+        Ok(())
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch(
+        "INSERT INTO watch_set (recipient,name,command,cwd,every,state,added_by,added_at)
+         VALUES ('chief','probe','true','/',10,'on','chief',100);
+         DROP TABLE roster_seat; PRAGMA user_version = 13;",
+    )?;
+    drop(db);
+    assert!(store.read()?.roster().seats()?.is_empty());
+    let roster = formation_store::decode(
+        br#"{"version":2,"seats":[{"name":"chief","role":"chief","host":"headless"}],"routes":[]}"#,
+    )?;
+    store.write(|tx| tx.roster().replace(&roster))?;
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.roster().seats()?.len(), 1);
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("chief")
+    );
+    assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    assert_eq!(snapshot.watch().list()?.len(), 1);
+    Ok(())
+}

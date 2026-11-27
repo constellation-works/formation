@@ -16,6 +16,7 @@ serde_json.workspace = true
 libc.workspace = true
 
 [dev-dependencies]
+formation-store.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 cw-testkit.workspace = true
