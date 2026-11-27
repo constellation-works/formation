@@ -168,11 +168,11 @@ impl<'a> App for Mail<'a> {
                     std::io::Error::other("join context unavailable"),
                 ));
             };
-            let outcome = join::run(&mail.store, session.as_ref(), name)?;
-            if let (Some(session), Some(sessions_dir)) = (session.as_ref(), sessions_dir.as_deref())
-            {
-                Store::record_session(sessions_dir, session, room_record)?;
-            }
+            let route = sessions_dir.as_deref().map(|sessions_dir| join::Route {
+                sessions_dir,
+                room: room_record,
+            });
+            let outcome = join::run(&mail.store, session.as_ref(), name, route)?;
             return Ok(outcome);
         }
 
