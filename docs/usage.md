@@ -114,3 +114,27 @@ formation watch wait \
   --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
   --timeout 300 --room trial --as sentry
 ```
+
+## Delegated authority grants
+
+Apply a version 2 roster to the room before managing authority grants; every `grant` command in a room with no applied roster refuses with `no_roster`.
+
+Formation ships a built-in catalog of twelve decision classes: `repair` (sergeant, or the workspace captain where there is no sergeant), `ship` and `land` (captain), `staffing` (chief), `design`, `breaking`, `direction`, `release` and `operator` (admiral), `override` (nobody), and `credentials` and `grant` (admiral; never granted).
+
+```sh
+formation grant add --to chief --class direction --workspace all \
+  --limit "a setting inside one workspace that a later change can undo" \
+  --for day --source "advisor chat 2026-11-27 12:00"
+formation grant withhold --to captain --class land --workspace site \
+  --for day --source "advisor chat 2026-11-27 12:30"
+formation grant revoke 1
+formation grant list
+formation grant list --seat chief --json
+formation grant check --seat chief --class direction
+```
+
+`add` and `withhold` accept `--to` (a rank name or a seat in the applied roster), `--class`, `--workspace` (a workspace identifier or `all`, defaulting to `all`), optional `--limit`, `--for day` (default `day`; standing grants come from a grants file), and required `--source`. `add` and `withhold` refuse `grant` and `credentials` with `class_not_grantable` and unknown classes with `unknown_class`.
+
+`grant list` without `--seat` prints active room grants and withholds; `--seat <seat>` prints what that seat settles now and any withheld entries, naming whether each line came from the `catalog`, a `grant` or a `withhold` (add `--json` for machine-readable output). Precedence follows seat over rank, a named workspace over `all`, room over house file over catalog, later over earlier, and a withhold over a grant entered at the same time. `grant check --seat <seat> --class <class> [--workspace <workspace>]` exits 0 with the covering JSON entry when the seat may settle that class in the workspace (defaulting to the seat's workspace, or `all`) and exits 1 with `not_authorized` otherwise.
+
+A grant records the calling seat (from the session binding or `--as`), or none when run outside a session, and marks grants whose holder is the caller's own seat or rank as `self-entered` in `grant list`. Every `add`, `withhold` and `revoke` mails one envelope to each joined seat whose effective authority changed and none to seats whose effective authority did not change. Audit events record only stable identifiers (never limit text or source).

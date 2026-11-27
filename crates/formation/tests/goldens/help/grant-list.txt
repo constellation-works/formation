@@ -1,0 +1,17 @@
+List active room grants, or what one seat settles now
+
+Usage: formation grant list [OPTIONS]
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --seat <SEAT>       Show effective authority for one seat in the applied roster
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session, or none outside one)
+      --json              Print a JSON document
+  -h, --help              Print help
+
+Without `--seat`, lists every active grant and withhold recorded in the room.
+With `--seat`, lists what that seat settles now and where each line came from.
+
+Examples:
+  formation grant list
+  formation grant list --seat chief --json

@@ -5,7 +5,7 @@ use cw_base::Error;
 use cw_sqlite::rusqlite::{Connection, params};
 
 /// One applied seat.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RosterSeat {
     /// Seat name.
     pub name: String,
@@ -53,6 +53,15 @@ pub struct RosterSeats<'a> {
 }
 
 impl RosterSeats<'_> {
+    /// List seats in name order inside this write transaction.
+    pub fn seats(&self) -> Result<Vec<RosterSeat>, Error> {
+        RosterRead {
+            conn: self.conn,
+            available: true,
+        }
+        .seats()
+    }
+
     /// Replace the entire applied roster atomically.
     pub fn replace(&self, roster: &crate::Roster) -> Result<(), Error> {
         self.conn

@@ -351,3 +351,52 @@ fn upgrade_to_roster_preserves_room_records() -> Result<(), Box<dyn std::error::
     assert_eq!(snapshot.watch().list()?.len(), 1);
     Ok(())
 }
+
+#[test]
+fn upgrade_to_grant_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
+    use formation_store::contract::{GrantEffect, GrantLifetime, GrantTargetKind, NewGrant};
+
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("grant-session")?;
+    let roster = formation_store::decode(
+        br#"{"version":2,"seats":[{"name":"chief","role":"chief","host":"headless"}],"routes":[]}"#,
+    )?;
+    store.write(|tx| {
+        tx.seats().bind("chief", Some(&session))?;
+        tx.roster().replace(&roster)?;
+        tx.messages().insert("chief", "chief", "id", "body", 100)?;
+        Ok(())
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch("DROP TABLE room_grant; PRAGMA user_version = 14;")?;
+    drop(db);
+
+    assert!(store.read()?.grants().active()?.is_empty());
+    let inserted = store.write(|tx| {
+        tx.grants().insert(&NewGrant {
+            effect: GrantEffect::Grant,
+            target_kind: GrantTargetKind::Rank,
+            target: "chief",
+            class: "direction",
+            workspace: "all",
+            limit: Some("reversible settings"),
+            lifetime: GrantLifetime::Day,
+            source: "advisor chat 12:00",
+            entered_by: None,
+            entered_at: 200,
+            entered_at_ns: 0,
+        })
+    })?;
+    assert_eq!(inserted.id, 1);
+
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.grants().active()?.len(), 1);
+    assert_eq!(snapshot.roster().seats()?.len(), 1);
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("chief")
+    );
+    assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    Ok(())
+}

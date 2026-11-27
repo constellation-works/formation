@@ -41,3 +41,7 @@ pub(crate) fn has_watch_mail(version: u32) -> bool {
 pub(crate) fn has_hook_waiter(version: u32) -> bool {
     version >= schema::HOOK_WAITER_SCHEMA_VERSION
 }
+
+pub(crate) fn has_grant(version: u32) -> bool {
+    version >= schema::GRANT_SCHEMA_VERSION
+}
