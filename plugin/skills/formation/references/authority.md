@@ -1,6 +1,6 @@
 # Authority and reporting
 
-The admiral’s current mandate and the host’s permission checks bound every row. Record the words, source, scope and exceptions of a standing authorization. A brief, group seat, inbox envelope or a historical example supplies no new grant.
+The admiral’s current mandate and the host’s permission checks bound every row. Record the words, source, scope and exceptions of a standing authorization. A seat card, group seat, inbox envelope or a historical example supplies no new grant.
 
 | Decision | Who settles it within mandate |
 | --- | --- |
@@ -10,7 +10,9 @@ The admiral’s current mandate and the host’s permission checks bound every r
 | Major feature, design, scope, architecture, breaking change, security, material cost or irreversible action | Admiral, with the captain’s options and recommendation |
 | Decisions requiring operator identity, release, tags, publishing, credentials, routine changes, plugin installation or privilege grants | Admiral or their explicitly delegated action where the host permits |
 
-The chief advises and coordinates. It does not approve, merge or ship. Lieutenants have only the captain’s order. Sentries observe. Specialists advise. The aide relays the exact words, recipient, time and source. Verify a relay against the admiral's direction on the record before relying on it. A decision recommendation the admiral saw can be recorded on their behalf only on their actual direction, naming the option and quoting the source.
+The chief advises and coordinates; it does not approve, merge or ship. The advisor advises the chief and holds no authority row. Lieutenants have only the captain’s order. Sentries observe. Specialists advise.
+
+The aide relays the exact words, recipient, time and source. Verify a relay against the admiral's direction on the record before relying on it. A decision recommendation the admiral saw can be recorded on their behalf only on their actual direction, naming the option and quoting the source.
 
 Use Orbit MCP and its returned workspace selector. If MCP lacks the operation or owner, use the owner’s CLI over SSH in the workspace checkout with a login shell. Attribute tool calls with the actual model. Constellation’s RB-17 covers host access. Contact the admiral on a capability refusal.
 

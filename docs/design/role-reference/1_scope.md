@@ -7,13 +7,13 @@ status: Accepted
 feature: role-reference
 doc_role: scope
 summary: One Formation skill in which every role reads one reference of its own, a seat card replaces the per-role briefs, and each role's record carries the crew of the seat that holds it.
-stage: idea
-next: Build phase 1, the role files, the seat card and the skill check.
+stage: building
+next: Build phase 2, the house-file step and retiring the second copy of the skill.
 ---
 
 # Formation — Role references
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 (role files, seat card, record fields and skill check) is built.
 
 ## Problem
 

@@ -126,6 +126,7 @@ standards-check:
 # their own target.
 docs-check:
 	python3 scripts/check-readme.py
+	python3 scripts/check-skill.py
 	python3 scripts/generate-feature-board.py --check
 
 feature-board:
