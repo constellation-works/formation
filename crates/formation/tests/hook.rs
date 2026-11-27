@@ -1337,3 +1337,39 @@ fn send_between_waiter_release_and_next_claim_remains_available() {
     );
     assert_eq!(waiter_row(&room, "captain"), Some((2, None, None)));
 }
+
+#[cfg(unix)]
+#[test]
+fn hook_delivers_to_a_seat_joined_on_retry_after_a_legacy_folder_refusal() {
+    use std::os::unix::fs::PermissionsExt;
+    let room = Room::new();
+    let dir = room.0.path().join("rooms/trial/seats/late");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let join = |session: &str| {
+        room.command()
+            .env("CODEX_THREAD_ID", session)
+            .args(["mail", "join", "late", "--room", "trial"])
+            .output()
+            .unwrap()
+    };
+
+    let refused = join("late-session");
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(!room.0.path().join("sessions/late-session").exists());
+    let input = fixture("user-prompt", "late-session");
+    silent(&room.hook("codex", "user-prompt", &input));
+
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let joined = join("late-session");
+    assert!(joined.status.success(), "{joined:?}");
+    let sent = room.mail(
+        "sender",
+        &["send", "late", "--id", "retry", "--body", "Welcome."],
+    );
+    let out = room.hook("codex", "user-prompt", &input);
+    let text = rendered("codex", "user-prompt", &out);
+    assert!(text.contains("Welcome."), "{text}");
+    let inbox = room.mail("late-session", &["inbox"]);
+    assert_eq!(inbox["messages"][0]["receipt"], sent["receipt"]);
+}

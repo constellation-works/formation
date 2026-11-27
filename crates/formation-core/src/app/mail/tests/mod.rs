@@ -5,8 +5,8 @@ use formation_store::Store;
 fn absence_holds_new_mail_and_preserves_replays() -> Result<(), Box<dyn std::error::Error>> {
     let root = cw_testkit::TempRoot::new("FORMATION")?;
     let store = Store::create(root.path())?;
-    join::run(&store, None, "chief".into())?;
-    join::run(&store, None, "captain".into())?;
+    join::run(&store, None, "chief".into(), None)?;
+    join::run(&store, None, "captain".into(), None)?;
     let chief = SeatRef::Name("chief");
     let captain = SeatRef::Name("captain");
 

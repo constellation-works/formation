@@ -20,6 +20,18 @@ formation mail join
 
    Pass `"$seat" --room "$group"` if Scribe is unavailable.
 
+   A join is complete only when it exits 0 and the seat’s own session can then reach its room. After the join, run this check in the assigned session, with no `--room` or `--as`, and send it with the join line in each seat’s brief.
+
+```sh
+env -u FORMATION_ROOM formation mail who
+```
+
+   - Both must hold: the join exited 0 and the check lists the seat. After a failed join, a passing check shows only an earlier route.
+   - A failed join or any refusal of the check, including `room_required` and `seat_required`, is a failed or partial join: report a startup failure and repair it before the seat takes work.
+   - Keep `env -u FORMATION_ROOM`. An inherited room override stands in for a missing session pointer in `mail who`, and the hook ignores it.
+   - A seat listed with flags, with that variable set or from another session proves nothing: it can be registered with no route.
+   - A join that exits nonzero changes nothing, so retry it once the cause is fixed. For `seat_dir_unavailable` on a legacy seat folder, set it to mode 0700 as the error says. `session_route_unrestored` is the one exception: the session pointer it names may have changed, so fix that path and join again.
+
 5. Use the provider procedure. Brief the aide, each captain and each named specialist with background, order, durable record, previous handoff, roster routes, provider, actual model, group, mail join line, `{ws_selector}`, `{repo}`, `{base_branch}`, attention ownership and close trigger.
    - A captain owning its workspace’s attention registers `attention` (when Orbit is configured) and `ci` in the room watch set and starts `formation watch run` in the background; other captains join `formation watch run` as standbys through the shared room.
    - A captain in a resident-owned workspace avoids duplicate attention monitoring and registers no `attention` watch while the resident owns attention.

@@ -22,6 +22,7 @@ use cw_sqlite::rusqlite::Connection;
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
 pub use seat::{Seats, SeatsRead};
+pub use session::{SessionPointer, SessionRoute};
 pub use watch::{Watch, WatchRead};
 pub use watch_reader::WatchLease;
 

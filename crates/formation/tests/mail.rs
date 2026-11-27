@@ -1,10 +1,40 @@
 //! Local-room contracts through independent CLI processes.
 #![allow(clippy::unwrap_used, reason = "fixture failures should panic")]
 
+#[cfg(unix)]
+mod support;
+
 use cw_testkit::TempRoot;
 use serde_json::Value;
 use std::path::Path;
 use std::process::{Command, Output};
+#[cfg(unix)]
+use std::time::Duration;
+#[cfg(unix)]
+use support::SpawnedChild;
+
+/// A commit that seats `loser` fails: a deferred foreign key is checked at COMMIT, after the
+/// join has written its session pointer.
+#[cfg(unix)]
+const FAIL_LOSER_COMMIT: &str = "\
+    CREATE TABLE parent(id INTEGER PRIMARY KEY);
+    CREATE TABLE child(parent INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED);
+    CREATE TRIGGER fail_loser AFTER INSERT ON seats WHEN NEW.name = 'loser'
+    BEGIN INSERT INTO child VALUES(1); END;";
+
+/// Hold a room's write lock, create the second path once it is held, and let go when the third
+/// path appears.
+#[cfg(unix)]
+const HOLD_WRITE_LOCK: &str = "\
+import os, sqlite3, sys, time
+db = sqlite3.connect(sys.argv[1], isolation_level=None)
+db.execute('BEGIN IMMEDIATE')
+open(sys.argv[2], 'w').close()
+deadline = time.monotonic() + 30
+while not os.path.exists(sys.argv[3]) and time.monotonic() < deadline:
+    time.sleep(0.01)
+db.execute('ROLLBACK')
+";
 
 struct Room(TempRoot);
 
@@ -35,6 +65,103 @@ impl Room {
             String::from_utf8_lossy(&out.stderr)
         );
         serde_json::from_slice(&out.stdout).unwrap()
+    }
+}
+
+/// One room in a disposable home, driven from provider sessions or by explicit seat.
+struct Home {
+    root: TempRoot,
+    home: std::path::PathBuf,
+}
+
+impl Home {
+    fn new() -> Self {
+        let root = TempRoot::new("FORMATION").unwrap();
+        let home = root.path().join("formation-home");
+        let fixture = Self { root, home };
+        ok(&fixture.join(None, "probe"));
+        fixture
+    }
+
+    fn room(&self) -> std::path::PathBuf {
+        self.home.join("rooms/trial")
+    }
+
+    fn seat_dir(&self, seat: &str) -> std::path::PathBuf {
+        self.room().join("seats").join(seat)
+    }
+
+    fn pointer(&self, session: &str) -> std::path::PathBuf {
+        self.home.join("sessions").join(session)
+    }
+
+    /// A `mail` command from `session` with the room only for joins.
+    fn command(&self, session: Option<&str>, args: &[&str]) -> Command {
+        let mut cmd = formation_with_home(&self.root, &self.home);
+        cmd.env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("FORMATION_ROOM");
+        if let Some(session) = session {
+            cmd.env("CODEX_THREAD_ID", session);
+        }
+        cmd.arg("mail").args(args);
+        cmd
+    }
+
+    fn mail(&self, session: Option<&str>, args: &[&str]) -> Output {
+        self.command(session, args).output().unwrap()
+    }
+
+    fn join(&self, session: Option<&str>, seat: &str) -> Output {
+        self.mail(session, &["join", seat, "--room", "trial"])
+    }
+
+    fn who(&self) -> Vec<String> {
+        let out = self.mail(None, &["--room", "trial", "--as", "probe", "who"]);
+        let body: Value = serde_json::from_slice(&out.stdout).unwrap_or(Value::Null);
+        body["seats"]
+            .as_array()
+            .map(|seats| {
+                seats
+                    .iter()
+                    .map(|seat| seat["name"].as_str().unwrap().to_owned())
+                    .filter(|name| name != "probe")
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn pointer_text(&self, session: &str) -> Option<String> {
+        std::fs::read_to_string(self.pointer(session)).ok()
+    }
+
+    #[cfg(unix)]
+    fn sql(&self, room: &str, sql: &str) {
+        let out = self
+            .root
+            .command("python3")
+            .args([
+                "-c",
+                "import sqlite3 as s,sys; s.connect(sys.argv[1]).executescript(sys.argv[2])",
+            ])
+            .arg(self.home.join("rooms").join(room).join("inbox.sqlite3"))
+            .arg(sql)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+
+    /// Run a join while the sessions directory takes no new file, so the pointer write fails.
+    /// The session must have joined before: only the pointer write then needs a new file.
+    #[cfg(unix)]
+    fn join_with_unwritable_pointer(&self, session: &str, seat: &str) -> Output {
+        let sessions = self.home.join("sessions");
+        set_mode(&sessions, 0o500);
+        let probe = std::fs::write(sessions.join("probe"), "");
+        let out = self.join(Some(session), seat);
+        set_mode(&sessions, 0o700);
+        assert!(probe.is_err(), "this test needs an unprivileged user");
+        out
     }
 }
 
@@ -531,4 +658,322 @@ fn join_fails_when_the_seat_folder_cannot_be_created() {
         "seat_dir_unavailable",
         Some(blocker.to_str().unwrap()),
     );
+}
+
+fn ok(out: &Output) -> Value {
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).unwrap()
+}
+
+fn refusal_message(out: &Output, code: &str) -> String {
+    expect_refusal(out, code, None);
+    let line = String::from_utf8(out.stderr.clone()).unwrap();
+    let body: Value = serde_json::from_str(line.trim()).unwrap();
+    body["error"].as_str().unwrap().to_owned()
+}
+
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[cfg(unix)]
+fn mode_of(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path).unwrap().permissions().mode() & 0o7777
+}
+
+#[cfg(unix)]
+fn legacy_seat_dir(home: &Home, seat: &str) -> std::path::PathBuf {
+    let dir = home.seat_dir(seat);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("held"), "kept").unwrap();
+    set_mode(&dir, 0o755);
+    dir
+}
+
+#[cfg(unix)]
+#[test]
+fn legacy_seat_folder_refuses_with_the_fix_and_joins_once_corrected() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    let dir = legacy_seat_dir(&home, "legacy");
+
+    let message = refusal_message(
+        &home.join(Some("sess-legacy"), "legacy"),
+        "seat_dir_unavailable",
+    );
+    assert!(message.contains(dir.to_str().unwrap()), "{message}");
+    assert!(message.contains("0755"), "{message}");
+    assert!(message.contains("0700"), "{message}");
+    assert!(message.contains("chmod -- 700"), "{message}");
+    assert!(message.contains("mail join"), "{message}");
+    assert_eq!(home.who(), ["seed"]);
+    assert_eq!(home.pointer_text("sess-legacy"), None);
+    assert_eq!(mode_of(&dir), 0o755);
+    assert_eq!(std::fs::read_to_string(dir.join("held")).unwrap(), "kept");
+
+    set_mode(&dir, 0o700);
+    let joined = ok(&home.join(Some("sess-legacy"), "legacy"));
+    assert_eq!(joined["seat_dir"], dir.to_str().unwrap());
+    assert_eq!(home.who(), ["legacy", "seed"]);
+    assert_eq!(home.pointer_text("sess-legacy").as_deref(), Some("trial\n"));
+    assert_eq!(std::fs::read_to_string(dir.join("held")).unwrap(), "kept");
+}
+
+#[cfg(unix)]
+#[test]
+fn unsafe_seat_folders_stay_refused() {
+    use std::os::unix::fs::symlink;
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    let target = home.root.path().join("elsewhere");
+    std::fs::create_dir(&target).unwrap();
+    set_mode(&target, 0o700);
+    symlink(&target, home.seat_dir("linked")).unwrap();
+    let message = refusal_message(
+        &home.join(Some("sess-link"), "linked"),
+        "seat_dir_unavailable",
+    );
+    assert!(message.contains("seat folder"), "{message}");
+    assert_eq!(home.who(), ["seed"]);
+    assert_eq!(home.pointer_text("sess-link"), None);
+
+    let group = home.seat_dir("group");
+    std::fs::create_dir_all(&group).unwrap();
+    set_mode(&group, 0o770);
+    refusal_message(
+        &home.join(Some("sess-group"), "group"),
+        "seat_dir_unavailable",
+    );
+    assert_eq!(mode_of(&group), 0o770);
+    assert_eq!(home.who(), ["seed"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_pointer_write_leaves_a_new_seat_unjoined_and_retry_succeeds() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    ok(&home.mail(Some("sess-new"), &["join", "away", "--room", "elsewhere"]));
+
+    let out = home.join_with_unwritable_pointer("sess-new", "fresh");
+    let message = refusal_message(&out, "mail_file");
+    assert!(message.contains("temporary file"), "{message}");
+    assert_eq!(home.who(), ["seed"]);
+    assert_eq!(
+        home.pointer_text("sess-new").as_deref(),
+        Some("elsewhere\n")
+    );
+    let send = home.mail(
+        None,
+        &[
+            "--room", "trial", "--as", "seed", "send", "fresh", "--id", "x", "--body", "hi",
+        ],
+    );
+    expect_refusal(&send, "unknown_recipient", None);
+
+    ok(&home.join(Some("sess-new"), "fresh"));
+    assert_eq!(home.who(), ["fresh", "seed"]);
+    assert_eq!(home.pointer_text("sess-new").as_deref(), Some("trial\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_rebind_keeps_the_owner_the_route_and_pending_mail() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    ok(&home.join(Some("sess-old"), "keeper"));
+    ok(&home.mail(
+        Some("seed"),
+        &["send", "keeper", "--id", "m1", "--body", "pending"],
+    ));
+    ok(&home.mail(Some("sess-new"), &["join", "away", "--room", "elsewhere"]));
+
+    let out = home.join_with_unwritable_pointer("sess-new", "keeper");
+    refusal_message(&out, "mail_file");
+    assert_eq!(
+        home.pointer_text("sess-new").as_deref(),
+        Some("elsewhere\n")
+    );
+    assert_eq!(home.pointer_text("sess-old").as_deref(), Some("trial\n"));
+    let inbox = ok(&home.mail(Some("sess-old"), &["inbox"]));
+    assert_eq!(inbox["messages"][0]["body"], "pending");
+    let intruder = home.mail(Some("sess-new"), &["--room", "trial", "inbox"]);
+    expect_refusal(&intruder, "seat_required", None);
+
+    let rebound = ok(&home.join(Some("sess-new"), "keeper"));
+    assert_eq!(rebound["replaced_session"], "sess-old");
+    assert_eq!(
+        ok(&home.mail(Some("sess-new"), &["inbox"]))["messages"][0]["body"],
+        "pending"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_rebind_at_the_seat_folder_keeps_the_prior_owner() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    ok(&home.join(Some("sess-old"), "keeper"));
+    let dir = home.seat_dir("keeper");
+    set_mode(&dir, 0o755);
+
+    refusal_message(
+        &home.join(Some("sess-new"), "keeper"),
+        "seat_dir_unavailable",
+    );
+    assert_eq!(home.pointer_text("sess-new"), None);
+    assert_eq!(home.pointer_text("sess-old").as_deref(), Some("trial\n"));
+    ok(&home.mail(Some("sess-old"), &["who"]));
+
+    set_mode(&dir, 0o700);
+    let rebound = ok(&home.join(Some("sess-new"), "keeper"));
+    assert_eq!(rebound["replaced_session"], "sess-old");
+}
+
+#[test]
+fn headless_join_still_needs_no_route() {
+    let home = Home::new();
+    let joined = ok(&home.join(None, "headless"));
+    assert_eq!(joined["seat"], "headless");
+    assert_eq!(home.who(), ["headless"]);
+    assert!(!home.home.join("sessions").exists());
+}
+
+#[test]
+fn unreadable_prior_pointer_refuses_before_anything_changes() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    let blocker = home.pointer("sess-new");
+    std::fs::create_dir(&blocker).unwrap();
+
+    refusal_message(&home.join(Some("sess-new"), "fresh"), "mail_file");
+    assert_eq!(home.who(), ["seed"]);
+
+    std::fs::remove_dir(&blocker).unwrap();
+    ok(&home.join(Some("sess-new"), "fresh"));
+    assert_eq!(home.who(), ["fresh", "seed"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_commit_puts_the_route_back() {
+    let home = Home::new();
+    ok(&home.join(Some("seed"), "seed"));
+    home.sql("trial", FAIL_LOSER_COMMIT);
+
+    let first = home.join(Some("sess-new"), "loser");
+    refusal_message(&first, "mail_database");
+    assert_eq!(home.pointer_text("sess-new"), None);
+    assert_eq!(home.who(), ["seed"]);
+
+    ok(&home.mail(Some("sess-new"), &["join", "away", "--room", "elsewhere"]));
+    refusal_message(&home.join(Some("sess-new"), "loser"), "mail_database");
+    assert_eq!(
+        home.pointer_text("sess-new").as_deref(),
+        Some("elsewhere\n")
+    );
+    assert_eq!(home.who(), ["seed"]);
+
+    home.sql("trial", "DROP TRIGGER fail_loser;");
+    ok(&home.join(Some("sess-new"), "loser"));
+    assert_eq!(home.pointer_text("sess-new").as_deref(), Some("trial\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn failing_join_cannot_undo_a_concurrent_join_of_the_same_session() {
+    let home = Home::new();
+    ok(&home.mail(Some("sess"), &["join", "old", "--room", "prior"]));
+    ok(&home.mail(None, &["join", "probe", "--room", "contested"]));
+    home.sql("contested", FAIL_LOSER_COMMIT);
+    let held = home.root.path().join("held");
+    let release = home.root.path().join("release");
+    let mut blocker = SpawnedChild::spawn(
+        home.root
+            .command("python3")
+            .args(["-c", HOLD_WRITE_LOCK])
+            .arg(home.home.join("rooms/contested/inbox.sqlite3"))
+            .arg(&held)
+            .arg(&release),
+    );
+    blocker.until(Duration::from_secs(10), || held.exists().then_some(()));
+
+    // The first join owns the session's route and waits for the contested room's write lock.
+    let mut first = SpawnedChild::spawn(
+        &mut home.command(Some("sess"), &["join", "loser", "--room", "contested"]),
+    );
+    let lock = home.pointer("sess.lock");
+    let owner = format!("{{\"pid\":{},", first.pid());
+    first.until(Duration::from_secs(4), || {
+        std::fs::read_to_string(&lock)
+            .ok()
+            .filter(|record| record.starts_with(&owner))
+    });
+    let mut second =
+        SpawnedChild::spawn(&mut home.command(Some("sess"), &["join", "winner", "--room", "wins"]));
+    // Fails if the second join runs to completion while the first still owns the route.
+    let observed = std::time::Instant::now() + Duration::from_secs(1);
+    second.until(Duration::from_secs(2), || {
+        (std::time::Instant::now() >= observed).then_some(())
+    });
+    std::fs::write(&release, "").unwrap();
+
+    let failed = first.wait_within(Duration::from_secs(10));
+    let message = refusal_message(&failed, "mail_database");
+    assert!(message.contains("commit"), "{message}");
+    ok(&second.wait_within(Duration::from_secs(20)));
+    assert!(
+        blocker
+            .wait_within(Duration::from_secs(10))
+            .status
+            .success()
+    );
+    assert_eq!(home.pointer_text("sess").as_deref(), Some("wins\n"));
+    ok(&home.mail(Some("sess"), &["who"]));
+}
+
+#[cfg(unix)]
+#[test]
+fn startup_route_check_refuses_a_missing_pointer_despite_a_room_override() {
+    let home = Home::new();
+    ok(&home.join(Some("sess"), "keeper"));
+    // The startup procedure's command, in a session that inherited FORMATION_ROOM.
+    let check = || {
+        home.root
+            .command("env")
+            .env("FORMATION_HOME", &home.home)
+            .env("FORMATION_ROOM", "trial")
+            .env("CODEX_THREAD_ID", "sess")
+            .env_remove("CLAUDE_CODE_SESSION_ID")
+            .args(["-u", "FORMATION_ROOM"])
+            .arg(env!("CARGO_BIN_EXE_formation"))
+            .args(["mail", "who"])
+            .output()
+            .unwrap()
+    };
+    let listed = ok(&check());
+    assert!(
+        listed["seats"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|seat| seat["name"] == "keeper"),
+        "{listed}"
+    );
+
+    std::fs::rename(home.pointer("sess"), home.root.path().join("aside")).unwrap();
+    let overridden = home
+        .command(Some("sess"), &["who"])
+        .env("FORMATION_ROOM", "trial")
+        .output()
+        .unwrap();
+    ok(&overridden);
+    expect_refusal(&check(), "room_required", None);
 }
