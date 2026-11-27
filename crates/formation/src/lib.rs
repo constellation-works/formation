@@ -37,5 +37,6 @@ pub fn run(env: formation_core::Env) -> ExitCode {
         Command::Hook(args) => command::hook::run(&env, args),
         Command::Watch(args) => command::watch::run(env, args, &queue),
         Command::Grant(args) => command::grant::run(env, args, &queue),
+        Command::Request(args) => command::request::run(env, args, &queue),
     }
 }

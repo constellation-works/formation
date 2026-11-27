@@ -6,6 +6,8 @@ mod grant;
 
 mod message;
 
+mod request;
+
 mod watch;
 
 pub mod roster;
@@ -15,6 +17,7 @@ pub use grant::{
     GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, NewGrant, RevokeStatus,
 };
 pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
+pub use request::{Request, RequestAdvice, RequestOption, RequestSettlement, RequestState};
 use std::fmt;
 pub use watch::{
     NewWatch, WatchEntry, WatchHandover, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState,

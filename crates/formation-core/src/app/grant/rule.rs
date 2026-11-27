@@ -344,34 +344,30 @@ pub(super) fn evaluate_one(
     best.map(|(_, entry)| entry)
 }
 
-pub(super) fn check_refusal(
+pub(super) fn check_refusal<'a>(
     seat: &RosterSeat,
     class: &str,
     query_workspace: &str,
     spec: Option<&ClassSpec>,
     winner: Option<&EffectiveEntry>,
+    holders: impl Iterator<Item = &'a RosterSeat>,
 ) -> Error {
-    if let Some(entry) = winner
-        && entry.effect == GrantEffect::Withhold
-    {
-        let by = entry
-            .grant_id
-            .map_or_else(|| "a withhold".to_owned(), |id| format!("withhold {id}"));
-        return refused(
-            "not_authorized",
-            format!(
-                "seat `{}` does not hold `{class}` for workspace `{query_workspace}` \
-                 (withheld by {by})",
-                seat.name
-            ),
-        );
-    }
-    let holder = spec.map_or("nobody", |spec| spec.default_holder.label());
+    let names: Vec<_> = holders.map(|holder| holder.name.as_str()).collect();
+    let default = spec.map_or("nobody", |spec| spec.default_holder.label());
+    let holder = if names.is_empty() {
+        format!("default holder: {default}")
+    } else {
+        format!("current holders: {}", names.join(", "))
+    };
+    let withhold = winner
+        .filter(|entry| entry.effect == GrantEffect::Withhold)
+        .and_then(|entry| entry.grant_id)
+        .map_or_else(String::new, |id| format!("withheld by {id}; "));
     refused(
         "not_authorized",
         format!(
             "seat `{}` does not hold `{class}` for workspace `{query_workspace}` \
-             (default holder: {holder})",
+             ({withhold}{holder})",
             seat.name
         ),
     )

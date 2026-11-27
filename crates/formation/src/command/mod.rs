@@ -8,6 +8,8 @@ pub(crate) mod hook;
 
 pub(crate) mod mail;
 
+pub(crate) mod request;
+
 pub(crate) mod roster;
 
 pub(crate) mod watch;
@@ -26,4 +28,6 @@ pub(crate) enum Command {
     Watch(watch::Watch),
     /// Manage delegated authority grants and check what a seat settles.
     Grant(grant::Grant),
+    /// File, route and decide requests under delegated authority.
+    Request(request::Request),
 }

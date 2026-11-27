@@ -6,6 +6,8 @@ pub mod hook;
 
 pub mod mail;
 
+pub mod request;
+
 pub mod roster;
 
 mod wake;

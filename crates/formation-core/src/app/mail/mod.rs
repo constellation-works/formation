@@ -8,7 +8,7 @@ mod join;
 
 mod rule;
 
-mod send;
+pub(super) mod send;
 
 mod sent;
 

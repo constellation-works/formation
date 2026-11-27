@@ -1,0 +1,16 @@
+Open a request and send it to your parent
+
+Usage: formation request open [OPTIONS] --class <CLASS> --record <POINTER> --ask <TEXT> --option <LABEL: TEXT> --recommend <LABEL>
+
+Options:
+      --class <CLASS>         Authority class from the catalog
+      --room <NAME|PATH>      Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>             Joined seat to act as (default: this session's seat)
+      --record <POINTER>      Pointer to the task, pull request or other record
+      --ask <TEXT>            One-sentence ask
+      --json                  Print machine-readable JSON
+      --option <LABEL: TEXT>  Choice as "label: text". Supply this flag two to four times
+      --recommend <LABEL>     Label of the option you recommend
+      --blocking              Mark the request as blocking the asker's work
+      --settle <LABEL>        Open and settle with this option under your own authority
+  -h, --help                  Print help

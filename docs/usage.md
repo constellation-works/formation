@@ -138,3 +138,46 @@ formation grant check --seat chief --class direction
 `grant list` without `--seat` prints active room grants and withholds; `--seat <seat>` prints what that seat settles now and any withheld entries, naming whether each line came from the `catalog`, a `grant` or a `withhold` (add `--json` for machine-readable output). Precedence follows seat over rank, a named workspace over `all`, room over house file over catalog, later over earlier, and a withhold over a grant entered at the same time. `grant check --seat <seat> --class <class> [--workspace <workspace>]` exits 0 with the covering JSON entry when the seat may settle that class in the workspace (defaulting to the seat's workspace, or `all`) and exits 1 with `not_authorized` otherwise.
 
 A grant records the calling seat (from the session binding or `--as`), or none when run outside a session, and marks grants whose holder is the caller's own seat or rank as `self-entered` in `grant list`. Every `add`, `withhold` and `revoke` mails one envelope to each joined seat whose effective authority changed and none to seats whose effective authority did not change. Audit events record only stable identifiers (never limit text or source).
+
+## Delegated authority requests
+
+Apply a version 2 roster before using `formation request`. Every request command returns
+`no_roster` in an existing room without one. Writes act as the session's joined seat or
+the joined seat selected with `--as`. Use `--room` to select a room explicitly. Add
+`--json` to any request command for machine-readable output and stable refusal codes.
+
+```sh
+formation request open --class design --record '<task or pull request>' \
+  --ask 'Should we share the cache?' \
+  --option 'a: Share the cache' --option 'b: Keep separate caches' --recommend b --blocking
+formation request advise <request> --recommend a --note 'Both jobs use the same key.'
+formation request settle <request> --option b --note 'Keep the jobs independent.'
+formation request pass <request> --recommend b
+formation request list --waiting admiral
+formation request list --settled-by chief --since 2026-01-01T00:00:00Z --json
+formation request show <request>
+```
+
+`open` records a one-line ask, a record pointer, and two to four uniquely labeled options.
+`--recommend` names one of the labels. `--blocking` records that the asker's work is waiting.
+The ID includes the originating room's name. The applied roster supplies the asker's
+workspace (`all` for a seat with no workspace) and parent. The parent holds the request
+and receives ordinary room mail. With `--settle <label>`, the asker instead uses their own
+effective authority to open and settle in one step.
+
+`advise` adds a recommendation and explanation without changing the state or holder.
+`settle` requires a covering entry for the calling seat, class and request workspace.
+`not_authorized` names the seats that hold the class in scope, or its default holder if no
+seat holds it. The record preserves the chosen option, settling seat, grant ID and limit at
+settlement. A catalog entry has a null grant ID in JSON. The asker receives one envelope.
+`pass` requires the current holder and sends the request to that seat's parent. A pass by a
+seat with no parent places it in the admiral's queue. Use `--recommend <label>` to add advice
+while passing. `--note` is optional with a recommendation. Request notifications use normal
+room mail. If a recipient seat has yet to join, the change is refused and can be retried after
+it joins. Requests waiting on the admiral appear in the queue.
+
+`list` shows all requests newest first by default. Use `--waiting <seat>` for that seat's
+open requests or `--waiting admiral` for the admiral's queue. Use `--settled-by <seat>`
+for that seat's decisions. `--since` includes activity at or after an RFC 3339 timestamp.
+With `--settled-by`, it compares the settlement time. `show` includes the original ask,
+options and recommendation, the advice history, and any settlement.
