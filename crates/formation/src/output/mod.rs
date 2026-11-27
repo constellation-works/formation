@@ -8,6 +8,8 @@ mod hook;
 
 mod mail;
 
+mod request;
+
 mod roster;
 
 mod watch;
@@ -22,6 +24,7 @@ pub(crate) use hook::{
     hook_error, hook_json, hook_rewake, hook_usage, prompt as hook_prompt, stop as hook_stop,
 };
 pub(crate) use mail::{HistoryFormat, payload as mail_payload, sent_history, write as mail_write};
+pub(crate) use request::write as request;
 pub(crate) use roster::summary;
 pub(crate) use watch::{
     checked as watch_checked, exited as watch_exited, list as watch_list, payload as watch_payload,

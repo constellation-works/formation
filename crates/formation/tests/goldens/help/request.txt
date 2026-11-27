@@ -1,0 +1,18 @@
+File, route and decide requests under delegated authority
+
+Usage: formation request [OPTIONS] <COMMAND>
+
+Commands:
+  open    Open a request and send it to your parent
+  advise  Add a recommendation without changing the request's state or holder
+  settle  Record a decision under your authority and mail the asker
+  pass    Pass a request you hold to your parent, or to the admiral if you have no parent
+  list    List requests, newest first
+  show    Show a request, its options, advice and any settlement
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --json              Print machine-readable JSON
+  -h, --help              Print help

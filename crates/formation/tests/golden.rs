@@ -65,6 +65,19 @@ fn help_and_roster_output() {
         ("help/grant-revoke.txt", vec!["grant", "revoke", "--help"]),
         ("help/grant-list.txt", vec!["grant", "list", "--help"]),
         ("help/grant-check.txt", vec!["grant", "check", "--help"]),
+        ("help/request.txt", vec!["request", "--help"]),
+        ("help/request-open.txt", vec!["request", "open", "--help"]),
+        (
+            "help/request-advise.txt",
+            vec!["request", "advise", "--help"],
+        ),
+        (
+            "help/request-settle.txt",
+            vec!["request", "settle", "--help"],
+        ),
+        ("help/request-pass.txt", vec!["request", "pass", "--help"]),
+        ("help/request-list.txt", vec!["request", "list", "--help"]),
+        ("help/request-show.txt", vec!["request", "show", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {
@@ -545,5 +558,64 @@ fn grant_list_output() {
                 ],
             ),
         )
+        .unwrap();
+}
+
+#[test]
+fn request_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().join("trial");
+    let room = room.to_str().unwrap();
+    for seat in ["chief", "app-captain"] {
+        let out = run(&["mail", "join", seat, "--room", room], b"");
+        assert!(out.status.success(), "{out:?}");
+    }
+    let roster = br#"{"version":2,"routes":[],"seats":[
+        {"name":"chief","role":"chief","host":"headless"},
+        {"name":"app-captain","role":"captain","host":"headless",
+         "workspace":"app","reports_to":"chief"}
+    ]}"#;
+    let out = run(&["roster", "apply", "--room", room], roster);
+    assert!(out.status.success(), "{out:?}");
+    let out = run(
+        &[
+            "request",
+            "open",
+            "--room",
+            room,
+            "--as",
+            "app-captain",
+            "--json",
+            "--class",
+            "land",
+            "--record",
+            "reviewed-change",
+            "--ask",
+            "Land the reviewed change?",
+            "--option",
+            "a: Land",
+            "--option",
+            "b: Wait",
+            "--recommend",
+            "a",
+            "--settle",
+            "a",
+        ],
+        b"",
+    );
+    assert!(out.status.success(), "{out:?}");
+    let opened: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let id = opened["id"].as_str().unwrap();
+    let normalize = |out: Output| {
+        assert!(out.status.success(), "{out:?}");
+        redact_timestamps(std::str::from_utf8(&out.stdout).unwrap()).replace(id, "<request>")
+    };
+    goldens
+        .check("output/request-show.json", &normalize(out))
+        .unwrap();
+    let shown = run(&["request", "show", id, "--room", room], b"");
+    goldens
+        .check("output/request-show.txt", &normalize(shown))
         .unwrap();
 }

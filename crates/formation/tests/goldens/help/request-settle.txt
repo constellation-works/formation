@@ -1,0 +1,14 @@
+Record a decision under your authority and mail the asker
+
+Usage: formation request settle [OPTIONS] --option <LABEL> <REQUEST>
+
+Arguments:
+  <REQUEST>  Request identifier
+
+Options:
+      --option <LABEL>    Label of the option you choose
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --note <TEXT>       Explain the decision
+      --json              Print machine-readable JSON
+  -h, --help              Print help

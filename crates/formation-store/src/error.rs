@@ -29,6 +29,10 @@ pub(crate) enum Failure {
     InvalidSessionFile(PathBuf),
     #[error("cannot encode audit event: {0}")]
     Encode(#[from] serde_json::Error),
+    #[error("cannot encode request: {0}")]
+    RequestEncode(#[source] serde_json::Error),
+    #[error("request timestamp is outside the supported storage range")]
+    RequestTimestamp(#[source] std::num::TryFromIntError),
 }
 
 impl From<Failure> for Error {
@@ -43,6 +47,8 @@ impl From<Failure> for Error {
             Failure::RoomNotFound(_) => (Kind::NotFound, "room_not_found"),
             Failure::InvalidSessionFile(_) => (Kind::Config, "invalid_session_file"),
             Failure::Encode(_) => (Kind::Internal, "audit_encode"),
+            Failure::RequestEncode(_) => (Kind::Internal, "request_encode"),
+            Failure::RequestTimestamp(_) => (Kind::Internal, "request_timestamp"),
         };
         Self::new(kind, code, error)
     }

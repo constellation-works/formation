@@ -421,37 +421,51 @@ fn check_grant(
     let grants = snapshot.grants().active()?;
 
     let roster_seat = find_roster_seat(&roster, seat)?;
-    let spec = rule::validate_class_for_check(class, CATALOG, &grants)?;
-    let query_workspace = match workspace {
+    let workspace = match workspace {
         Some(value) => rule::validate_workspace(value)?,
         None => roster_seat.workspace.as_deref().unwrap_or(ALL_WORKSPACES),
     };
+    let entry = check_authority(roster_seat, class, workspace, &roster, &grants)?;
+    Ok(Outcome::Checked {
+        seat: roster_seat.name.clone(),
+        role: roster_seat.role.clone(),
+        entry,
+    })
+}
 
-    let winner = rule::evaluate_one(
-        roster_seat,
-        class,
-        query_workspace,
-        &roster,
-        &grants,
-        CATALOG,
-    );
+pub(super) fn check_authority(
+    seat: &RosterSeat,
+    class: &str,
+    workspace: &str,
+    roster: &[RosterSeat],
+    grants: &[GrantRecord],
+) -> Result<EffectiveEntry, Error> {
+    let spec = rule::validate_class_for_check(class, CATALOG, grants)?;
+    let winner = rule::evaluate_one(seat, class, workspace, roster, grants, CATALOG);
     match winner {
-        Some(entry) if entry.effect == GrantEffect::Grant => Ok(Outcome::Checked {
-            seat: roster_seat.name.clone(),
-            role: roster_seat.role.clone(),
-            entry,
-        }),
-        other => Err(rule::check_refusal(
-            roster_seat,
-            class,
-            query_workspace,
-            spec,
-            other.as_ref(),
-        )),
+        Some(entry) if entry.effect == GrantEffect::Grant => Ok(entry),
+        other => {
+            let holders = roster.iter().filter(|candidate| {
+                rule::evaluate_one(candidate, class, workspace, roster, grants, CATALOG)
+                    .is_some_and(|entry| entry.effect == GrantEffect::Grant)
+            });
+            Err(rule::check_refusal(
+                seat,
+                class,
+                workspace,
+                spec,
+                other.as_ref(),
+                holders,
+            ))
+        }
     }
 }
 
-fn require_roster_tx(tx: &Tx<'_>) -> Result<Vec<RosterSeat>, Error> {
+pub(super) fn validate_class(class: &str, grants: &[GrantRecord]) -> Result<(), Error> {
+    rule::validate_class_for_check(class, CATALOG, grants).map(|_| ())
+}
+
+pub(super) fn require_roster_tx(tx: &Tx<'_>) -> Result<Vec<RosterSeat>, Error> {
     let seats = tx.roster().seats()?;
     if seats.is_empty() {
         return Err(no_roster());
@@ -459,7 +473,7 @@ fn require_roster_tx(tx: &Tx<'_>) -> Result<Vec<RosterSeat>, Error> {
     Ok(seats)
 }
 
-fn require_roster_snapshot(snapshot: &Snapshot) -> Result<Vec<RosterSeat>, Error> {
+pub(super) fn require_roster_snapshot(snapshot: &Snapshot) -> Result<Vec<RosterSeat>, Error> {
     let seats = snapshot.roster().seats()?;
     if seats.is_empty() {
         return Err(no_roster());
@@ -474,7 +488,10 @@ fn no_roster() -> Error {
     )
 }
 
-fn find_roster_seat<'a>(roster: &'a [RosterSeat], name: &str) -> Result<&'a RosterSeat, Error> {
+pub(super) fn find_roster_seat<'a>(
+    roster: &'a [RosterSeat],
+    name: &str,
+) -> Result<&'a RosterSeat, Error> {
     roster.iter().find(|seat| seat.name == name).ok_or_else(|| {
         rule::refused(
             "unknown_seat",

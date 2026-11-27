@@ -8,6 +8,8 @@ mod hook_waiter;
 
 mod message;
 
+mod request;
+
 mod seat;
 
 mod roster;
@@ -26,6 +28,7 @@ use cw_sqlite::rusqlite::Connection;
 pub use grant::{GrantMut, GrantRead};
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
+pub use request::{RequestMut, RequestRead};
 pub use roster::{RosterRead, RosterSeat, RosterSeats};
 pub use seat::{Seats, SeatsRead};
 pub use session::{SessionPointer, SessionRoute};
@@ -51,6 +54,14 @@ impl Snapshot {
         GrantRead {
             conn: &self.reader,
             available: sqlite::has_grant(self.reader.version()),
+        }
+    }
+
+    /// Room requests visible at the snapshot.
+    pub fn requests(&self) -> RequestRead<'_> {
+        RequestRead {
+            conn: &self.reader,
+            available: sqlite::has_request(self.reader.version()),
         }
     }
 
@@ -106,6 +117,11 @@ impl Tx<'_> {
     /// Room grant records in this transaction.
     pub fn grants(&self) -> GrantMut<'_> {
         GrantMut { conn: self.conn }
+    }
+
+    /// Room request records in this transaction.
+    pub fn requests(&self) -> RequestMut<'_> {
+        RequestMut { conn: self.conn }
     }
 
     /// Seat records in this transaction.
