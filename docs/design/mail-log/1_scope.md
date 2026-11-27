@@ -3,17 +3,17 @@ title: Formation — Mail log and status
 owner: claude
 created_date: 2026-11-27
 updated_date: 2026-11-27
-status: Draft
+status: Accepted
 feature: mail-log
 doc_role: scope
 summary: The admiral reads every envelope in a room with one command, replies link into threads, and one status screen shows the room, his inbox and the latest mail.
-stage: designing
-next: The operator reviews this scope and its two open questions.
+stage: idea
+next: Build `mail log` and `mail show`, after the admiral caller.
 ---
 
 # Formation — Mail log and status
 
-Proposed on 2026-11-27 and not yet reviewed. Nothing in it is built. It builds on the admiral-seat scope, which makes a terminal call the admiral's.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built. It builds on the admiral-seat scope, which makes a terminal call the admiral's.
 
 ## Problem
 
@@ -110,10 +110,12 @@ Not designed here. Both would read `status --json` and `mail log --json`, which 
 | Build the pane first | It would need these same reads, written once inside the pane and again for the terminal |
 | A separate `thread` command group | Two more nouns for what one flag and one argument cover |
 
-## Open questions
+## Decided
 
-1. **Does a seat's `mail log` hold only its own mail?** Recommended: yes. The admiral reads the room; a seat reads what it sent and received.
-2. **Is the log flat by default, with `--threads` to group?** Recommended: yes. The flat log is the overview of recent mail, and it works on mail sent before replies were linked.
+The operator, 2026-11-27, approved the scope as drafted. The approval reached him as a design request through the chief and was given in the chief's chat. Two points were open questions in the draft and were approved with the recommendation:
+
+1. **A seat's `mail log` holds only its own mail.** The admiral reads the room; a seat reads what it sent and received.
+2. **The log is flat by default, with `--threads` to group.** The flat log is the overview of recent mail, and it works on mail sent before replies were linked.
 
 ## Build
 
