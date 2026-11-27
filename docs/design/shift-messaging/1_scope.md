@@ -2,14 +2,14 @@
 title: Formation — Shift messaging
 owner: codex
 created_date: 2026-11-24
-updated_date: 2026-11-26
+updated_date: 2026-11-27
 last_validated: 2026-11-26
 status: Draft
 feature: shift-messaging
 doc_role: scope
 summary: Durable seat mail between Claude and Codex sessions, delivered by host hooks and fed by one shared watch reader.
 stage: building
-next: Daniel refreshes and trusts the updated Codex plugin hooks for production chats.
+next: Daniel refreshes and trusts the updated Codex plugin hooks; then one more formation day times every captain-to-chief send and counts a sentry's empty turns.
 ---
 
 # Formation — Shift messaging
@@ -164,11 +164,24 @@ Trials 6 to 9 belong to [A Claude seat after its hold](#a-claude-seat-after-its-
 
 Trial 5 exercised the provider queue and prompt hook. The built-executable integration tests exercise Formation's ordinary send, watch reader and turn-end ordering with a fake queue. The Linux validation host has no disposable Desktop chat for a live test of the integrated send.
 
-| Measure | 2026-11-25 | Target |
-| --- | --- | --- |
-| Routing comments on a captain's task record | Every message between the chief and the Codex captain | None |
-| Longest wait for the chief to learn of the Codex captain's answer | 40 minutes | Under a minute while a hold is waiting |
-| Sentry turns in an hour with nothing new | One per read | None |
+| Measure | 2026-11-25 | 2026-11-26, first day on seat mail | Target |
+| --- | --- | --- | --- |
+| Routing comments on a captain's task record | Every message between the chief and the Codex captain | Two chief notes among 81 comments on one captain's record, one of them restating a mailed ask. One answer was also written on a second captain's record | None |
+| Longest wait for the chief to learn of the Codex captain's answer | 40 minutes | 4 to 9 seconds over the six sends that were timed, all delivered by the hook. Not every send was timed, so no longest wait is known | Under a minute while a hold is waiting |
+| Sentry turns in an hour with nothing new | One per read | Not counted. A sentry ran for five hours and its empty turns were not recorded | None |
+
+The first day was the formation of 2026-11-25 to 2026-11-26: a Claude chief with Codex captains, on seat mail and the hooks from 00:12Z on 2026-11-26. The values come from the chief's and the captains' task records. The first target was nearly met, the second was met for every send that was timed, and the third has no observation, so the stage stays `building`.
+
+What broke that day:
+
+- The Claude plugin cache had no mail hooks until the operator refreshed it at 00:12Z; before that the chief read mail with a hand-run wait.
+- Mail to a seat in the middle of a turn waited for the turn to end: 4 minutes 14 seconds in the longest timed case, chief to captain.
+- A Codex Desktop update interrupted a captain's Stop hold.
+- Typed input to a Codex captain stalled behind its 1,800-second hold.
+- A Claude seat's 540-second hold ended and three envelopes waited about an hour, until a native message woke the seat.
+- A new binary migrated the room schema while old-binary watches and hooks were running, and they exited with `mail_database`.
+- The watch probes needed operator permission in the reader's shell, and the shared watch lost coverage.
+- A Codex captain left unheld after its last turn was not woken by later mail and never answered the close-out. The record does not say whether the queue wake was tried for that seat.
 
 ## Decided
 
