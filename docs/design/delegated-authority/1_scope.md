@@ -3,17 +3,17 @@ title: Formation — Delegated authority
 owner: claude
 created_date: 2026-11-27
 updated_date: 2026-11-27
-status: Draft
+status: Accepted
 feature: delegated-authority
 doc_role: scope
 summary: Authority becomes a record the admiral changes with one command, every ask above a captain's row is a request that goes to the chief first, and the admiral reads one list of what no seat may settle.
-stage: designing
-next: The operator reviews this scope and its four open questions.
+stage: idea
+next: Build phase 0, the routing rule and a hand-kept grants table in the operator's copy of the skill.
 ---
 
 # Formation — Delegated authority
 
-Proposed on 2026-11-27 and not yet reviewed. Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
 
 ## Problem
 
@@ -203,12 +203,14 @@ A grant suits a class whose decisions a later change can reverse, because the lo
 | Keep asks as open items in a notes store | The store is optional, knows no class or grant, and cannot refuse a settlement nobody was granted |
 | Requests from every rank | A sergeant's routine asks to its captain are frequent and never reach the admiral. The form would cost more than it returns there |
 
-## Open questions
+## Decided
 
-1. **What does the chief hold on the first day?** Recommended: `staffing` as today, `direction` limited to a setting inside one workspace that a later change can undo, `operator` limited to answering a tracker decision whose recommended option can be undone, and one house class for wording fixes to shared documents that change no version. `design`, `breaking` and `release` stay with the admiral. The log then shows which approvals he gives unchanged, and those are the next grants.
-2. **Does a grant a seat records take effect at once?** Recommended: yes for a day grant, marked `self-entered` and shown in the next log. A standing grant takes effect only through the approved change to the grants file.
-3. **May a captain still put a question to the admiral in its own chat?** Recommended: no. It opens a request and says so. He may answer there anyway, and the captain records it.
-4. **Is a blocking request announced through the host's notification?** Recommended: yes, for `--blocking` only, where the chief's host has one.
+The operator, 2026-11-27, in the advisor's chat, approved the scope as drafted. Four points were open questions in the draft and were approved with the recommendation:
+
+1. **What the chief holds on the first day.** `staffing` as today, `direction` limited to a setting inside one workspace that a later change can undo, `operator` limited to answering a tracker decision whose recommended option can be undone, and one house class for wording fixes to shared documents that change no version. `design`, `breaking` and `release` stay with the admiral. The log then shows which approvals he gives unchanged, and those are the next grants.
+2. **A day grant a seat records takes effect at once,** marked `self-entered` and shown in the next log. A standing grant takes effect only through the approved change to the grants file.
+3. **A captain does not put a question to the admiral in its own chat.** It opens a request and says so. He may answer there anyway, and the captain records it.
+4. **A `--blocking` request is announced through the host's notification** where the chief's host has one. Nothing else is.
 
 ## Build
 
