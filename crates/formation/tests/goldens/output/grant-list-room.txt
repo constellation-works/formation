@@ -1,0 +1,3 @@
+ID  EFFECT    TO       CLASS      WORKSPACE  FOR  ENTERED BY  FLAGS         LIMIT
+ 1  grant     chief    direction  all        day  0-chief     self-entered  reversible workspace settings
+ 2  withhold  captain  land       site       day  -           -             -

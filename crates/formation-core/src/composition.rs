@@ -89,6 +89,7 @@ pub(crate) enum Caller {
     },
     Explicit(String),
     Session(SessionId),
+    None,
 }
 
 pub(crate) struct MailContext {
@@ -185,6 +186,31 @@ pub(crate) fn compose_room(env: &Env) -> Result<MailContext, Error> {
         room: room.record,
         store,
         caller: Caller::Explicit(String::new()),
+    })
+}
+
+pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
+    let session = resolve_session(env)?;
+    let room = resolve_room(env, session.as_ref())?;
+    let store = Store::open(&room.path)?;
+
+    let caller = if let Some(seat) = env.seat.as_deref() {
+        validate_identifier(seat, ComposeError::InvalidSeat)?;
+        Caller::Explicit(seat.to_owned())
+    } else if let Some(session_id) = session {
+        if store.read()?.seats().by_session(&session_id)?.is_some() {
+            Caller::Session(session_id)
+        } else {
+            Caller::None
+        }
+    } else {
+        Caller::None
+    };
+
+    Ok(MailContext {
+        room: room.record,
+        store,
+        caller,
     })
 }
 

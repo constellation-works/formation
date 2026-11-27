@@ -179,7 +179,7 @@ impl<'a> App for Mail<'a> {
         let seat = match &mail.caller {
             Caller::Explicit(name) => SeatRef::Name(name),
             Caller::Session(session) => SeatRef::Session(session),
-            Caller::Join { .. } => {
+            Caller::Join { .. } | Caller::None => {
                 return Err(Error::new(
                     Kind::Internal,
                     "missing_context",

@@ -2,6 +2,8 @@
 
 mod audit;
 
+mod grant;
+
 mod hook_waiter;
 
 mod message;
@@ -21,6 +23,7 @@ mod watch_reader;
 use crate::driver::sqlite;
 pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
+pub use grant::{GrantMut, GrantRead};
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
 pub use roster::{RosterRead, RosterSeat, RosterSeats};
@@ -40,6 +43,14 @@ impl Snapshot {
         RosterRead {
             conn: &self.reader,
             available: self.reader.version() >= 14,
+        }
+    }
+
+    /// Room grants visible at the snapshot.
+    pub fn grants(&self) -> GrantRead<'_> {
+        GrantRead {
+            conn: &self.reader,
+            available: sqlite::has_grant(self.reader.version()),
         }
     }
 
@@ -90,6 +101,11 @@ impl Tx<'_> {
     /// Applied roster records in this transaction.
     pub fn roster(&self) -> RosterSeats<'_> {
         RosterSeats { conn: self.conn }
+    }
+
+    /// Room grant records in this transaction.
+    pub fn grants(&self) -> GrantMut<'_> {
+        GrantMut { conn: self.conn }
     }
 
     /// Seat records in this transaction.

@@ -34,7 +34,7 @@ pub struct Seat {
 }
 
 /// Duties that a seat can hold.
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Role {
     /// Coordinates the shift.
@@ -58,6 +58,22 @@ pub enum Role {
 }
 
 impl Role {
+    /// Parse a stable role wire name.
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "chief" => Some(Self::Chief),
+            "aide" => Some(Self::Aide),
+            "captain" => Some(Self::Captain),
+            "lieutenant" => Some(Self::Lieutenant),
+            "sergeant" => Some(Self::Sergeant),
+            "sentry" => Some(Self::Sentry),
+            "specialist" => Some(Self::Specialist),
+            "advisor" => Some(Self::Advisor),
+            "worker" => Some(Self::Worker),
+            _ => None,
+        }
+    }
+
     /// Stable wire name of this role.
     pub fn as_str(&self) -> &'static str {
         match self {

@@ -1,0 +1,17 @@
+Check whether a seat may settle an authority class in a workspace
+
+Usage: formation grant check [OPTIONS] --seat <SEAT> --class <CLASS>
+
+Options:
+      --room <NAME|PATH>           Room name or directory path (default: $FORMATION_ROOM or session file)
+      --seat <SEAT>                Seat name in the applied roster
+      --as <SEAT>                  Seat name for this command (default: seat recorded for this session, or none outside one)
+      --class <CLASS>              Authority class from the catalog
+      --workspace <WORKSPACE|all>  Workspace to check (default: the seat's workspace, or `all`)
+  -h, --help                       Print help
+
+Exits 0 with the covering entry as JSON when authorized, or exits 1 with a refusal on stderr.
+
+Examples:
+  formation grant check --seat chief --class direction
+  formation grant check --seat site-captain --class land --workspace site

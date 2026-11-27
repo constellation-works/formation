@@ -2,6 +2,8 @@
 
 mod audit;
 
+mod grant;
+
 mod message;
 
 mod seat;
@@ -24,6 +26,8 @@ pub(crate) const WATCH_MAIL_SCHEMA_VERSION: u32 = 11;
 
 pub(crate) const HOOK_WAITER_SCHEMA_VERSION: u32 = 13;
 
+pub(crate) const GRANT_SCHEMA_VERSION: u32 = 15;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -39,4 +43,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     watch::ABSENCE,
     seat::HOOK_WAITER,
     seat::ROSTER,
+    grant::CREATE,
 ];

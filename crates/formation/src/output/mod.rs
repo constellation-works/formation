@@ -2,6 +2,8 @@
 
 mod common;
 
+mod grant;
+
 mod hook;
 
 mod mail;
@@ -13,6 +15,9 @@ mod watch;
 pub(crate) use common::error;
 pub(crate) use common::failure;
 pub(crate) use common::init_logging;
+pub(crate) use grant::{
+    room_list as grant_room_list, seat_list as grant_seat_list, write as grant_write,
+};
 pub(crate) use hook::{
     hook_error, hook_json, hook_rewake, hook_usage, prompt as hook_prompt, stop as hook_stop,
 };

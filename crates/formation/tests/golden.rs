@@ -56,6 +56,15 @@ fn help_and_roster_output() {
         ("help/watch-stop.txt", vec!["watch", "stop", "--help"]),
         ("help/watch-check.txt", vec!["watch", "check", "--help"]),
         ("help/watch-wait.txt", vec!["watch", "wait", "--help"]),
+        ("help/grant.txt", vec!["grant", "--help"]),
+        ("help/grant-add.txt", vec!["grant", "add", "--help"]),
+        (
+            "help/grant-withhold.txt",
+            vec!["grant", "withhold", "--help"],
+        ),
+        ("help/grant-revoke.txt", vec!["grant", "revoke", "--help"]),
+        ("help/grant-list.txt", vec!["grant", "list", "--help"]),
+        ("help/grant-check.txt", vec!["grant", "check", "--help"]),
         ("output/roster.txt", vec!["roster", "check"]),
         ("output/roster.json", vec!["roster", "check", "--json"]),
     ] {
@@ -396,4 +405,145 @@ fn roster_check_creates_no_room() {
     child.stdin.take().unwrap().write_all(EXAMPLE).unwrap();
     assert!(child.wait_with_output().unwrap().status.success());
     assert!(!room.exists());
+}
+
+#[test]
+fn grant_list_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap().to_owned();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for seat in ["0-chief", "orbit-capt", "site-capt"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", &room]);
+    }
+    let roster = serde_json::json!({
+        "version": 2,
+        "seats": [
+            {
+                "name": "0-chief",
+                "role": "chief",
+                "host": "claude-desktop"
+            },
+            {
+                "name": "orbit-capt",
+                "role": "captain",
+                "workspace": "orbit",
+                "host": "codex-desktop",
+                "reports_to": "0-chief"
+            },
+            {
+                "name": "site-capt",
+                "role": "captain",
+                "workspace": "site",
+                "host": "codex-desktop",
+                "reports_to": "0-chief"
+            }
+        ],
+        "routes": []
+    });
+    let mut apply = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(["roster", "apply", "--room", &room])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    apply
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&serde_json::to_vec(&roster).unwrap())
+        .unwrap();
+    assert!(apply.wait_with_output().unwrap().status.success());
+
+    in_room(
+        &root,
+        &cwd,
+        &[
+            "grant",
+            "add",
+            "--room",
+            &room,
+            "--as",
+            "0-chief",
+            "--to",
+            "chief",
+            "--class",
+            "direction",
+            "--workspace",
+            "all",
+            "--limit",
+            "reversible workspace settings",
+            "--for",
+            "day",
+            "--source",
+            "advisor chat 12:00",
+        ],
+    );
+    in_room(
+        &root,
+        &cwd,
+        &[
+            "grant",
+            "withhold",
+            "--room",
+            &room,
+            "--to",
+            "captain",
+            "--class",
+            "land",
+            "--workspace",
+            "site",
+            "--for",
+            "day",
+            "--source",
+            "advisor chat 12:30",
+        ],
+    );
+
+    goldens
+        .check(
+            "output/grant-list-room.txt",
+            &in_room(&root, &cwd, &["grant", "list", "--room", &room]),
+        )
+        .unwrap();
+    goldens
+        .check(
+            "output/grant-list-room.json",
+            &redact_timestamps(&in_room(
+                &root,
+                &cwd,
+                &["grant", "list", "--room", &room, "--json"],
+            )),
+        )
+        .unwrap();
+    goldens
+        .check(
+            "output/grant-list-seat.txt",
+            &in_room(
+                &root,
+                &cwd,
+                &["grant", "list", "--room", &room, "--seat", "site-capt"],
+            ),
+        )
+        .unwrap();
+    goldens
+        .check(
+            "output/grant-list-seat.json",
+            &in_room(
+                &root,
+                &cwd,
+                &[
+                    "grant",
+                    "list",
+                    "--room",
+                    &room,
+                    "--seat",
+                    "site-capt",
+                    "--json",
+                ],
+            ),
+        )
+        .unwrap();
 }

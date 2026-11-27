@@ -2,6 +2,8 @@
 
 mod audit;
 
+mod grant;
+
 mod message;
 
 mod watch;
@@ -9,6 +11,9 @@ mod watch;
 pub mod roster;
 
 pub use audit::{AuditEvent, AuditStatus};
+pub use grant::{
+    GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, NewGrant, RevokeStatus,
+};
 pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
 use std::fmt;
 pub use watch::{
