@@ -3,17 +3,17 @@ title: Formation — Admiral seat
 owner: claude
 created_date: 2026-11-27
 updated_date: 2026-11-27
-status: Draft
+status: Accepted
 feature: admiral-seat
 doc_role: scope
 summary: A terminal call with no agent session is the admiral, who is a member of every room without joining and has a mailbox where what waits on him lands.
-stage: designing
-next: The operator reviews this scope and its two open questions.
+stage: idea
+next: Build the admiral caller and the seat in every room.
 ---
 
 # Formation — Admiral seat
 
-Proposed on 2026-11-27 and not yet reviewed. Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
 
 ## Problem
 
@@ -107,10 +107,12 @@ No rule of that scope changes. The chief holds every request first, and only the
 | Let any seat he talks to mail him | It rebuilds the several queues, and skips the chief's first look |
 | One admiral inbox across all rooms | A second store beside the rooms. One formation is active on most days, and `mail who` already shows his count per room |
 
-## Open questions
+## Decided
 
-1. **Who may mail the admiral directly?** Recommended: the chief only. Every other seat reaches him through a request, as the routing rule already says.
-2. **Does mail from the admiral count as his word?** Recommended: yes, with the same standing as his words in a chat, and labelled as sent from a terminal. A seat that doubts one asks the chief.
+The operator, 2026-11-27, approved the scope as drafted. The approval reached him as a design request through the chief and was given in the chief's chat. Two points were open questions in the draft and were approved with the recommendation:
+
+1. **Only the chief mails the admiral directly.** Every other seat reaches him through a request, as the routing rule already says.
+2. **Mail from the admiral counts as his word,** with the same standing as his words in a chat, and labelled as sent from a terminal. A seat that doubts one asks the chief.
 
 ## Build
 
