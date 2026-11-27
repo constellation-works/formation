@@ -63,7 +63,8 @@ The folder is named for the seat. A seat name is already validated as an identif
 
 - **Additive.** Every existing field of the join output stays as it is.
 - **Idempotent.** Joining again as the same seat from the same session changes nothing in the room and prints the same path, so a seat that lost the path after a refresh reads it by joining again.
-- **A failure to create the folder fails the join** with a typed error naming the path. A seat that believes it has a folder and does not would lose the files it writes next.
+- **A failure to create the folder fails the join** with `seat_dir_unavailable` and the path. A seat that believes it has a folder and does not would lose the files it writes next. The seat is already bound when this happens, so joining again once the cause is removed is safe.
+- **The folder is checked as the room directory is.** Join refuses a `seats/` or seat folder that is a symlink, belongs to another user or is open to group or other, with the same error. It never changes an existing folder or its contents.
 - **No new command.** A read-only command may not create the folder, and a seat needs the path once, at the moment it joins.
 
 ### What the seat does with it
@@ -113,7 +114,7 @@ Each through the built executable, as the mail tests are today.
 | A second join changes nothing | Join again from the same session; same `seat_dir`, and a file written there between the joins is still present |
 | The folder follows the room | Join with `--room <path>` and with `FORMATION_HOME` set; `seat_dir` is under that room directory each time |
 | The folder is private | On Unix, its mode grants nothing to group or other |
-| A folder that cannot be created fails the join | Put a regular file at `seats`; join exits 1 with one JSON error line naming the path |
-| Existing output is unchanged | The join goldens differ only by the added field |
+| A folder that cannot be created fails the join | Put a regular file at `seats`; join exits 1 with one `seat_dir_unavailable` JSON error line naming the path |
+| Existing output is unchanged | The first-join test asserts `seat`, `rebound` and `replaced_session` beside the new field. No golden captures join output |
 
-Not verified by tests: that every brief's use of `{scratch}` reads correctly with the new meaning. That is read once when the plugin text changes.
+Not verified by tests: the refusal of a symlinked, foreign-owned or group-readable folder, which rests on the shared kit's directory check; a non-UTF-8 room path, which join refuses because `seat_dir` is a JSON string; and that every brief's use of `{scratch}` reads correctly with the new meaning. That is read once when the plugin text changes.
