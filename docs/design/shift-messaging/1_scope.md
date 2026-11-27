@@ -178,12 +178,12 @@ The first day was the formation of 2026-11-25 to 2026-11-26: a Claude chief with
 - **Latency.** The send and observation times come from the chief's first-shift mail log for 2026-11-26, 00:15Z to 01:34Z, with corroboration from the captain's record at 00:30:53Z. A send's latency is its recorded send time subtracted from its recorded hook observation. Where only a read or acknowledgement time was recorded, the value is an upper bound. Receipt 8, for example, was sent at 00:25:28Z and observed at 00:25:35.550Z, within 8 seconds. The six timed sends and their 4 to 9 second range are reported by the close-out reconstruction of these measures. That reconstruction is a summary and was not reproduced independently for this document. The range covers those six sends only. It is not a full-day maximum, and no longest wait is known because not every send was timed. Receipt 9 was sent at 00:28:45Z and acknowledged at 00:28:57Z, but no hook observation time is recorded for it, so its 12-second send-to-acknowledgement interval is not counted as a delivery latency.
 - **Sentry.** The five hours is the sentry's approximate staffed interval, from the first-shift chief's staffing and close-out records for 2026-11-26. It is not a measured duration. Empty turns were not counted, so the table gives no count.
 - **Baselines from 2026-11-25.** The 40-minute wait has unverified provenance, since no dated record cited here supports it. The sentry baseline of one turn per read describes the read pattern; no count was recorded, so it is unverified as a measured figure.
-- **Hook start.** The hooks are live from 00:12Z, when the operator refreshed the Claude plugin cache (see what broke that day). No dated source record is cited for that time, so it is unverified.
+- **Hook start.** The chief-side plugin setup log for 2026-11-26 records the Claude plugin's `installedAt` time as 00:12:02Z. After reload, the first observed Stop-hook self-test was sent at 00:13:23Z and read at 00:13:27Z. The recorded install time is distinct from the first observed test delivery.
 
 What broke that day:
 
 - The Claude plugin cache had no mail hooks until the operator refreshed it at 00:12Z; before that the chief read mail with a hand-run wait.
-- Mail to a seat in the middle of a turn waited for the turn to end: 4 minutes 14 seconds in the longest timed case, chief to captain.
+- A captain-side hook record for 2026-11-26 documents one busy-turn delay: chief-to-captain receipt 13 was sent at 00:31:30Z and delivered to the Codex Stop hook at 00:35:43.967Z, an elapsed 253.967 seconds (about 4m14s). The captain rechecked the subtraction on 2026-11-27. This is one documented case; the full-shift maximum was not measured.
 - A Codex Desktop update interrupted a captain's Stop hold.
 - Typed input to a Codex captain stalled behind its 1,800-second hold.
 - A Claude seat's 540-second hold ended and three envelopes waited about an hour, until a native message woke the seat.
