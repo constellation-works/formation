@@ -10,5 +10,7 @@ Options:
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
       --as <SEAT>         Joined seat to act as (default: this session's seat)
       --note <TEXT>       Explain the decision
+      --admiral           Record the admiral's answer
       --json              Print machine-readable JSON
+      --source <TEXT>     Where the admiral gave the answer
   -h, --help              Print help

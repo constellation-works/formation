@@ -70,6 +70,27 @@ enum Verb {
         /// Explain the decision.
         #[arg(long, value_name = "TEXT")]
         note: Option<String>,
+        /// Record the admiral's answer.
+        #[arg(long, requires = "source")]
+        admiral: bool,
+        /// Where the admiral gave the answer.
+        #[arg(long, requires = "admiral", value_name = "TEXT")]
+        source: Option<String>,
+    },
+    /// Overturn a settlement and return it to the admiral.
+    Reopen {
+        /// Request identifier.
+        #[arg(value_name = "REQUEST")]
+        id: String,
+        /// Record the admiral's action from a joined seat.
+        #[arg(long)]
+        admiral: bool,
+    },
+    /// Copy open requests from an earlier room.
+    Carry {
+        /// Source room name or path.
+        #[arg(long, value_name = "ROOM")]
+        from: String,
     },
     /// Pass a request you hold to your parent, or to the admiral if you have no parent.
     Pass {
@@ -133,13 +154,31 @@ pub(crate) fn run(env: Env, args: Request, queue: &dyn Fn(&str) -> bool) -> Exit
             },
             queue,
         },
-        Verb::Settle { id, option, note } => Command::Change {
+        Verb::Settle {
+            id,
+            option,
+            note,
+            admiral: _,
+            source,
+        } => Command::Change {
             change: Change::Existing {
                 id,
-                action: Action::Settle { option, note },
+                action: Action::Settle {
+                    option,
+                    note,
+                    source,
+                },
             },
             queue,
         },
+        Verb::Reopen { id, admiral } => Command::Change {
+            change: Change::Existing {
+                id,
+                action: Action::Reopen { admiral },
+            },
+            queue,
+        },
+        Verb::Carry { from } => Command::Carry(from),
         Verb::Pass { id, option, note } => Command::Change {
             change: Change::Existing {
                 id,

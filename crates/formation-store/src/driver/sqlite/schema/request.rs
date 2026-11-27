@@ -19,3 +19,8 @@ pub(super) const CREATE: cw_sqlite::Step = cw_sqlite::Step::sql(
         CHECK(holder IS NULL OR settlement IS NULL)
     ) STRICT;",
 );
+
+/// Preserve settlements when a request is reopened.
+pub(super) const HISTORY: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE room_request ADD COLUMN overturned TEXT NOT NULL DEFAULT '[]';",
+);

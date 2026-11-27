@@ -75,6 +75,11 @@ fn help_and_roster_output() {
             "help/request-settle.txt",
             vec!["request", "settle", "--help"],
         ),
+        (
+            "help/request-reopen.txt",
+            vec!["request", "reopen", "--help"],
+        ),
+        ("help/request-carry.txt", vec!["request", "carry", "--help"]),
         ("help/request-pass.txt", vec!["request", "pass", "--help"]),
         ("help/request-list.txt", vec!["request", "list", "--help"]),
         ("help/request-show.txt", vec!["request", "show", "--help"]),

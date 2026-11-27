@@ -32,6 +32,8 @@ pub(crate) const GRANT_SCHEMA_VERSION: u32 = 15;
 
 pub(crate) const REQUEST_SCHEMA_VERSION: u32 = 16;
 
+pub(crate) const REQUEST_HISTORY_SCHEMA_VERSION: u32 = 17;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -49,4 +51,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::ROSTER,
     grant::CREATE,
     request::CREATE,
+    request::HISTORY,
 ];

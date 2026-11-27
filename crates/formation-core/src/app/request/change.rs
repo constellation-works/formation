@@ -32,13 +32,21 @@ impl Mutation<'_> {
                 };
                 ("received advice", recipient)
             }
-            Action::Settle { option, note } => {
+            Action::Settle {
+                option,
+                note,
+                source: None,
+            } => {
                 if matches!(request.state, RequestState::Settled(_)) {
                     return Err(Failure::Settled(request.id).into());
                 }
                 self.settle(&mut request, option, note)?;
                 ("settled", Some(request.asker.clone()))
             }
+            Action::Settle {
+                source: Some(_), ..
+            }
+            | Action::Reopen { .. } => unreachable!("handled before seat mutations"),
             Action::Pass { option, note } => {
                 self.pass(&mut request, option, note)?;
                 ("passed", self.actor.reports_to.clone())
@@ -82,6 +90,7 @@ impl Mutation<'_> {
                 holder: self.actor.reports_to.clone(),
             },
             advice: Vec::new(),
+            overturned: Vec::new(),
         };
         let (action, recipient) = if let Some(option) = input.settle {
             self.settle(&mut request, option, None)?;
@@ -132,6 +141,8 @@ impl Mutation<'_> {
             grant_id: entry.grant_id,
             limit: entry.limit,
             note: checked_note(note)?,
+            source: None,
+            entered_by: None,
             at: self.now,
         });
         request.updated_at = self.now;
@@ -205,6 +216,18 @@ pub(super) fn run(
     queue: &dyn Fn(&str) -> bool,
 ) -> Result<Request, Error> {
     let room = ctx.mail()?;
+    if matches!(
+        &change,
+        Change::Existing {
+            action: Action::Settle {
+                source: Some(_),
+                ..
+            } | Action::Reopen { .. },
+            ..
+        }
+    ) {
+        return admiral_change(ctx, change, queue);
+    }
     let (request, recipient) = room.store.write(|tx| {
         let roster = grant::require_roster_tx(tx)?;
         let name = joined_caller(tx, &room.caller)?;
@@ -263,4 +286,134 @@ fn checked_note(note: Option<String>) -> Result<Option<String>, Error> {
     note.as_deref()
         .map(|value| rule::text("note", value).map(str::to_owned))
         .transpose()
+}
+
+fn admiral_change(
+    ctx: &Ctx<'_>,
+    change: Change,
+    queue: &dyn Fn(&str) -> bool,
+) -> Result<Request, Error> {
+    let room = ctx.mail()?;
+    let (request, recipients) = room.store.write(|tx| {
+        let roster = grant::require_roster_tx(tx)?;
+        let entered = match &room.caller {
+            Caller::None => None,
+            caller @ (Caller::Explicit(_) | Caller::Session(_) | Caller::Join { .. }) => {
+                let name = joined_caller(tx, caller)?;
+                grant::find_roster_seat(&roster, &name)?;
+                Some(name)
+            }
+        };
+        let Change::Existing { id, action } = change else {
+            unreachable!()
+        };
+        let mut request = rule::require_request(&id, tx.requests().get(&id)?)?;
+        let now = (ctx.clock)();
+        let mut recipients = vec![request.asker.clone()];
+        let verb = match action {
+            Action::Settle {
+                option,
+                note,
+                source: Some(source),
+            } => {
+                if matches!(request.state, RequestState::Settled(_)) {
+                    return Err(Failure::Settled(id).into());
+                }
+                rule::require_option(&request.options, &option)?;
+                request.state = RequestState::Settled(RequestSettlement {
+                    option,
+                    seat: "admiral".to_owned(),
+                    grant_id: None,
+                    limit: None,
+                    note: checked_note(note)?,
+                    source: Some(rule::text("source", &source)?.to_owned()),
+                    entered_by: entered,
+                    at: now,
+                });
+                "settled"
+            }
+            Action::Reopen { admiral } => {
+                if entered.is_some() && !admiral {
+                    return Err(Failure::AdmiralRequired.into());
+                }
+                let RequestState::Settled(settlement) = request.state else {
+                    return Err(Failure::NotSettled(id).into());
+                };
+                if settlement.seat != "admiral" {
+                    recipients.push(settlement.seat.clone());
+                }
+                request.overturned.push(settlement);
+                request.state = RequestState::Open { holder: None };
+                "reopened"
+            }
+            Action::Advise { .. } | Action::Settle { source: None, .. } | Action::Pass { .. } => {
+                unreachable!()
+            }
+        };
+        request.updated_at = now;
+        tx.requests().update(&request)?;
+        for recipient in &recipients {
+            let messages = tx.messages();
+            let mut sequence = messages.next_receipt()?;
+            let id = loop {
+                let id = format!("request-{sequence}");
+                if messages.prior_delivery("admiral", &id)?.is_none() {
+                    break id;
+                }
+                sequence = sequence
+                    .checked_add(1)
+                    .ok_or(Failure::MailIdentifierExhausted)?;
+            };
+            let body = format!(
+                "Request {} {verb}. Run `formation request show {}` for details.",
+                request.id, request.id
+            );
+            messages.insert("admiral", recipient, &id, &body, now.unix_timestamp())?;
+        }
+        Ok((request, recipients))
+    })?;
+    for recipient in recipients {
+        wake::after_commit(ctx, &recipient, queue);
+    }
+    Ok(request)
+}
+
+pub(super) fn carry(ctx: &Ctx<'_>, from: &str) -> Result<Vec<Request>, Error> {
+    let source_env = ctx
+        .env
+        .clone()
+        .with_mail_options(Some(from.to_owned()), None);
+    let source = crate::composition::compose_room(&source_env)?;
+    let snapshot = source.store.read()?;
+    let open: Vec<_> = snapshot
+        .requests()
+        .list()?
+        .into_iter()
+        .filter(|request| matches!(request.state, RequestState::Open { .. }))
+        .collect();
+    drop(snapshot);
+    let room = ctx.mail()?;
+    room.store.write(|tx| {
+        let roster = grant::require_roster_tx(tx)?;
+        let chief = roster
+            .iter()
+            .find(|seat| seat.role == "chief")
+            .ok_or(Failure::NoChief)?;
+        let mut carried = Vec::new();
+        for mut request in open {
+            if tx.requests().get(&request.id)?.is_some() {
+                continue;
+            }
+            if let RequestState::Open {
+                holder: Some(holder),
+            } = &mut request.state
+                && !roster.iter().any(|seat| seat.name == *holder)
+            {
+                *holder = chief.name.clone();
+            }
+            tx.requests().insert(&request)?;
+            carried.push(request);
+        }
+        Ok(carried)
+    })
 }

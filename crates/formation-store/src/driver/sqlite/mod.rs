@@ -49,3 +49,7 @@ pub(crate) fn has_grant(version: u32) -> bool {
 pub(crate) fn has_request(version: u32) -> bool {
     version >= schema::REQUEST_SCHEMA_VERSION
 }
+
+pub(crate) fn has_request_history(version: u32) -> bool {
+    version >= schema::REQUEST_HISTORY_SCHEMA_VERSION
+}

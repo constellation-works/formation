@@ -62,6 +62,7 @@ impl Snapshot {
         RequestRead {
             conn: &self.reader,
             available: sqlite::has_request(self.reader.version()),
+            history: sqlite::has_request_history(self.reader.version()),
         }
     }
 

@@ -143,7 +143,7 @@ A grant records the calling seat (from the session binding or `--as`), or none w
 
 Apply a version 2 roster before using `formation request`. Every request command returns
 `no_roster` in an existing room without one. Writes act as the session's joined seat or
-the joined seat selected with `--as`. Use `--room` to select a room explicitly. Add
+the joined seat selected with `--as`, except for admiral actions and carry. Use `--room` to select a room explicitly. Add
 `--json` to any request command for machine-readable output and stable refusal codes.
 
 ```sh
@@ -152,6 +152,9 @@ formation request open --class design --record '<task or pull request>' \
   --option 'a: Share the cache' --option 'b: Keep separate caches' --recommend b --blocking
 formation request advise <request> --recommend a --note 'Both jobs use the same key.'
 formation request settle <request> --option b --note 'Keep the jobs independent.'
+formation request settle <request> --option a --admiral --source 'chief chat, 10:30'
+formation request reopen <request> --admiral
+formation request carry --from yesterday
 formation request pass <request> --recommend b
 formation request list --waiting admiral
 formation request list --settled-by chief --since 2026-01-01T00:00:00Z --json
@@ -170,11 +173,13 @@ effective authority to open and settle in one step.
 `not_authorized` names the seats that hold the class in scope, or its default holder if no
 seat holds it. The record preserves the chosen option, settling seat, grant ID and limit at
 settlement. A catalog entry has a null grant ID in JSON. The asker receives one envelope.
+With `--admiral --source <text>`, `settle` records the admiral's answer without a grant, including the source and the entering seat (or none outside a session). `reopen` overturns a settlement, returns the request to the admiral, and mails the asker and the settling seat. A joined seat must pass `--admiral`; this changes the record only and does not undo external actions. Overturned settlements remain visible in `show` and `list --settled-by`.
+
+`carry --from <room>` copies open requests into the current room with their IDs and history. It skips existing IDs and settled requests. Holders missing from the new roster map to its chief.
+
 `pass` requires the current holder and sends the request to that seat's parent. A pass by a
 seat with no parent places it in the admiral's queue. Use `--recommend <label>` to add advice
-while passing. `--note` is optional with a recommendation. Request notifications use normal
-room mail. If a recipient seat has yet to join, the change is refused and can be retried after
-it joins. Requests waiting on the admiral appear in the queue.
+while passing. `--note` is optional with a recommendation. Seat-entered request notifications use normal room mail. If a recipient seat has yet to join, the change is refused and can be retried after it joins. Admiral notifications are stored for the named seats, including seats that have not joined. Requests waiting on the admiral appear in the queue.
 
 `list` shows all requests newest first by default. Use `--waiting <seat>` for that seat's
 open requests or `--waiting admiral` for the admiral's queue. Use `--settled-by <seat>`

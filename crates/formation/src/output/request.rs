@@ -43,6 +43,8 @@ struct Payload<'a> {
     updated_at: OffsetDateTime,
     advice: &'a [RequestAdvice],
     settlement: Option<&'a RequestSettlement>,
+    #[serde(skip_serializing_if = "<[RequestSettlement]>::is_empty")]
+    overturned: &'a [RequestSettlement],
 }
 
 impl<'a> Payload<'a> {
@@ -71,6 +73,7 @@ impl<'a> Payload<'a> {
             updated_at: record.updated_at,
             advice: &record.advice,
             settlement,
+            overturned: &record.overturned,
         }
     }
 
@@ -85,13 +88,20 @@ impl<'a> Payload<'a> {
             .advice
             .last()
             .map_or(self.recommendation, |advice| advice.option.as_str());
-        let settlement = self.settlement;
+        let settlement = self.settlement.or_else(|| self.overturned.last());
         let limit = settlement
             .and_then(|settlement| settlement.limit.as_deref())
             .map_or_else(|| "-".to_owned(), |limit| limit.escape_debug().to_string());
         [
             self.id.to_owned(),
-            self.state.to_owned(),
+            if self.overturned.is_empty() {
+                self.state
+            } else if self.settlement.is_some() {
+                "settled; overturned history"
+            } else {
+                "overturned"
+            }
+            .to_owned(),
             self.holder.unwrap_or("-").to_owned(),
             self.class.to_owned(),
             self.ask.to_owned(),
@@ -170,6 +180,15 @@ fn write_detail(out: &mut impl Write, record: &Payload<'_>) -> io::Result<()> {
             writeln!(out, "  {note}")?;
         }
     }
+    for settlement in record.overturned {
+        writeln!(
+            out,
+            "Overturned settlement by {} at {}: {}",
+            settlement.seat,
+            timestamp(settlement.at)?,
+            settlement.option
+        )?;
+    }
     if let Some(settlement) = record.settlement {
         writeln!(
             out,
@@ -179,6 +198,14 @@ fn write_detail(out: &mut impl Write, record: &Payload<'_>) -> io::Result<()> {
             settlement.option,
             grant(settlement)
         )?;
+        if let Some(source) = &settlement.source {
+            writeln!(out, "Source: {source}")?;
+            writeln!(
+                out,
+                "Entered by: {}",
+                settlement.entered_by.as_deref().unwrap_or("none")
+            )?;
+        }
         if let Some(limit) = &settlement.limit {
             writeln!(out, "Limit: {}", limit.escape_debug())?;
         }
@@ -233,6 +260,9 @@ fn write_row(
 }
 
 fn grant(settlement: &RequestSettlement) -> String {
+    if settlement.source.is_some() {
+        return "admiral".to_owned();
+    }
     settlement
         .grant_id
         .map_or_else(|| "catalog".to_owned(), |id| id.to_string())
