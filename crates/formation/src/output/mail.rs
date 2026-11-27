@@ -15,10 +15,12 @@ pub(crate) fn payload(out: Outcome) -> Value {
         Outcome::Joined {
             seat,
             replaced_session,
+            seat_dir,
         } => json!({
             "seat": seat,
             "rebound": replaced_session.is_some(),
             "replaced_session": replaced_session,
+            "seat_dir": seat_dir,
         }),
         Outcome::Seats(seats) => json!({"seats": seats
             .into_iter()

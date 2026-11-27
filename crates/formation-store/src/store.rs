@@ -52,6 +52,13 @@ impl Store {
         crate::repository::session::write(sessions_dir, session, room).map_err(Into::into)
     }
 
+    /// Create the seat's private folder in this room if missing and return its absolute path.
+    ///
+    /// The seat name must already be a valid identifier. Existing contents are never touched.
+    pub fn seat_dir(&self, seat: &str) -> Result<PathBuf, Error> {
+        crate::repository::seat_dir::ensure(&self.root, seat).map_err(Into::into)
+    }
+
     /// Open one committed snapshot.
     pub fn read(&self) -> Result<Snapshot, Error> {
         Ok(Snapshot {

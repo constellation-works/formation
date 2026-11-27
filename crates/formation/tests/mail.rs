@@ -470,3 +470,62 @@ fn join_resolves_scribe_seats_and_refuses_missing_or_ambiguous_results() {
         "captain"
     );
 }
+
+#[test]
+fn join_creates_the_seat_folder_and_reports_it_again_on_rejoin() {
+    let root = TempRoot::new("FORMATION").unwrap();
+    let home = root.path().join("formation-home");
+    let join = || {
+        run_ok(
+            formation_with_home(&root, &home)
+                .env("CLAUDE_CODE_SESSION_ID", "sess-folder")
+                .args(["mail", "join", "chief", "--room", "trial"]),
+        )
+    };
+
+    let first = join();
+    let expected = home.join("rooms/trial/seats/chief");
+    assert_eq!(first["seat_dir"], expected.to_str().unwrap());
+    assert_eq!(first["seat"], "chief");
+    assert_eq!(first["rebound"], false);
+    assert_eq!(first["replaced_session"], Value::Null);
+    assert!(expected.is_dir());
+
+    std::fs::write(expected.join("held"), "kept").unwrap();
+    let second = join();
+    assert_eq!(second["seat_dir"], first["seat_dir"]);
+    assert_eq!(
+        std::fs::read_to_string(expected.join("held")).unwrap(),
+        "kept"
+    );
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&expected).unwrap().permissions().mode();
+        assert_eq!(mode & 0o077, 0, "seat folder mode {mode:o}");
+    }
+}
+
+#[test]
+fn seat_folder_follows_a_room_path() {
+    let room = Room::new();
+    let joined = room.ok("chief", &["join", "chief"]);
+    let expected = room.0.path().join("seats/chief");
+    assert_eq!(joined["seat_dir"], expected.to_str().unwrap());
+    assert!(expected.is_dir());
+}
+
+#[test]
+fn join_fails_when_the_seat_folder_cannot_be_created() {
+    let room = Room::new();
+    std::fs::create_dir_all(room.0.path()).unwrap();
+    let blocker = room.0.path().join("seats");
+    std::fs::write(&blocker, "not a directory").unwrap();
+    let out = room.run("chief", &["join", "chief"]);
+    expect_refusal(
+        &out,
+        "seat_dir_unavailable",
+        Some(blocker.to_str().unwrap()),
+    );
+}

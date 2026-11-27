@@ -26,6 +26,7 @@ use formation_store::Store;
 use formation_store::Tx;
 use formation_store::contract::Message;
 pub use formation_store::contract::SentMessage;
+use std::path::PathBuf;
 use std::time::Duration;
 
 pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -65,6 +66,8 @@ pub enum Outcome {
         seat: String,
         /// Previous session id when a different session took over the seat.
         replaced_session: Option<String>,
+        /// Absolute path of the seat's folder in the room directory.
+        seat_dir: PathBuf,
     },
     /// Every joined seat, ordered by name.
     Seats(Vec<SeatStatus>),
