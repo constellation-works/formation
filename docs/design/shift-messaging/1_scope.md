@@ -3,7 +3,7 @@ title: Formation — Shift messaging
 owner: codex
 created_date: 2026-11-24
 updated_date: 2026-11-27
-last_validated: 2026-11-26
+last_validated: 2026-11-27
 status: Draft
 feature: shift-messaging
 doc_role: scope
@@ -166,11 +166,19 @@ Trial 5 exercised the provider queue and prompt hook. The built-executable integ
 
 | Measure | 2026-11-25 | 2026-11-26, first day on seat mail | Target |
 | --- | --- | --- | --- |
-| Routing comments on a captain's task record | Every message between the chief and the Codex captain | Two chief notes among 81 comments on one captain's record, one of them restating a mailed ask. One answer was also written on a second captain's record | None |
+| Routing comments on a captain's task record | Every message between the chief and the Codex captain | Two chief notes among 81 comments on one captain's record. One answer was also written on a second captain's record | None |
 | Longest wait for the chief to learn of the Codex captain's answer | 40 minutes | 4 to 9 seconds over the six sends that were timed, all delivered by the hook. Not every send was timed, so no longest wait is known | Under a minute while a hold is waiting |
 | Sentry turns in an hour with nothing new | One per read | Not counted. A sentry ran for five hours and its empty turns were not recorded | None |
 
-The first day was the formation of 2026-11-25 to 2026-11-26: a Claude chief with Codex captains, on seat mail and the hooks from 00:12Z on 2026-11-26. The values come from the chief's and the captains' task records. The first target was nearly met, the second was met for every send that was timed, and the third has no observation, so the stage stays `building`.
+The first day was the formation of 2026-11-25 to 2026-11-26: a Claude chief with Codex captains, on seat mail and the hooks from 00:12Z on 2026-11-26. The first target was missed: two routing notes remained against a target of none. The second was met for each of the six sends that were timed. The third has no observation, so the stage stays `building`.
+
+**Sources and method.** Times are UTC. Each figure above has the record and method listed here.
+
+- **Routing.** The Codex captain's assignment comment list, from 2026-11-26, has 81 comments. The chief wrote two of them: a takeover routing note at 00:19:32Z and a standards-relay note at 00:31:47Z. The captain's entry at 00:31:47Z matches the relay note and anchors the count. An independent recheck on 2026-11-27 read the record's comments, counted them and grouped them by author, and reproduced 81 with the same two chief notes. The second captain's mirrored answer is in the chief's first-shift mail log at 00:36Z on 2026-11-26.
+- **Latency.** The send and observation times come from the chief's first-shift mail log for 2026-11-26, 00:15Z to 01:34Z, with corroboration from the captain's record at 00:30:53Z. A send's latency is its recorded send time subtracted from its recorded hook observation. Where only a read or acknowledgement time was recorded, the value is an upper bound. Receipt 8, for example, was sent at 00:25:28Z and observed at 00:25:35.550Z, within 8 seconds. The six timed sends and their 4 to 9 second range are reported by the close-out reconstruction of these measures. That reconstruction is a summary and was not reproduced independently for this document. The range covers those six sends only. It is not a full-day maximum, and no longest wait is known because not every send was timed. Receipt 9 was sent at 00:28:45Z and acknowledged at 00:28:57Z, but no hook observation time is recorded for it, so its 12-second send-to-acknowledgement interval is not counted as a delivery latency.
+- **Sentry.** The five hours is the sentry's approximate staffed interval, from the first-shift chief's staffing and close-out records for 2026-11-26. It is not a measured duration. Empty turns were not counted, so the table gives no count.
+- **Baselines from 2026-11-25.** The 40-minute wait has unverified provenance, since no dated record cited here supports it. The sentry baseline of one turn per read describes the read pattern; no count was recorded, so it is unverified as a measured figure.
+- **Hook start.** The hooks are live from 00:12Z, when the operator refreshed the Claude plugin cache (see what broke that day). No dated source record is cited for that time, so it is unverified.
 
 What broke that day:
 
