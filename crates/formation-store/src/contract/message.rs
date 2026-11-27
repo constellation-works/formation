@@ -67,8 +67,10 @@ pub struct SentMessage {
 pub struct Mailbox {
     /// Seat name.
     pub name: String,
-    /// Envelopes addressed to the seat and not acknowledged.
-    pub unread: i64,
+    /// Envelopes addressed to the seat that no hook has delivered and it has not acknowledged.
+    pub undelivered: i64,
+    /// Envelopes addressed to the seat and not acknowledged, whether or not a hook delivered them.
+    pub unacknowledged: i64,
     /// Unix seconds when the seat last renewed its presence, or 0 when it never has.
     pub seen: i64,
 }

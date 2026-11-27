@@ -10,7 +10,8 @@ pub(super) fn run(store: &Store, caller: SeatRef<'_>, now: i64) -> Result<Outcom
             .into_iter()
             .map(|mailbox| SeatStatus {
                 name: mailbox.name,
-                unread: mailbox.unread,
+                undelivered: mailbox.undelivered,
+                unacknowledged: mailbox.unacknowledged,
                 held: rule::held(mailbox.seen, now),
                 seen: if mailbox.seen > 0 {
                     rfc3339(mailbox.seen)

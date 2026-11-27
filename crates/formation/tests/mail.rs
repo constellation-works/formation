@@ -192,7 +192,7 @@ fn send_to_a_name_nobody_joined_lists_the_joined_seats() {
 }
 
 #[test]
-fn who_lists_every_joined_seat_with_unread_held_and_seen() {
+fn who_lists_every_joined_seat_with_undelivered_unacknowledged_held_and_seen() {
     let room = Room::new();
     room.ok("chief", &["join", "chief"]);
     room.ok("captain", &["join", "captain"]);
@@ -205,11 +205,14 @@ fn who_lists_every_joined_seat_with_unread_held_and_seen() {
     let seats = who["seats"].as_array().unwrap();
     assert_eq!(seats.len(), 2);
     assert_eq!(seats[0]["name"], "captain");
-    assert_eq!(seats[0]["unread"], 1);
+    assert_eq!(seats[0]["undelivered"], 1);
+    assert_eq!(seats[0]["unacknowledged"], 1);
+    assert!(seats[0].get("unread").is_none());
     assert_eq!(seats[0]["held"], false);
     assert_eq!(seats[0]["seen"], Value::Null);
     assert_eq!(seats[1]["name"], "chief");
-    assert_eq!(seats[1]["unread"], 0);
+    assert_eq!(seats[1]["undelivered"], 0);
+    assert_eq!(seats[1]["unacknowledged"], 0);
     assert_eq!(seats[1]["held"], true);
     assert!(is_rfc3339_utc(seats[1]["seen"].as_str().unwrap()));
 }
