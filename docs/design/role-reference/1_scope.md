@@ -3,17 +3,17 @@ title: Formation — Role references
 owner: claude
 created_date: 2026-11-27
 updated_date: 2026-11-27
-status: Draft
+status: Accepted
 feature: role-reference
 doc_role: scope
 summary: One Formation skill in which every role reads one reference of its own, a seat card replaces the per-role briefs, and each role's record carries the crew of the seat that holds it.
 stage: idea
-next: The operator answers the two open questions and approves; then build phase 1, the role files and the seat card.
+next: Build phase 1, the role files, the seat card and the skill check.
 ---
 
 # Formation — Role references
 
-The operator chose the direction on 2026-11-27 ([Decided](#decided)). The layout, the seat card, the record table and the checks are proposed here and not yet reviewed.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
 
 ## Problem
 
@@ -80,7 +80,7 @@ plugin/skills/formation/
 | `SKILL.md` | Gains one step that routes a seat to its role file, and the list of role files |
 | `units.yaml` | Each role's `brief:` becomes `role:`, and `record:` becomes a title, tags and crew |
 | `references/sentry.md` | Folds into `role-sentry.md`; only the sentry reads it |
-| Advisor | Added as an optional seat ([open question 1](#open)) |
+| Advisor | Added as an optional seat ([Decided](#decided), 3) |
 | `record-check.sh` | New. Compares each record with the roster |
 | Skill check | New, in `make ci-fast`. Budgets, links and the role set |
 
@@ -153,7 +153,7 @@ The record of each role moves from prose to fields in `units.yaml`:
 | Role | Title | Tags | Crew | Filed by |
 | --- | --- | --- | --- | --- |
 | chief | `[orchestration]: formation <units> - <family>` | `orchestration`, `formation-day`, `no-drain` | the chief's | the chief |
-| advisor | `[advisor]: formation <group> - <family>` | `advisor`, `no-drain` | the advisor's | whoever starts it ([open question 2](#open)) |
+| advisor | `[advisor]: formation <group> - <family>` | `advisor`, `no-drain` | the advisor's | whoever starts it; an advisor with no card files its own |
 | captain | `[orchestration]: <ws> - <family>` | `orchestration`, `no-drain`, the workspace | the captain's | the chief, before the start |
 | lieutenant, sergeant | the task it is ordered onto or claims | that task's | its own, set when it claims | — |
 | aide, sentry, specialist | none | | | |
@@ -207,13 +207,12 @@ The second copy of the skill is retired by placing every rule it holds: in a rol
 
 The operator, 2026-11-27, in the advisor's chat:
 
-1. **One skill, with a reference per role.** To a proposal naming this plugin as its home, the operator asked for the spec.
+1. **One skill, with a reference per role,** in this plugin. Asked for as a spec, then approved as drafted.
 2. **The advisor keeps a record** in the coordination workspace, tagged `advisor`.
+3. **The advisor is a product role:** an optional seat started on first need, with no authority row, reaching the chief only. Which model it runs on stays a house choice. Keeping its role file beside the house file would have left one role outside the one skill.
+4. **Whoever starts the advisor files its record,** as for a captain, so its id is on the card. An advisor the admiral opens directly, with no card, files its own on its first turn.
 
-## Open
-
-1. **Is the advisor a product role?** Recommended: yes, as an optional seat started on first need, with no authority row, reaching the chief only. Which model it runs on stays a house choice. The alternative keeps its role file in the house file's directory, which leaves one role outside the one skill.
-2. **Who files the advisor's record?** Recommended: whoever starts it, as for a captain, so its id is on the card. An advisor the admiral opens directly, with no card, files its own on its first turn.
+Items 3 and 4 were open questions in the draft, approved with the recommendation.
 
 ## Build
 
