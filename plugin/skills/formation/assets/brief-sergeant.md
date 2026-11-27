@@ -114,9 +114,10 @@ For each item the sentry sends, and each piece of routine work the captain order
      3. Fix it yourself only when it is mechanical: formatting, lint, a docs guard, a
         generated index, a lockfile, or a golden whose new output the commit that turned
         the branch red intended (name that commit). The diff changes no behaviour. Work in
-        your own worktree under `~/workspace/constellation/worktrees/`, never under `{scratch}` or
-        `/tmp`, cut from the base branch's head; commit before the turn ends, and open a PR
-        against the base branch. You do not merge it and never enable auto-merge. Send the
+        your own worktree under `~/workspace/constellation/worktrees/`, never under `{scratch}`
+        (your seat folder, the `seat_dir` that `formation mail join` printed) or `/tmp`, cut
+        from the base branch's head; commit before the turn ends, and open a PR against the
+        base branch. You do not merge it and never enable auto-merge. Send the
         captain the PR as a **now** message; it lands it after the required checks.
      4. Never go green by weakening a check: no skipped or ignored test, no loosened
         assertion, no removed guard, no added retry. A fix that would touch an assertion or

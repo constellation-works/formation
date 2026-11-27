@@ -8,6 +8,8 @@ mod message;
 
 mod seat;
 
+pub(crate) mod seat_dir;
+
 pub(crate) mod session;
 
 mod watch;
