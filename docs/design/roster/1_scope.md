@@ -3,17 +3,17 @@ title: Formation — Roster view
 owner: claude
 created_date: 2026-11-27
 updated_date: 2026-11-27
-status: Draft
+status: Accepted
 feature: roster
 doc_role: scope
 summary: Two read commands list the formations in the home and show one formation's seats beside their live state, and a recorded close tells an ended formation from a running one.
-stage: designing
-next: The operator reviews this scope and its two open questions.
+stage: idea
+next: Build `roster show`, after the task that adds `roster apply`.
 ---
 
 # Formation — Roster view
 
-Proposed on 2026-11-27 and not yet reviewed. Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
 
 ## Problem
 
@@ -124,10 +124,12 @@ A room is `active` until `formation roster close` records its end, and `closed` 
 | Read the notes store's list of groups | That store is optional, and it knows members but no rank, parent or mail state |
 | A pane beside the chat | The command serves the admiral and every seat now. A pane can read its JSON later |
 
-## Open questions
+## Decided
 
-1. **A third status for an abandoned room?** Recommended: no. Two statuses and the `LAST SEEN` column show it, and a threshold for "abandoned" would be a guess.
-2. **Does a closed room refuse mail?** Recommended: no. A seat finishing its handoff after the close still needs its inbox. Close is a marker, and only `roster apply` is refused.
+The operator, 2026-11-27, approved the scope as drafted. The approval reached him as a design request through the chief and was given in the chief's chat. Two points were open questions in the draft and were approved with the recommendation:
+
+1. **No third status for an abandoned room.** Two statuses and the `LAST SEEN` column show it, and a threshold for "abandoned" would be a guess.
+2. **A closed room does not refuse mail.** A seat finishing its handoff after the close still needs its inbox. Close is a marker, and only `roster apply` is refused.
 
 ## Build
 
