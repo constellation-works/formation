@@ -383,6 +383,102 @@ fn a_failed_notification_rolls_back_the_request() {
     room.assert_mail(CHIEF, CAPTAIN, opened["id"].as_str().unwrap());
 }
 
+#[test]
+fn admiral_answers_and_overturns_delegated_settlements() {
+    let room = Room::new(&[CHIEF, CAPTAIN]);
+    room.apply_roster();
+    let first = room.json(Some(CAPTAIN), OPEN);
+    let id = first["id"].as_str().unwrap();
+    let missing = room.request(None, &["settle", id, "--option", "a", "--admiral"]);
+    assert!(!missing.status.success());
+    let answer = room.json(
+        Some(CAPTAIN),
+        &[
+            "settle",
+            id,
+            "--option",
+            "b",
+            "--admiral",
+            "--source",
+            "captain chat",
+        ],
+    );
+    assert_eq!(answer["settlement"]["seat"], "admiral");
+    assert_eq!(answer["settlement"]["source"], "captain chat");
+    assert_eq!(answer["settlement"]["entered_by"], CAPTAIN);
+    room.refuse(Some(CHIEF), &["reopen", id], "admiral_required");
+    let reopened = room.json(None, &["reopen", id]);
+    assert_eq!(reopened["holder"], "admiral");
+    assert_eq!(reopened["overturned"][0]["source"], "captain chat");
+    let second = room.json(Some(CAPTAIN), OPEN);
+    let id2 = second["id"].as_str().unwrap();
+    room.grant("add", CHIEF, "app");
+    room.json(Some(CHIEF), &["settle", id2, "--option", "a"]);
+    let reopened = room.json(Some(CHIEF), &["reopen", id2, "--admiral"]);
+    assert_eq!(reopened["overturned"][0]["seat"], CHIEF);
+    let listed = room.json(None, &["list", "--settled-by", CHIEF]);
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed[0]["overturned"][0]["seat"], CHIEF);
+    room.assert_mail(CHIEF, "admiral", id2);
+    room.assert_mail(CAPTAIN, "admiral", id2);
+}
+
+#[test]
+fn carry_preserves_open_history_and_maps_missing_holders() {
+    let room = Room::new(&[CHIEF, CAPTAIN, WORKER]);
+    room.apply_roster();
+    let opened = room.json(Some(WORKER), OPEN);
+    let id = opened["id"].as_str().unwrap();
+    room.json(
+        Some(CAPTAIN),
+        &["advise", id, "--recommend", "b", "--note", "context"],
+    );
+    let closed = room.json(Some(CAPTAIN), OPEN);
+    let closed_id = closed["id"].as_str().unwrap();
+    room.json(
+        None,
+        &[
+            "settle",
+            closed_id,
+            "--option",
+            "a",
+            "--admiral",
+            "--source",
+            "chat",
+        ],
+    );
+    success(
+        room.command()
+            .args(["mail", "join", CHIEF, "--room", "tomorrow"])
+            .output()
+            .unwrap(),
+    );
+    let roster = json!({
+        "version": 2,
+        "seats": [{"name": CHIEF, "role": "chief", "host": "claude-desktop"}],
+        "routes": []
+    });
+    let mut command = room.command();
+    command.args(["roster", "apply", "--room", "tomorrow"]);
+    success(run_with_input(&mut command, &roster));
+    let carry = || {
+        parse(
+            room.command()
+                .args([
+                    "request", "carry", "--room", "tomorrow", "--from", "trial", "--json",
+                ])
+                .output()
+                .unwrap(),
+        )
+    };
+    let carried = carry();
+    assert_eq!(carried.as_array().unwrap().len(), 1);
+    assert_eq!(carried[0]["id"], id);
+    assert_eq!(carried[0]["holder"], CHIEF);
+    assert_eq!(carried[0]["advice"][0]["note"], "context");
+    assert_eq!(carry(), json!([]));
+}
+
 fn run_with_input(command: &mut Command, input: &Value) -> Output {
     let mut child = command
         .stdin(Stdio::piped())

@@ -11,12 +11,13 @@ use serde::de::DeserializeOwned;
 use time::OffsetDateTime;
 
 const COLUMNS: &str = "id, asker, class, workspace, record, ask, options, recommendation,
-    blocking, opened_at, updated_at, holder, settlement, advice";
+    blocking, opened_at, updated_at, holder, settlement, advice, overturned";
 
 /// Requests visible in a room snapshot.
 pub struct RequestRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) available: bool,
+    pub(crate) history: bool,
 }
 
 impl RequestRead<'_> {
@@ -25,7 +26,13 @@ impl RequestRead<'_> {
         if !self.available {
             return Ok(None);
         }
-        let query = format!("SELECT {COLUMNS} FROM room_request WHERE id = ?");
+        let columns = if self.history {
+            COLUMNS
+        } else {
+            "id, asker, class, workspace, record, ask, options, recommendation,
+             blocking, opened_at, updated_at, holder, settlement, advice, '[]'"
+        };
+        let query = format!("SELECT {columns} FROM room_request WHERE id = ?");
         self.conn
             .query_row(&query, [id], decode)
             .optional()
@@ -37,7 +44,13 @@ impl RequestRead<'_> {
         if !self.available {
             return Ok(Vec::new());
         }
-        let query = format!("SELECT {COLUMNS} FROM room_request ORDER BY opened_at DESC, id");
+        let columns = if self.history {
+            COLUMNS
+        } else {
+            "id, asker, class, workspace, record, ask, options, recommendation,
+             blocking, opened_at, updated_at, holder, settlement, advice, '[]'"
+        };
+        let query = format!("SELECT {columns} FROM room_request ORDER BY opened_at DESC, id");
         let mut statement = self.conn.prepare(&query).map_err(error::sql)?;
         statement
             .query_map([], decode)
@@ -65,6 +78,7 @@ impl RequestMut<'_> {
         RequestRead {
             conn: self.conn,
             available: true,
+            history: true,
         }
         .get(id)
     }
@@ -77,7 +91,7 @@ impl RequestMut<'_> {
             .execute(
                 &format!(
                     "INSERT INTO room_request ({COLUMNS})
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ),
                 params![
                     request.id,
@@ -94,6 +108,7 @@ impl RequestMut<'_> {
                     holder,
                     settlement,
                     encode(&request.advice)?,
+                    encode(&request.overturned)?,
                 ],
             )
             .map(|_| ())
@@ -107,13 +122,14 @@ impl RequestMut<'_> {
         let changed = self
             .conn
             .execute(
-                "UPDATE room_request SET updated_at = ?, holder = ?, settlement = ?, advice = ?
-                 WHERE id = ?",
+                "UPDATE room_request SET updated_at = ?, holder = ?, settlement = ?,
+                 advice = ?, overturned = ? WHERE id = ?",
                 params![
                     encode_time(request.updated_at)?,
                     holder,
                     settlement,
                     encode(&request.advice)?,
+                    encode(&request.overturned)?,
                     request.id,
                 ],
             )
@@ -151,6 +167,7 @@ fn decode(row: &Row<'_>) -> Result<Request, SqlError> {
         updated_at: decode_time(row, 10)?,
         state,
         advice: decode_json(&row.get::<_, String>(13)?, 13)?,
+        overturned: decode_json(&row.get::<_, String>(14)?, 14)?,
     })
 }
 

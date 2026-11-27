@@ -460,6 +460,7 @@ fn upgrade_to_request_preserves_room_records() -> Result<(), Box<dyn std::error:
         updated_at: now,
         state: RequestState::Open { holder: None },
         advice: Vec::new(),
+        overturned: Vec::new(),
     };
     store.write(|tx| tx.requests().insert(&request))?;
 
@@ -474,5 +475,20 @@ fn upgrade_to_request_preserves_room_records() -> Result<(), Box<dyn std::error:
     ));
     assert_eq!(snapshot.roster().seats()?.len(), 1);
     assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    Ok(())
+}
+
+#[test]
+fn request_history_upgrade_reads_version_sixteen_before_and_after_write()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|_| Ok(()))?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch("ALTER TABLE room_request DROP COLUMN overturned; PRAGMA user_version = 16;")?;
+    drop(db);
+    assert!(store.read()?.requests().list()?.is_empty());
+    store.write(|_| Ok(()))?;
+    assert!(store.read()?.requests().list()?.is_empty());
     Ok(())
 }

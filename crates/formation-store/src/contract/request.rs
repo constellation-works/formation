@@ -39,6 +39,12 @@ pub struct RequestSettlement {
     pub limit: Option<String>,
     /// Explanation, when supplied.
     pub note: Option<String>,
+    /// Source of an admiral answer, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Seat that entered an admiral answer, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entered_by: Option<String>,
     /// When the choice was made.
     #[serde(with = "time::serde::rfc3339")]
     pub at: OffsetDateTime,
@@ -85,4 +91,6 @@ pub struct Request {
     pub state: RequestState,
     /// Recommendations added by seats, in recording order.
     pub advice: Vec<RequestAdvice>,
+    /// Prior settlements overturned by the admiral.
+    pub overturned: Vec<RequestSettlement>,
 }

@@ -70,6 +70,13 @@ pub enum Action {
         option: String,
         /// Optional explanation of the choice.
         note: Option<String>,
+        /// Admiral answer source; absence means delegated settlement.
+        source: Option<String>,
+    },
+    /// Overturn a settlement and return it to the admiral.
+    Reopen {
+        /// Whether the caller explicitly records the admiral's action.
+        admiral: bool,
     },
     /// Move an open request to its holder's parent, or to the admiral.
     Pass {
@@ -89,6 +96,8 @@ pub enum Command<'a> {
         /// Queue a fixed wake for an idle Codex session.
         queue: &'a dyn Fn(&str) -> bool,
     },
+    /// Carry open requests from a previous room.
+    Carry(String),
     /// Read matching requests.
     List(Filter),
     /// Read one request by identifier.
@@ -122,8 +131,10 @@ impl<'a> App for RequestApp<'a> {
                     Action::Advise { .. } => "request advise",
                     Action::Settle { .. } => "request settle",
                     Action::Pass { .. } => "request pass",
+                    Action::Reopen { .. } => "request reopen",
                 },
             }),
+            Command::Carry(_) => Some("request carry"),
             Command::List(_) | Command::Show(_) => None,
         }
     }
@@ -133,6 +144,7 @@ impl<'a> App for RequestApp<'a> {
             Command::Change { change, queue } => {
                 change::run(ctx, change, queue).map(|request| Outcome::Record(Box::new(request)))
             }
+            Command::Carry(from) => change::carry(ctx, &from).map(Outcome::List),
             Command::List(filter) => {
                 let snapshot = read_snapshot(ctx)?;
                 let filter = rule::ListFilter::parse(filter)?;

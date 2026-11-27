@@ -36,6 +36,12 @@ pub(super) enum Failure {
     NoteRequiresRecommendation,
     #[error("invalid `--since` {0:?}; use an RFC 3339 timestamp with an offset")]
     InvalidSince(String),
+    #[error("a joined seat must pass --admiral to reopen a request")]
+    AdmiralRequired,
+    #[error("request `{0}` is not settled")]
+    NotSettled(String),
+    #[error("the current roster has no chief")]
+    NoChief,
     #[error("could not reserve an envelope identifier for the request")]
     MailIdentifierExhausted,
 }
@@ -43,6 +49,9 @@ pub(super) enum Failure {
 impl From<Failure> for Error {
     fn from(failure: Failure) -> Self {
         let code = match &failure {
+            Failure::AdmiralRequired => "admiral_required",
+            Failure::NotSettled(_) => "request_not_settled",
+            Failure::NoChief => "chief_required",
             Failure::SeatRequired => "seat_required",
             Failure::UnjoinedSeat(_) => "unknown_seat",
             Failure::UnknownRequest(_) => "unknown_request",
@@ -85,29 +94,41 @@ impl ListFilter {
     pub(super) fn matches(&self, request: &Request) -> bool {
         match &request.state {
             RequestState::Open { holder } => {
-                if self.settled_by.is_some()
-                    || self.waiting.as_ref().is_some_and(|name| {
-                        if name == "admiral" {
-                            holder.is_some()
-                        } else {
-                            holder.as_ref() != Some(name)
-                        }
+                if self.settled_by.as_ref().is_some_and(|seat| {
+                    !request.overturned.iter().any(|entry| {
+                        &entry.seat == seat && self.since.is_none_or(|since| entry.at >= since)
                     })
-                {
+                }) || self.waiting.as_ref().is_some_and(|name| {
+                    if name == "admiral" {
+                        holder.is_some()
+                    } else {
+                        holder.as_ref() != Some(name)
+                    }
+                }) {
                     return false;
                 }
             }
             RequestState::Settled(settlement) => {
                 if self.waiting.is_some()
-                    || self
-                        .settled_by
-                        .as_ref()
-                        .is_some_and(|seat| seat != &settlement.seat)
+                    || self.settled_by.as_ref().is_some_and(|seat| {
+                        seat != &settlement.seat
+                            && !request.overturned.iter().any(|prior| {
+                                &prior.seat == seat
+                                    && self.since.is_none_or(|since| prior.at >= since)
+                            })
+                    })
                 {
                     return false;
                 }
                 if self.settled_by.is_some() {
-                    return self.since.is_none_or(|since| settlement.at >= since);
+                    return self.settled_by.as_ref().is_some_and(|seat| {
+                        (seat == &settlement.seat
+                            && self.since.is_none_or(|since| settlement.at >= since))
+                            || request.overturned.iter().any(|prior| {
+                                seat == &prior.seat
+                                    && self.since.is_none_or(|since| prior.at >= since)
+                            })
+                    });
                 }
             }
         }
