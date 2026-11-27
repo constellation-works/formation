@@ -4,9 +4,9 @@ Usage: formation mail [OPTIONS] <COMMAND>
 
 Commands:
   join   Register this seat, or rebind it to this session
-  who    List every joined seat, not only those seen lately: unread, held, seen
+  who    List every joined seat, not only those seen lately: undelivered, unacknowledged, held, seen
   send   Send to a joined seat, present or not. Reuse the ID when retrying
-  inbox  Read unread messages or wait for up to 900 seconds
+  inbox  Read unacknowledged messages or wait for up to 900 seconds
   sent   List this seat's most recent sends and their delivery state
   ack    Mark a receipt in this seat's inbox as handled
   help   Print this message or the help of the given subcommand(s)

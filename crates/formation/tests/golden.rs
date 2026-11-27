@@ -84,6 +84,33 @@ fn in_room(root: &TempRoot, cwd: &std::path::Path, args: &[&str]) -> String {
 }
 
 #[test]
+fn mail_who_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap().to_owned();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for seat in ["captain", "chief"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", &room]);
+    }
+    in_room(
+        &root,
+        &cwd,
+        &[
+            "mail", "send", "captain", "--room", &room, "--as", "chief", "--id", "who-1", "--body",
+            "pending",
+        ],
+    );
+    let who = in_room(
+        &root,
+        &cwd,
+        &["mail", "who", "--room", &room, "--as", "chief"],
+    );
+    goldens
+        .check("output/mail-who.json", &redact_timestamps(&who))
+        .unwrap();
+}
+
+#[test]
 fn watch_list_output() {
     let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
     let root = TempRoot::new("FORMATION").unwrap();

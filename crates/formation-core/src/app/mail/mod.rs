@@ -97,8 +97,10 @@ pub enum Outcome {
 pub struct SeatStatus {
     /// Seat name.
     pub name: String,
-    /// Unacknowledged envelopes addressed to the seat.
-    pub unread: i64,
+    /// Envelopes addressed to the seat that no hook has delivered and it has not acknowledged.
+    pub undelivered: i64,
+    /// Envelopes addressed to the seat that it has not acknowledged, delivered or not.
+    pub unacknowledged: i64,
     /// Whether a process was waiting on the seat's mailbox within the presence window.
     pub held: bool,
     /// When the seat last renewed its presence, as RFC 3339 UTC, or `None` when it never has.

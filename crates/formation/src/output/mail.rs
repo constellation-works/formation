@@ -26,7 +26,8 @@ pub(crate) fn payload(out: Outcome) -> Value {
             .into_iter()
             .map(|seat| json!({
                 "name": seat.name,
-                "unread": seat.unread,
+                "undelivered": seat.undelivered,
+                "unacknowledged": seat.unacknowledged,
                 "held": seat.held,
                 "seen": seat.seen,
             }))

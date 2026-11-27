@@ -7,7 +7,7 @@ use formation_core::app::mail;
 use formation_core::app::mail::Command;
 use std::process::ExitCode;
 
-/// List every joined seat, not only those seen lately: unread, held, seen.
+/// List every joined seat, not only those seen lately: undelivered, unacknowledged, held, seen.
 #[derive(Args)]
 pub(super) struct Who;
 

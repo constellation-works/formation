@@ -357,6 +357,36 @@ fn user_prompt_adds_context_once_and_keeps_the_envelope_until_ack() {
 }
 
 #[test]
+fn who_separates_delivered_mail_from_unacknowledged_mail() {
+    let room = Room::new();
+    let input = fixture("user-prompt", "receiver");
+    silent(&room.hook("codex", "user-prompt", &input));
+    room.send("first", "Check the build.");
+    room.send("second", "Check the docs.");
+    let captain = |room: &Room| {
+        let who = room.mail("sender", &["who"]);
+        let seat = who["seats"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|seat| seat["name"] == "captain")
+            .unwrap()
+            .clone();
+        (seat["undelivered"].clone(), seat["unacknowledged"].clone())
+    };
+    assert_eq!(captain(&room), (json!(2), json!(2)));
+
+    let out = room.hook("codex", "user-prompt", &input);
+    assert!(rendered("codex", "user-prompt", &out).contains("Check the docs."));
+    assert_eq!(captain(&room), (json!(0), json!(2)));
+
+    let inbox = room.mail("receiver", &["inbox"]);
+    let receipt = inbox["messages"][0]["receipt"].to_string();
+    room.mail("receiver", &["ack", &receipt]);
+    assert_eq!(captain(&room), (json!(0), json!(1)));
+}
+
+#[test]
 fn stop_uses_the_host_continuation_protocol() {
     for provider in PROVIDERS {
         let room = Room::new();

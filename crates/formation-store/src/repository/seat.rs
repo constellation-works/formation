@@ -245,12 +245,14 @@ impl Seats<'_> {
             .map_err(error::sql)
     }
 
-    /// Every joined seat with its unread count, ordered alphabetically.
+    /// Every joined seat with its undelivered and unacknowledged counts, ordered alphabetically.
     pub fn mailboxes(&self) -> Result<Vec<Mailbox>, Error> {
         let mut statement = self
             .conn
             .prepare(
                 "SELECT name, seen,
+                        (SELECT count(*) FROM messages
+                          WHERE recipient = seats.name AND ack = 0 AND delivered IS NULL),
                         (SELECT count(*) FROM messages
                           WHERE recipient = seats.name AND ack = 0)
                    FROM seats ORDER BY name",
@@ -260,7 +262,8 @@ impl Seats<'_> {
             .query_map([], |row| {
                 Ok(Mailbox {
                     name: row.get(0)?,
-                    unread: row.get(2)?,
+                    undelivered: row.get(2)?,
+                    unacknowledged: row.get(3)?,
                     seen: row.get(1)?,
                 })
             })

@@ -1,4 +1,4 @@
-List every joined seat, not only those seen lately: unread, held, seen
+List every joined seat, not only those seen lately: undelivered, unacknowledged, held, seen
 
 Usage: formation mail who [OPTIONS]
 

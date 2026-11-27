@@ -8,10 +8,10 @@ use formation_core::app::mail::Command;
 use std::process::ExitCode;
 use std::time::Duration;
 
-/// Read unread messages or wait for up to 900 seconds.
+/// Read unacknowledged messages or wait for up to 900 seconds.
 #[derive(Args)]
 pub(super) struct Inbox {
-    /// Seconds to wait for the first unread message.
+    /// Seconds to wait for the first unacknowledged message.
     #[arg(long, default_value_t=0, value_parser=clap::value_parser!(u64).range(0..=900))]
     wait: u64,
 }
