@@ -24,6 +24,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 - Alert the responsible captain immediately whenever you learn the admiral started a drain.
 - Keep chief fallback probes unconfigured until the seat-network design settles their recipient (`0-aide` vs `0-chief`).
 - At each wake, and at the end of any turn the admiral is in, present `formation request list --waiting admiral` with each item's options and one recommendation. Then present each settlement under a grant since the last time (`formation request list --since <last time>`; `formation request show <request>` gives the seat, choice, grant and limit). When he overturns one, record it with `formation request reopen <request> --admiral`.
+- Announce a request once, and only when `formation request show <request> --json` reports `blocking: true` and the admiral holds it. Send one line (id, asker, one-sentence ask, no options) by **Claude mechanics** or **Codex mechanics**, "Announce a blocking request"; name the id in your turn end. Where it says the host has none, send nothing and let the request wait for the list.
 - End every turn with the outcome first, then the evidence pointer, then the ask.
 
 ## You settle

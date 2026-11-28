@@ -16,3 +16,11 @@ Otherwise inherit the configured model and effort. Report unavailable seats or m
 - Inspect reader/standby state and failures with `formation watch list [--json]` (`live`, `none`, `stopped`; `read failed` on probe error). If all readers end with the session or shell without `formation watch stop`, affected seats receive a one-time `watch: nothing has read...` hook notice; start `formation watch run` again. Use `formation watch check -- <command>` to dry-run a probe; a background `watch wait` does not wake an idle Codex parent on exit.
 - Preserve user conversation through host compaction. If context usage or self-clear is unavailable, checkpoint on the record and continue from it. Replace a worker only after the old writer has stood down. For a desktop handoff, use the host’s supported user-authorized chat operation. Keep its visible chat distinct from any replacement child.
 - At close, finish or hand back work, collect child evidence, run `formation watch stop` on a full shift close (or pause/remove only the closing unit’s watches on a single-unit close), and end any remaining wait. Interrupt only a worker whose stop is authorized and whose running work is accounted for. Report which chats remain open. Desktop archiving requires the applicable admiral instruction and host support. A completed subagent has no sidebar chat to archive.
+
+## Announce a blocking request
+
+Announce a `--blocking` request that reaches the admiral once, with one line: `<request id> · <asker> · <the one-sentence ask>`. It carries no option text and no recommendation; those wait for the list. Do not announce a request that is not blocking, or one that waits on a seat.
+
+Not available. No Codex host notification the chief may use has been exercised: the host tools in this reference are chat, collaboration and queue operations, and none notifies the admiral. The chief falls back to its next turn's list (`formation request list --waiting admiral`), where the request shows with its options and recommendation.
+
+Write the mechanism here only after a chief's session sends the line once and the admiral confirms it reached him. Name the run that did it.

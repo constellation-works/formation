@@ -32,3 +32,11 @@ Inspect context with `get_usage` if available. The chief and any captain in acti
 If the app refuses the clear because of live work, queued input, pinning or permissions, honor that refusal. The admiral can type /clear or /scribe continue with the handoff ID where applicable.
 
 Before archiving a replaced captain, have it detach lieutenants it started. At authorized shift close, issue `formation watch stop` before archiving roster sessions so readers exit cleanly, read session records and leave the aide to the admiral. If pinned, on screen or busy, report the session. A visible chief or captain can ask the admiral to archive it when self-archive is refused.
+
+## Announce a blocking request
+
+Announce a `--blocking` request that reaches the admiral once, with one line: `<request id> · <asker> · <the one-sentence ask>`. It carries no option text and no recommendation; those wait for the list. Do not announce a request that is not blocking, or one that waits on a seat.
+
+Not available. A Claude host may expose a `PushNotification` tool, but no run has exercised it from a chief's Claude Desktop Code session, so it is not a capability the chief may use. Do not send the line through it, through a seat's mail or through the admiral's own chat on a guess. The chief falls back to its next turn's list (`formation request list --waiting admiral`), where the request shows with its options and recommendation.
+
+Write the mechanism here only after a chief's session sends the line once and the admiral confirms it reached him. Name the run that did it.
