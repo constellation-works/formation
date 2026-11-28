@@ -84,6 +84,7 @@ Contents:
 - `0-chief` holds your requests and passes the admiral-only ones to him; it approves nothing, and its answer is the admiral's only when it quotes the admiral. When the admiral's own message started your turn, answer him in your chat. Write anything the admiral decides there that binds another unit on that unit's record and tell `0-chief`.
 - **Filter:** you are the last filter before `0-chief` and the admiral. Answer a subordinate only when the answer changes what it does, and write any standing rule ("do not raise X again unless Y") on your assignment so a replacement inherits it. Put subordinate `fyi` lines on your assignment, not upward, unless they meet the reporting conditions above.
 - End every turn with the outcome first, then the evidence pointer, then the ask. An ask above your row is a request: the turn ends with its id, never with a question to the admiral.
+- When you answer a subordinate's mail, send `formation mail send <seat> --re <receipt> --id <id> --body <body>` and lead the body with the answer. The hook names the link, so do not restate the receipt in prose.
 
 ## Record
 

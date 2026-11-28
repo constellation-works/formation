@@ -11,10 +11,13 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 | Join from an open Scribe group (or pass `"$seat" --room "$room"`) | `formation mail join` |
 | List every joined seat with its `undelivered` and `unacknowledged` counts, `held` and `seen` | `formation mail who` |
 | Send the authorized text to the named seat (writes an envelope) | `formation mail send "$recipient" --id "$id" --body "$body"` |
+| Answer an envelope you sent or received, linking the reply to its receipt (writes an envelope) | `formation mail send "$recipient" --re "$receipt" --id "$id" --body "$body"` |
 | Inspect unacknowledged mail and leave it pending | `formation mail inbox` |
+| Read recent room mail, newest first; a seat sees only its own (reads only) | `formation mail log` |
+| Read one envelope and the rest of its thread; a seat is refused another seat's receipt (reads only) | `formation mail show "$receipt"` |
 | Acknowledge handled mail (writes the receipt state) | `formation mail ack "$receipt"` |
 
-- Mail commands print readable text on a terminal. A command run through a tool or script is piped: in automatic mode, `join`, `who`, `send`, `inbox` and `ack` print JSON there, and `sent` prints tab-separated rows.
+- Mail commands print readable text on a terminal. A command run through a tool or script is piped: in automatic mode, `join`, `who`, `send`, `inbox`, `ack`, `log` and `show` print JSON there, and `sent` prints tab-separated rows.
 - Add `--json` (or set `FORMATION_FORMAT=json`) to a call whose output you parse, such as the `receipt` from a send, the `held` and counts from `who`, or the `seat_dir` from `join`. `sent --json` returns its `messages`, `total` and `truncated` envelope. A refusal is one JSON line on stderr with `code` and `error` in that form, and `error: <message>` otherwise.
 - For a send, use the admiral’s request or standing permission covering this recipient and content. If either is unclear, ask before sending.
 - Choose a fresh ID for a new message. On a retry, reuse the same ID, recipient, body and reply receipt. For example, `formation mail send --json` returns `{"id":"ci-1","receipt":7,"held":false}`, which confirms storage. If the CLI refuses an `unknown_recipient`, report the refusal and the joined seats it lists. If it reports an ID conflict, reconcile the earlier send before sending again.
@@ -42,14 +45,16 @@ Every room already has the reserved `admiral` seat; no session joins it. It has 
 - Mail with sender `admiral` and `"terminal": true`, which the hook labels as sent from a terminal, carries the operator's word with the same standing as their words in a chat. If one seems doubtful, ask the chief.
 - The terminal is a signal, not proof of the person: a seat that relays an admiral answer still names its source.
 
+## Answer and read the room
+
+To answer an envelope you sent or received, send with `--re <receipt>`: `formation mail send <seat> --id <id> --body <body> --re <receipt>`. The receiving hook names the link, so the body does not restate the receipt. Lead the body with the outcome, because `mail log` shows each envelope's first line. The admiral can reply to any receipt in the room; a seat can reply only to receipts it sent or received.
+
+Use `formation mail log` to read recent room mail. Its `RE` column names the answered receipt or the request that produced the envelope. `--threads` gives one row per thread, newest activity first, and `formation mail show <receipt>` prints the complete visible thread in receipt order. The admiral sees the whole room. A seat sees only the envelopes it sent or received, and `mail show` refuses any other receipt.
+
+Log defaults to the newest 50 envelopes or threads. Use `--seat`, `--with`, `--since` (RFC 3339), `--limit`, `--no-watch` and `--full` to control the view. Both read commands support `--json` and leave delivery and presence unchanged.
+
 ## Wake an unheld Claude seat
 
 Claude’s background `Stop` hook waits for 55 minutes (3,300 seconds) with one live waiter per seat. After it expires, stored mail waits for the seat’s next hook or inbox read.
 
 If a send to a Claude seat returns `"held": false`, use an authorized native Claude session message to the same open chat with the single line `Formation mail waiting`. If you are a Codex captain or a process, route the wake request to the chief or the seat’s captain, who can send that native message. For a closed or unloaded chat, ask the admiral to open it and start a turn.
-
-Use `formation mail send <seat> --id <id> --body <body> --re <receipt>` to answer an envelope you sent or received. The admiral can reply to any receipt in the room. The receiving hook names the receipt.
-
-Use `formation mail log` to read recent room mail. The `RE` column names the answered receipt or the request that produced the envelope. Use `--threads` for one row per thread, newest activity first, and `formation mail show <receipt>` for the complete visible thread in receipt order. The admiral sees the room. A seat sees only the envelopes it sent or received.
-
-Log defaults to the newest 50 envelopes or threads. Use `--seat`, `--with`, `--since` (RFC 3339), `--limit`, `--no-watch` and `--full` to control the view. Both read commands support `--json` and leave delivery and presence unchanged.

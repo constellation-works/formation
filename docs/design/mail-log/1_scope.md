@@ -8,7 +8,7 @@ feature: mail-log
 doc_role: scope
 summary: The admiral reads every envelope in a room with one command, replies link into threads, and one status screen shows the room, his inbox and the latest mail.
 stage: building
-next: Build the read-only room status screen.
+next: Build the read-only room status screen (build step 3).
 ---
 
 # Formation — Mail log and status
