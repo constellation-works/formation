@@ -22,7 +22,8 @@ pub(crate) struct Mail {
     /// Room name or directory path (default: $FORMATION_ROOM or session file).
     #[arg(long, global = true, value_name = "NAME|PATH")]
     room: Option<String>,
-    /// Seat name for this command (default: seat recorded for this session).
+    /// Seat name for this command (default: seat recorded for this session, or admiral at a
+    /// terminal).
     #[arg(long = "as", global = true, value_name = "SEAT")]
     seat: Option<String>,
     /// Print JSON, overriding $FORMATION_FORMAT (auto, human or json).

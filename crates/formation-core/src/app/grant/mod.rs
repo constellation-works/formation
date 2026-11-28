@@ -528,7 +528,7 @@ fn require_joined_caller_tx(
             }
         }
         Caller::Session(session) => tx.seats().by_session(session)?.ok_or_else(seat_required),
-        Caller::None => Err(seat_required()),
+        Caller::None | Caller::Admiral => Err(seat_required()),
         Caller::Join { .. } => Err(Error::new(
             Kind::Internal,
             "missing_context",
@@ -560,7 +560,7 @@ fn validate_caller_snapshot(
                 ))
             }
         }
-        Caller::Session(_) | Caller::None => Ok(()),
+        Caller::Session(_) | Caller::None | Caller::Admiral => Ok(()),
         Caller::Join { .. } => Err(Error::new(
             Kind::Internal,
             "missing_context",

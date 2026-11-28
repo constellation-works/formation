@@ -19,7 +19,16 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     )
 }
 
+/// Undo the admiral steps, so the file matches release 19's schema.
+fn drop_admiral(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    connection.execute_batch(
+        "ALTER TABLE messages DROP COLUMN terminal;
+         DELETE FROM seats WHERE name = 'admiral';",
+    )
+}
+
 fn drop_roster_details(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    drop_admiral(connection)?;
     connection.execute_batch(
         "DROP TABLE room_close;
          DROP TABLE roster_application;
@@ -62,7 +71,10 @@ fn upgrade_retains_seats_and_pending_receipts() -> Result<(), Box<dyn std::error
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
     let store = Store::open(root.path())?;
     assert!(store.write(|tx| tx.seats().touch("captain", 102))?);
-    assert_eq!(store.read()?.seats().names()?, ["captain", "chief"]);
+    assert_eq!(
+        store.read()?.seats().names()?,
+        ["admiral", "captain", "chief"]
+    );
 
     let pending = store.read()?.messages().unread("captain")?;
     assert_eq!(pending.len(), 1);
@@ -523,6 +535,7 @@ fn room_close_upgrades_version_eighteen_after_reading_it_as_active()
     })?;
     let path = root.path().join("inbox.sqlite3");
     let db = Connection::open(&path)?;
+    drop_admiral(&db)?;
     db.execute_batch("DROP TABLE room_close; PRAGMA user_version = 18;")?;
     drop(db);
     // The old binary would have left its WAL companions in place.
@@ -540,6 +553,54 @@ fn room_close_upgrades_version_eighteen_after_reading_it_as_active()
     store.write(|tx| tx.close_room(300, "chief"))?;
     let snapshot = store.read_strict()?;
     assert_eq!(snapshot.closure()?, Some((300, "chief".to_owned())));
-    assert_eq!(snapshot.seats().names()?, ["chief"]);
+    assert_eq!(snapshot.seats().names()?, ["admiral", "chief"]);
+    Ok(())
+}
+
+#[test]
+fn a_release_nineteen_room_gains_the_admiral_seat_on_its_next_write()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("taken-admiral")?;
+    store.write(|tx| {
+        tx.seats().bind("chief", None)?;
+        tx.messages().insert("chief", "chief", "note", "kept", 100)
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_admiral(&db)?;
+    // An earlier build let a session join under the name.
+    db.execute_batch(
+        "INSERT INTO seats (name, session_id, seen) VALUES ('admiral', 'taken-admiral', 150);
+         PRAGMA user_version = 19;",
+    )?;
+    drop(db);
+    assert_eq!(
+        store.read()?.seats().by_session(&session)?.as_deref(),
+        Some("admiral")
+    );
+
+    store.write(|_| Ok(()))?;
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.seats().names()?, ["admiral", "chief"]);
+    assert_eq!(snapshot.seats().by_session(&session)?, None);
+    let admiral = snapshot.seats().presence()?;
+    assert!(admiral.contains(&("admiral".to_owned(), 0)), "{admiral:?}");
+    let kept = snapshot.messages().unread("chief")?;
+    assert_eq!((kept[0].body.as_str(), kept[0].terminal), ("kept", false));
+    Ok(())
+}
+
+#[test]
+fn a_new_room_has_the_admiral_seat_from_the_start() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|_| Ok(()))?;
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.seats().names()?, ["admiral"]);
+    assert_eq!(
+        snapshot.seats().by_session(&SessionId::try_new("any")?)?,
+        None
+    );
     Ok(())
 }

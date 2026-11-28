@@ -23,6 +23,9 @@ pub use watch::{
     NewWatch, WatchEntry, WatchHandover, WatchLeaseStatus, WatchParticipant, WatchRole, WatchState,
 };
 
+/// The reserved seat of the operator, present in every room and joined by no session.
+pub const ADMIRAL: &str = "admiral";
+
 /// Provider observed in a host hook for a session binding.
 #[derive(Clone, Copy)]
 pub enum HookProvider {

@@ -24,6 +24,15 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 - A hooked seat is not expected to acknowledge, so its `unacknowledged` count only grows and says nothing about whether it received its mail. A seat with no hook has nothing delivered, so both counts match.
 - Acknowledge only after the responsible recipient has handled the message and authorized marking it handled. Reading an inbox leaves the envelope unacknowledged.
 
+## The admiral's seat
+
+A mail call from a terminal with no agent session and no `--as` is the operator, the admiral. Every room has the `admiral` seat already; it has no presence, so `mail who` lists it with its counts and `held` null.
+
+- Never pass `--as admiral` and never join `admiral`: inside an agent session both are refused with `reserved_seat`, and a roster that names the seat fails `roster check`.
+- Only the seat holding the chief's rank in the applied roster runs `formation mail send admiral`. Any other seat is refused with `admiral_via_chief`: open a request for the chief instead. A room with no applied roster refuses the send with `no_roster`.
+- Mail with sender `admiral` and `"terminal": true`, which the hook labels as sent from a terminal, carries the operator's word with the same standing as their words in a chat. If one seems doubtful, ask the chief.
+- The terminal is a signal, not proof of the person: a seat that relays an admiral answer still names its source.
+
 ## Wake an unheld Claude seat
 
 Claude’s background `Stop` hook waits for 55 minutes (3,300 seconds) with one live waiter per seat. After it expires, stored mail waits for the seat’s next hook or inbox read.

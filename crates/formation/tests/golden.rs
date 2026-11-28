@@ -787,8 +787,11 @@ fn roster_show_compares_planned_and_joined_without_touching_presence() {
     assert_eq!(value["seats"][0]["model"], "opus");
     assert!(value["seats"][1]["live"].is_null());
     assert_eq!(value["not_on_roster"][0]["name"], "extra");
-    assert_eq!(value["seats"][0]["live"], who["seats"][0]);
-    assert_eq!(value["not_on_roster"][0], who["seats"][1]);
+    // The admiral's seat heads `mail who` and is the tree's root, never "not on the roster".
+    assert_eq!(who["seats"][0]["name"], "admiral");
+    assert_eq!(value["not_on_roster"].as_array().unwrap().len(), 1);
+    assert_eq!(value["seats"][0]["live"], who["seats"][1]);
+    assert_eq!(value["not_on_roster"][0], who["seats"][2]);
     let after = store.read().unwrap().seats().mailboxes().unwrap();
     assert_eq!(
         before.iter().map(|seat| seat.seen).collect::<Vec<_>>(),

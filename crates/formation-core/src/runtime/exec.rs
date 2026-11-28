@@ -2,6 +2,7 @@
 
 use super::Ctx;
 use super::audit::AuditGuard;
+use crate::composition::Caller;
 use crate::{Env, composition};
 use cw_base::Error;
 
@@ -9,6 +10,8 @@ pub(crate) enum RoomAccess<'a> {
     None,
     Join(&'a str),
     Existing,
+    /// An existing room whose caller may also be the admiral.
+    Member,
     OptionalSeat,
     Hook(&'a str),
 }
@@ -25,6 +28,12 @@ pub(crate) trait App {
     fn room_access(cmd: &Self::Command) -> RoomAccess<'_>;
 
     fn audit(cmd: &Self::Command) -> Option<&'static str>;
+
+    /// The audit name of a command the admiral calls. An app that admits the admiral also names
+    /// here the commands that write for every caller but audit no seat's call.
+    fn admiral_audit(cmd: &Self::Command) -> Option<&'static str> {
+        Self::audit(cmd)
+    }
 
     fn run(ctx: &Ctx<'_>, cmd: Self::Command) -> Result<Self::Outcome, Error>;
 
@@ -47,7 +56,11 @@ pub(crate) fn exec<A: App, R>(
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
-        RoomAccess::Existing => match composition::compose_existing(env) {
+        RoomAccess::Existing => match composition::compose_existing(env, false) {
+            Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
+        RoomAccess::Member => match composition::compose_existing(env, true) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
@@ -67,10 +80,14 @@ pub(crate) fn exec<A: App, R>(
         cwd: env.cwd.as_deref(),
         clock: time::OffsetDateTime::now_utc,
     };
-    let mut guard = ctx
-        .mail
-        .as_ref()
-        .and_then(|mail| A::audit(&cmd).map(|name| AuditGuard::new(&mail.store, name, &ctx)));
+    let mut guard = ctx.mail.as_ref().and_then(|mail| {
+        let name = if matches!(mail.caller, Caller::Admiral) {
+            A::admiral_audit(&cmd)
+        } else {
+            A::audit(&cmd)
+        };
+        name.map(|name| AuditGuard::new(&mail.store, name, &ctx))
+    });
     let result = A::run(&ctx, cmd);
     if let Some(guard) = &mut guard {
         guard.record(result.as_ref().map(A::target).map_err(Error::code));

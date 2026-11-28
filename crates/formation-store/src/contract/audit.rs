@@ -30,6 +30,12 @@ pub struct AuditEvent {
     /// The OS user name that invoked the command, or `None` when unset.
     #[serde(default)]
     pub actor: Option<String>,
+    /// `admiral` when the caller is the admiral: a terminal call with no agent session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller: Option<String>,
+    /// Whether the call came from a terminal, which only an admiral call records.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub terminal: bool,
     /// The command path, such as `note add`.
     pub command: String,
     /// How it ended.

@@ -160,7 +160,7 @@ fn caller_seat(tx: &Tx<'_>, caller: &Caller) -> Result<Option<String>, cw_base::
     match caller {
         Caller::Session(id) => tx.seats().by_session(id),
         Caller::Explicit(name) if !name.is_empty() => Ok(Some(name.clone())),
-        Caller::Join { .. } | Caller::Explicit(_) | Caller::None => Ok(None),
+        Caller::Join { .. } | Caller::Explicit(_) | Caller::None | Caller::Admiral => Ok(None),
     }
 }
 
@@ -168,6 +168,7 @@ fn roster_error(error: Error) -> cw_base::Error {
     let code = match error {
         Error::UnknownParent => "unknown_parent",
         Error::ParentCycle => "roster_cycle",
+        Error::ReservedSeat => "reserved_seat",
         Error::Decode(_) | Error::Invalid(_) => "invalid_roster",
     };
     cw_base::Error::new(cw_base::Kind::Usage, code, error)
@@ -184,9 +185,10 @@ fn show(ctx: &Ctx<'_>) -> Result<View, cw_base::Error> {
         snapshot.seats().mailboxes()?,
         (ctx.clock)().unix_timestamp(),
     );
+    live.retain(|seat| seat.name != formation_store::contract::ADMIRAL);
     if status == Status::Closed {
         for seat in &mut live {
-            seat.held = false;
+            seat.held = Some(false);
         }
     }
     let roster_applied = !roster.is_empty() || stamp.is_some();

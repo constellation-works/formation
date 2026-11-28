@@ -211,7 +211,7 @@ fn children(
 }
 
 fn state(seat: &formation_core::app::mail::SeatStatus) -> String {
-    if seat.held {
+    if seat.held == Some(true) {
         format!("held, {} unread", seat.undelivered)
     } else {
         format!(

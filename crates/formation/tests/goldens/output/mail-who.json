@@ -1,1 +1,1 @@
-{"seats":[{"held":false,"name":"captain","seen":null,"unacknowledged":1,"undelivered":1},{"held":true,"name":"chief","seen":"<timestamp>","unacknowledged":0,"undelivered":0}]}
+{"seats":[{"held":null,"name":"admiral","seen":null,"unacknowledged":0,"undelivered":0},{"held":false,"name":"captain","seen":null,"unacknowledged":1,"undelivered":1},{"held":true,"name":"chief","seen":"<timestamp>","unacknowledged":0,"undelivered":0}]}

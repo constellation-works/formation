@@ -125,7 +125,7 @@ impl Home {
                 seats
                     .iter()
                     .map(|seat| seat["name"].as_str().unwrap().to_owned())
-                    .filter(|name| name != "probe")
+                    .filter(|name| name != "probe" && name != "admiral")
                     .collect()
             })
             .unwrap_or_default()
@@ -209,7 +209,7 @@ fn recipient_owns_ack_and_retries_preserve_receipts() {
         .iter()
         .map(|seat| seat["name"].clone())
         .collect();
-    assert_eq!(names, ["captain", "chief"]);
+    assert_eq!(names, ["admiral", "captain", "chief"]);
     let send = ["send", "captain", "--id", "alert-1", "--body", "a probe"];
     let receipt = room.ok("chief", &send);
     assert_eq!(room.ok("chief", &send), receipt);
@@ -300,20 +300,30 @@ fn assert_who_envelope(value: &Value) {
     let envelope = value.as_object().unwrap();
     assert_eq!(envelope.len(), 1);
     let seats = value["seats"].as_array().unwrap();
-    assert_eq!(seats.len(), 2);
+    assert_eq!(seats.len(), 3);
     for seat in seats {
         assert_eq!(seat.as_object().unwrap().len(), 5);
     }
-    assert_eq!(seats[0]["name"], "captain");
-    assert_eq!(seats[0]["undelivered"], 1);
-    assert_eq!(seats[0]["unacknowledged"], 1);
-    assert_eq!(seats[0]["held"], false);
-    assert_eq!(seats[0]["seen"], Value::Null);
-    assert_eq!(seats[1]["name"], "chief");
-    assert_eq!(seats[1]["undelivered"], 0);
-    assert_eq!(seats[1]["unacknowledged"], 0);
-    assert_eq!(seats[1]["held"], true);
-    assert!(is_rfc3339_utc(seats[1]["seen"].as_str().unwrap()));
+    assert_admiral_row(&seats[0]);
+    assert_eq!(seats[1]["name"], "captain");
+    assert_eq!(seats[1]["undelivered"], 1);
+    assert_eq!(seats[1]["unacknowledged"], 1);
+    assert_eq!(seats[1]["held"], false);
+    assert_eq!(seats[1]["seen"], Value::Null);
+    assert_eq!(seats[2]["name"], "chief");
+    assert_eq!(seats[2]["undelivered"], 0);
+    assert_eq!(seats[2]["unacknowledged"], 0);
+    assert_eq!(seats[2]["held"], true);
+    assert!(is_rfc3339_utc(seats[2]["seen"].as_str().unwrap()));
+}
+
+/// The admiral's seat is in every room, with counts and no presence.
+fn assert_admiral_row(seat: &Value) {
+    assert_eq!(seat["name"], "admiral");
+    assert_eq!(seat["undelivered"], 0);
+    assert_eq!(seat["unacknowledged"], 0);
+    assert_eq!(seat["held"], Value::Null);
+    assert_eq!(seat["seen"], Value::Null);
 }
 
 fn who_without_seen(value: &Value) -> Value {
@@ -358,18 +368,19 @@ fn who_lists_every_joined_seat_with_undelivered_unacknowledged_held_and_seen() {
 
     let who = room.ok("chief", &["who"]);
     let seats = who["seats"].as_array().unwrap();
-    assert_eq!(seats.len(), 2);
-    assert_eq!(seats[0]["name"], "captain");
-    assert_eq!(seats[0]["undelivered"], 1);
-    assert_eq!(seats[0]["unacknowledged"], 1);
-    assert!(seats[0].get("unread").is_none());
-    assert_eq!(seats[0]["held"], false);
-    assert_eq!(seats[0]["seen"], Value::Null);
-    assert_eq!(seats[1]["name"], "chief");
-    assert_eq!(seats[1]["undelivered"], 0);
-    assert_eq!(seats[1]["unacknowledged"], 0);
-    assert_eq!(seats[1]["held"], true);
-    assert!(is_rfc3339_utc(seats[1]["seen"].as_str().unwrap()));
+    assert_eq!(seats.len(), 3);
+    assert_admiral_row(&seats[0]);
+    assert_eq!(seats[1]["name"], "captain");
+    assert_eq!(seats[1]["undelivered"], 1);
+    assert_eq!(seats[1]["unacknowledged"], 1);
+    assert!(seats[1].get("unread").is_none());
+    assert_eq!(seats[1]["held"], false);
+    assert_eq!(seats[1]["seen"], Value::Null);
+    assert_eq!(seats[2]["name"], "chief");
+    assert_eq!(seats[2]["undelivered"], 0);
+    assert_eq!(seats[2]["unacknowledged"], 0);
+    assert_eq!(seats[2]["held"], true);
+    assert!(is_rfc3339_utc(seats[2]["seen"].as_str().unwrap()));
 }
 
 #[test]
@@ -1068,10 +1079,14 @@ fn a_terminal_gets_human_output_for_every_verb_and_json_overrides_a_human_prefer
     );
     assert_eq!(
         lines[1].split_whitespace().collect::<Vec<_>>(),
+        ["admiral", "0", "0", "-", "-"]
+    );
+    assert_eq!(
+        lines[2].split_whitespace().collect::<Vec<_>>(),
         ["captain", "1", "1", "no", "-"]
     );
     assert_eq!(
-        lines[2].split_whitespace().collect::<Vec<_>>()[..4],
+        lines[3].split_whitespace().collect::<Vec<_>>()[..4],
         ["chief", "0", "0", "yes"]
     );
     assert!(serde_json::from_str::<Value>(&who.stdout).is_err());
@@ -1113,7 +1128,7 @@ fn a_terminal_gets_human_output_for_every_verb_and_json_overrides_a_human_prefer
         let value: Value = serde_json::from_str(&json.stdout).unwrap();
         assert_eq!(
             value["seats"].as_array().unwrap().len(),
-            2,
+            3,
             "{preference:?}"
         );
     }
@@ -1168,9 +1183,9 @@ fn piped_output_keeps_the_json_envelopes_and_every_verb_accepts_json() {
             }
 
             let mut later_seen = plain.clone();
-            later_seen["seats"][1]["seen"] = "2020-01-01T00:00:00Z".into();
+            later_seen["seats"][2]["seen"] = "2020-01-01T00:00:00Z".into();
             assert_who_envelope(&later_seen);
-            assert_ne!(plain["seats"][1]["seen"], later_seen["seats"][1]["seen"]);
+            assert_ne!(plain["seats"][2]["seen"], later_seen["seats"][2]["seen"]);
             assert_eq!(who_without_seen(&plain), who_without_seen(&later_seen));
         } else {
             assert_eq!(plain, flagged);

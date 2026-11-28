@@ -19,6 +19,9 @@ pub struct Message {
     /// Seat that added the producing watch.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watch_added_by: Option<String>,
+    /// Whether the admiral sent the envelope from a terminal.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub terminal: bool,
     /// When the envelope was stored, as RFC 3339 UTC. Null for envelopes stored by earlier builds.
     pub sent: Option<String>,
     /// When a hook delivered the envelope, as RFC 3339 UTC, if delivered.

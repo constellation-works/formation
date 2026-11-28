@@ -1,7 +1,9 @@
 //! Fail-open audit guard owned by the runtime.
 
 use super::Ctx;
+use crate::composition::Caller;
 use cw_base::Error;
+use formation_store::contract::ADMIRAL;
 use formation_store::contract::AuditEvent;
 use formation_store::contract::AuditStatus;
 use formation_store::{Store, Tx};
@@ -58,9 +60,15 @@ pub(crate) fn record_delivery(
 }
 
 fn event(ctx: &Ctx<'_>, command: &str, at: OffsetDateTime) -> AuditEvent {
+    let admiral = ctx
+        .mail
+        .as_ref()
+        .is_some_and(|mail| matches!(mail.caller, Caller::Admiral));
     AuditEvent {
         at,
         actor: ctx.actor.map(str::to_owned),
+        caller: admiral.then(|| ADMIRAL.to_owned()),
+        terminal: admiral,
         command: command.into(),
         status: AuditStatus::Failure,
         target: None,

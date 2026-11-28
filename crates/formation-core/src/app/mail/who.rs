@@ -1,4 +1,4 @@
-use super::{Error, Outcome, SeatRef, SeatStatus, Store, touch};
+use super::{ADMIRAL, Error, Outcome, SeatRef, SeatStatus, Store, touch};
 use crate::runtime;
 use formation_store::contract::rfc3339;
 
@@ -16,16 +16,19 @@ pub(crate) fn statuses(
 ) -> Vec<SeatStatus> {
     mailboxes
         .into_iter()
-        .map(|mailbox| SeatStatus {
-            name: mailbox.name,
-            undelivered: mailbox.undelivered,
-            unacknowledged: mailbox.unacknowledged,
-            held: runtime::held(mailbox.seen, now),
-            seen: if mailbox.seen > 0 {
-                rfc3339(mailbox.seen)
-            } else {
-                None
-            },
+        .map(|mailbox| {
+            let held = (mailbox.name != ADMIRAL).then(|| runtime::held(mailbox.seen, now));
+            SeatStatus {
+                name: mailbox.name,
+                undelivered: mailbox.undelivered,
+                unacknowledged: mailbox.unacknowledged,
+                held,
+                seen: if mailbox.seen > 0 {
+                    rfc3339(mailbox.seen)
+                } else {
+                    None
+                },
+            }
         })
         .collect()
 }

@@ -29,3 +29,9 @@ pub(super) const WATCH_MAIL: cw_sqlite::Step = cw_sqlite::Step::sql(
      ALTER TABLE messages ADD COLUMN watch_added_by TEXT;
      CREATE TABLE watch_notice (seat TEXT PRIMARY KEY) STRICT;",
 );
+
+/// Whether the admiral sent an envelope from a terminal.
+pub(super) const TERMINAL: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE messages ADD COLUMN terminal INTEGER NOT NULL DEFAULT 0
+         CHECK(terminal IN (0, 1));",
+);

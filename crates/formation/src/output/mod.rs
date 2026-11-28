@@ -15,6 +15,7 @@ mod roster;
 mod watch;
 
 pub(crate) use common::Mode;
+pub(crate) use common::attached_to_terminal;
 pub(crate) use common::error;
 pub(crate) use common::failure;
 pub(crate) use common::init_logging;

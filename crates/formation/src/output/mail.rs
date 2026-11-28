@@ -101,7 +101,12 @@ fn write_human(out: &mut impl Write, outcome: &Outcome) -> io::Result<()> {
                         seat.name.clone(),
                         seat.undelivered.to_string(),
                         seat.unacknowledged.to_string(),
-                        if seat.held { "yes" } else { "no" }.to_owned(),
+                        match seat.held {
+                            Some(true) => "yes",
+                            Some(false) => "no",
+                            None => "-",
+                        }
+                        .to_owned(),
                         seat.seen.clone().unwrap_or_else(|| "-".to_owned()),
                     ]
                 })
@@ -124,8 +129,15 @@ fn write_human(out: &mut impl Write, outcome: &Outcome) -> io::Result<()> {
                 }
                 writeln!(
                     out,
-                    "Receipt {} from {} (id {})",
-                    message.receipt, message.sender, message.id,
+                    "Receipt {} from {}{} (id {})",
+                    message.receipt,
+                    message.sender,
+                    if message.terminal {
+                        ", sent from a terminal"
+                    } else {
+                        ""
+                    },
+                    message.id,
                 )?;
                 writeln!(
                     out,

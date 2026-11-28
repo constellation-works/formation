@@ -1,6 +1,7 @@
 //! Process environment captured once and composed per invocation.
 
 use cw_base::{Error, Kind};
+use formation_store::contract::ADMIRAL;
 use formation_store::{InvalidSessionId, SessionId, Store};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -31,6 +32,7 @@ pub struct Env {
     seat: Option<String>,
     claude_session: Option<OsString>,
     codex_session: Option<OsString>,
+    terminal: bool,
     pub(crate) actor: Option<String>,
     pub(crate) cwd: Option<PathBuf>,
 }
@@ -45,11 +47,21 @@ impl Env {
             seat: None,
             claude_session: std::env::var_os(ENV_CLAUDE_SESSION),
             codex_session: std::env::var_os(ENV_CODEX_SESSION),
+            terminal: false,
             actor: std::env::var("USER")
                 .or_else(|_| std::env::var("USERNAME"))
                 .ok(),
             cwd: std::env::current_dir().ok(),
         }
+    }
+
+    /// Record whether the call is attached to a terminal, as the CLI's output module probes it.
+    ///
+    /// Mail treats a terminal call with no agent session and no `--as` as the admiral's.
+    #[must_use]
+    pub fn with_terminal(mut self, attached: bool) -> Self {
+        self.terminal = attached;
+        self
     }
 
     /// Apply explicit command-line mail options over the captured environment.
@@ -82,6 +94,8 @@ impl Env {
 }
 
 pub(crate) enum Caller {
+    /// The operator: a terminal call with no agent session and no seat named.
+    Admiral,
     Join {
         session: Option<SessionId>,
         sessions_dir: Option<PathBuf>,
@@ -132,6 +146,8 @@ enum ComposeError {
     InvalidSeat,
     #[error("--as does not match the seat name passed to join")]
     ConflictingSeat,
+    #[error("`admiral` is the operator's reserved seat; pass this session's own seat")]
+    ReservedSeat,
     #[error(transparent)]
     InvalidSession(#[from] InvalidSessionId),
     #[error("cannot resolve working directory: {0}")]
@@ -152,6 +168,7 @@ impl From<ComposeError> for Error {
             ComposeError::MissingHome | ComposeError::InvalidHome => (Kind::Config, "mail_home"),
             ComposeError::InvalidSeat => (Kind::Refused, "invalid_identifier"),
             ComposeError::ConflictingSeat => (Kind::Refused, "conflicting_seat"),
+            ComposeError::ReservedSeat => (Kind::Refused, "reserved_seat"),
             ComposeError::InvalidSession(_) => (Kind::Refused, "invalid_session_id"),
             ComposeError::CurrentDir(_) => (Kind::Io, "mail_room"),
         };
@@ -160,13 +177,13 @@ impl From<ComposeError> for Error {
 }
 
 pub(crate) fn compose_join(env: &Env, seat: &str) -> Result<MailContext, Error> {
-    if let Some(as_seat) = env.seat.as_deref()
+    let session = resolve_session(env)?;
+    if let Some(as_seat) = named_seat(env, session.as_ref())?
         && as_seat != seat
     {
         return Err(ComposeError::ConflictingSeat.into());
     }
 
-    let session = resolve_session(env)?;
     let room = resolve_room(env, session.as_ref())?;
     let sessions_dir = match &session {
         Some(_) => Some(formation_home(env)?.join("sessions")),
@@ -218,7 +235,7 @@ pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
     let room = resolve_room(env, session.as_ref())?;
     let store = Store::open(&room.path)?;
 
-    let caller = if let Some(seat) = env.seat.as_deref() {
+    let caller = if let Some(seat) = named_seat(env, session.as_ref())? {
         validate_identifier(seat, ComposeError::InvalidSeat)?;
         Caller::Explicit(seat.to_owned())
     } else if let Some(session_id) = session {
@@ -234,12 +251,16 @@ pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
     })
 }
 
-pub(crate) fn compose_existing(env: &Env) -> Result<MailContext, Error> {
+/// Compose a call on an existing room by a seat that must be known.
+///
+/// With `admiral`, a call with no agent session and no seat named, from a terminal, is the
+/// admiral's. That is a signal, not proof of the person: see the admiral-seat scope.
+pub(crate) fn compose_existing(env: &Env, admiral: bool) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
     let room = resolve_room(env, session.as_ref())?;
     let store = Store::open(&room.path)?;
 
-    let caller = if let Some(seat) = env.seat.as_deref() {
+    let caller = if let Some(seat) = named_seat(env, session.as_ref())? {
         validate_identifier(seat, ComposeError::InvalidSeat)?;
         Caller::Explicit(seat.to_owned())
     } else if let Some(session_id) = session {
@@ -248,6 +269,8 @@ pub(crate) fn compose_existing(env: &Env) -> Result<MailContext, Error> {
             return Err(ComposeError::SeatRequired.into());
         }
         Caller::Session(session_id)
+    } else if admiral && env.terminal {
+        Caller::Admiral
     } else {
         return Err(ComposeError::SeatRequired.into());
     };
@@ -285,6 +308,16 @@ pub(crate) fn is_hook_room(env: &Env, room: &str, session: &SessionId) -> Result
     let bound = parse_room_spec(env, &recorded)?.path.canonicalize();
     let current = parse_room_spec(env, room)?.path.canonicalize();
     Ok(matches!((bound, current), (Ok(bound), Ok(current)) if bound == current))
+}
+
+/// The seat passed with `--as`. `--as admiral` is refused inside an agent session and outside
+/// one is the same as leaving `--as` out.
+fn named_seat<'a>(env: &'a Env, session: Option<&SessionId>) -> Result<Option<&'a str>, Error> {
+    match env.seat.as_deref() {
+        Some(ADMIRAL) if session.is_some() => Err(ComposeError::ReservedSeat.into()),
+        Some(ADMIRAL) => Ok(None),
+        seat => Ok(seat),
+    }
 }
 
 fn resolve_session(env: &Env) -> Result<Option<SessionId>, Error> {

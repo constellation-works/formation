@@ -26,6 +26,7 @@ pub fn run(env: formation_core::Env) -> ExitCode {
     if !matches!(args.command, Command::Hook(_)) {
         output::init_logging();
     }
+    let env = env.with_terminal(output::attached_to_terminal());
     let child_env: Vec<_> = codex_wake::CHILD_ENV
         .iter()
         .filter_map(|name| std::env::var_os(name).map(|value| (*name, value)))
