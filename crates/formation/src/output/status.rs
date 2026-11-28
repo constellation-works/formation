@@ -80,21 +80,14 @@ fn render(out: &mut impl Write, view: &View) -> io::Result<()> {
         view.caller
     )?;
     let total: usize = view.requests.values().sum();
-    let holders = view
-        .requests
-        .iter()
-        .map(|(name, count)| format!("{count} with {name}"))
-        .collect::<Vec<_>>();
-    writeln!(
-        out,
-        "requests  {} open{}",
-        total,
-        if holders.is_empty() {
-            String::new()
-        } else {
-            format!(": {}", holders.join(", "))
-        }
-    )?;
+    if total > 0 {
+        let holders = view
+            .requests
+            .iter()
+            .map(|(name, count)| format!("{count} with {name}"))
+            .collect::<Vec<_>>();
+        writeln!(out, "requests  {total} open: {}", holders.join(", "))?;
+    }
     let state = if view.reader.active.is_some() {
         "live"
     } else if view.reader.stopped {

@@ -1,6 +1,5 @@
 room status-room, active
 seats     3 joined: chief, other, worker
 inbox     1 waiting on worker
-requests  0 open
 watches   reader not live, 0 on
 recent    <timestamp> chief → worker  hello
