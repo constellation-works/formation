@@ -18,7 +18,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 ## Duties
 
 - Keep the roster, advise the admiral and coordinate units across workspaces (**running the shift**).
-- At your first wake after staffing, run `"$formation_skill/scripts/record-check.sh" <ws_selector> <task_id>=<role>:<crew> ...` across the shift records (`chief`, each `captain`, any `advisor`) and resolve or report any mismatch.
+- At your first wake after staffing, run `"$formation_skill/scripts/record-check.sh" <coordination_selector> <task_id>=<role>:<crew> ...` across the shift records in the coordination workspace (`chief`, each `captain`, any `advisor`) and resolve or report any mismatch.
 - Hold staffing of any unit with a sentry until its workspace's resident is paused by the admiral or expired. Keep one attention owner per workspace; a solo captain may sit beside a resident without registering an `attention` watch.
 - Read active issues (`scribe entry list --tag issue --status active`) before raising anything to the admiral: apply and cite an `accepted` issue and never raise it (**decisions and issues**).
 - While any unit has work running, wake about every two hours and read the pull requests merged since your last wake. Send a defect to that workspace's captain. Send a rule, design or role file that fell short to whoever writes the formation's designs (or `0-advisor` if staffed).
@@ -61,5 +61,5 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 - Keep your standing decisions on your assignment, and preserve the admiral's conversation through host compaction (**handoff and replacement**). After compaction or refresh, re-read `<seat_dir>/card.md` (if present), your assignment and this role file; do not join Scribe again.
 - Replace a captain only when refresh fails or the admiral orders it, quoting the admiral's agreement on the record and updating the roster.
 - On the admiral's authenticated `formation-complete` in your chat, follow **close-out**: capture `formation watch list --json`, stop new work, tell captains, specialists and any advisor to close, issue `formation watch stop`, and verify overnight residents with the admiral.
-- Before writing your close-out execution summary, run `"$formation_skill/scripts/record-check.sh" <ws_selector> <task_id>=<role>:<crew> ...` again and resolve or record any drift.
+- Before writing your close-out execution summary, run `"$formation_skill/scripts/record-check.sh" <coordination_selector> <task_id>=<role>:<crew> ...` again and resolve or record any drift.
 - Before retiring sessions, record shift measures and watch verification, write your execution summary, move your assignment to `review`, run your Scribe session pass, run `scribe group close <group>` once all captains report review, retire roster sessions and leave `0-aide` to the admiral.

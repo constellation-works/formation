@@ -59,7 +59,7 @@ def fail(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def owner_host(selector: str) -> str:
+def checked_selector(selector: str) -> str:
     if OWNER_SELECTOR.fullmatch(selector) is None:
         fail(
             "the selector must be host-qualified (hm_<owner>/ws_<name>) "
@@ -288,7 +288,7 @@ def check_record(selector: str, task_id: str, expected_crew: str, required_tags:
 
 def main() -> None:
     script_dir = Path(sys.argv[1])
-    selector = owner_host(sys.argv[2])
+    selector = checked_selector(sys.argv[2])
     specs = [parse_spec(raw) for raw in sys.argv[3:]]
 
     role_tags: dict[str, list[str] | None] = {}
