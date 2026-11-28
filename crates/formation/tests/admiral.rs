@@ -758,6 +758,42 @@ fn a_passed_request_lands_in_the_admirals_mailbox_and_terminal_settlement_clears
 }
 
 #[test]
+fn terminal_settlement_refuses_chat_only_admiral_source_flags() {
+    let home = Home::new();
+    home.apply_roster();
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["pass", id]);
+
+    terminal_refused(
+        &home.terminal_cmd(
+            None,
+            &[
+                "request",
+                "--room",
+                "trial",
+                "--json",
+                "settle",
+                id,
+                "--option",
+                "a",
+                "--admiral",
+                "--source",
+                "chief chat 12:00",
+            ],
+        ),
+        "source_from_terminal",
+    );
+
+    let still_open = home.request_ok(CHIEF, &["show", id]);
+    assert_eq!(still_open["state"], "open");
+    assert_eq!(still_open["holder"], "admiral");
+    let inbox = json_of(&home.terminal(None, &["inbox"]));
+    assert_eq!(inbox["messages"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn chat_settlement_from_a_joined_seat_keeps_source_and_clears_the_admirals_inbox() {
     let home = Home::new();
     home.apply_roster("trial");

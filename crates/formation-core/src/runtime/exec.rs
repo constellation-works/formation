@@ -66,11 +66,11 @@ pub(crate) fn exec<A: App, R>(
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
-        RoomAccess::OptionalSeat => match composition::compose_optional_seat(env, false) {
+        RoomAccess::OptionalSeat => match composition::compose_optional_seat(env) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
-        RoomAccess::OptionalMember => match composition::compose_optional_seat(env, true) {
+        RoomAccess::OptionalMember => match composition::compose_optional_member(env) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },

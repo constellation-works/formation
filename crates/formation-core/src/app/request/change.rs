@@ -344,6 +344,9 @@ fn admiral_change(
                 note,
                 source,
             } => {
+                if terminal && source.is_some() {
+                    return Err(Failure::AdmiralSourceFromTerminal.into());
+                }
                 if matches!(request.state, RequestState::Settled(_)) {
                     return Err(Failure::Settled(id).into());
                 }

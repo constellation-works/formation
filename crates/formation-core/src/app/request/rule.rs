@@ -46,6 +46,8 @@ pub(super) enum Failure {
     InvalidSince(String),
     #[error("a joined seat must pass --admiral to reopen a request")]
     AdmiralRequired,
+    #[error("`--source` is for a joined seat recording the admiral's chat answer")]
+    AdmiralSourceFromTerminal,
     #[error("request `{0}` is not settled")]
     NotSettled(String),
     #[error("the current roster has no chief")]
@@ -62,6 +64,7 @@ impl From<Failure> for Error {
     fn from(failure: Failure) -> Self {
         let code = match &failure {
             Failure::AdmiralRequired => "admiral_required",
+            Failure::AdmiralSourceFromTerminal => "source_from_terminal",
             Failure::NotSettled(_) => "request_not_settled",
             Failure::NoChief => "chief_required",
             Failure::AmbiguousChief(..) => "chief_ambiguous",

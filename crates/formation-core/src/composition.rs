@@ -235,7 +235,15 @@ pub(crate) fn discover_rooms(env: &Env) -> Result<Vec<DiscoveredRoom>, Error> {
         .collect()
 }
 
-pub(crate) fn compose_optional_seat(env: &Env, admiral: bool) -> Result<MailContext, Error> {
+pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
+    compose_optional_caller(env, false)
+}
+
+pub(crate) fn compose_optional_member(env: &Env) -> Result<MailContext, Error> {
+    compose_optional_caller(env, true)
+}
+
+fn compose_optional_caller(env: &Env, admiral: bool) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
     let room = resolve_room(env, session.as_ref())?;
     let store = Store::open(&room.path)?;
