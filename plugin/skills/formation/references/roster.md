@@ -1,4 +1,14 @@
-# Check a roster
+# Roster commands
+
+| Command | Use when |
+| --- | --- |
+| `formation roster check` | Validate a roster draft offline before applying it. |
+| `formation roster apply --room <room>` | Store the full version 2 roster in an existing room when the lineup is ready or has changed. |
+| `formation roster show [<room>]` | See who is staffed in one room, their reporting lines and live presence. |
+| `formation roster list [--status active|closed]` | Find open or closed formations under the home. |
+| `formation roster close [--room <room>]` | Mark a formation ended during close-out. |
+
+## Check a roster
 
 1. Use the admiral’s roster file as input to the offline checker.
 

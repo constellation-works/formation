@@ -7,8 +7,8 @@ status: Accepted
 feature: roster
 doc_role: scope
 summary: Two read commands list the formations in the home and show one formation's seats beside their live state, and a recorded close tells an ended formation from a running one.
-stage: building
-next: Wire roster apply and close into the startup and close-out references.
+stage: shipped
+next: Maintain the roster commands and skill guidance together.
 ---
 
 # Formation — Roster view

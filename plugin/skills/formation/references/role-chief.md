@@ -8,12 +8,24 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 2. Read the house file named on your card after this skill when one is named, and skip this step when the card says `none`. With no card, when the instruction file of the checkout you run in names a Formation house file, read it after this skill and write its path on every seat card (otherwise write `none`). Apply choices in order: the admiral's current words, then the house file, then this skill's defaults. A house file records the admiral's choices and grants no new authority.
 3. Discover workspace owners and their registered crews with `orbit.workspace.list`, keeping each host-qualified selector (`hm_<owner>/ws_<name>`). Read the previous formation (`scribe group list`, `scribe group show <id>`) and its handoffs, then check `orbit.attention` (`limit: 1`) for counts and each resident's checkpoint, deadline and open warn notices (**startup**).
 4. Establish your shift record in the host-qualified coordination workspace with `crew` and `orchestrator` set together to your registered crew:
-   - When starting fresh (no existing record ID on a card), file it via `orbit.task.add` with title `[orchestration]: formation <units> - <family>`, description, `acceptance_criteria`, complexity, tags `orchestration`, `formation-day`, `no-drain`, and explicit `crew` and `orchestrator` matching your actual model; then claim the returned task ID in one `orbit.task.update` carrying `status: "in-progress"`, `plan`, `crew` and `orchestrator`.
+   - When starting fresh (no existing record ID on a card), file it via `orbit.task.add` with title `[orchestration]: formation <units> - <family>`, description, `acceptance_criteria`, complexity, tags `orchestration` and `formation-day`, and explicit `crew` and `orchestrator` matching your actual model; then claim the returned task ID in one `orbit.task.update` carrying `status: "in-progress"`, `plan`, `crew` and `orchestrator`.
    - If you received a seat card naming an existing record ID, claim it in one `orbit.task.update` setting `status: "in-progress"`, `plan`, `crew` and `orchestrator` from your card.
    - If you run on a model other than a card names, set the matching registered crew. If no registered crew matches a seat's model, tell the admiral once, leave the field as filed and note it on the record; never pick a near match.
 5. File each captain's proposed assignment (and an advisor's if starting one) in the coordination workspace via `orbit.task.add` (with title, description, `acceptance_criteria`, complexity, role tags, and explicit `crew` and `orchestrator` set together to that seat's registered crew), ready to write on its seat card.
 6. Open the shift Scribe group with the admiral's actual typed line and join once (`scribe group join <group> --as 0-chief --author <your model name> --role chief`). Join Formation mail once (`formation mail join --json`, or `formation mail join 0-chief --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail. If you received a seat card, save it to `<seat_dir>/card.md`.
-7. Using the receiving host's provider procedure (**Claude mechanics** or **Codex mechanics**), fill one **seat card** (including `house rules` with the house-file path or `none`) for `0-aide`, each captain, any advisor and each named specialist. Send roster routes before detaching. Verify starting watch coverage with `formation watch list`, stamp the roster comment in UTC on your assignment, and tell the admiral who started, what carried over (open requests included) and what awaits them.
+7. Apply the room roster, record the room and staff seats:
+   - Write one version 2 roster file with each seat's name, role, workspace, `reports_to` parent,
+     model, effort and record ID (`null` if it has no record), then apply it before briefing.
+   - Record the room name on your assignment; do not put the roster in a record comment. A later
+     seat or unit is an edit to the file followed by another `formation roster apply`.
+   - Use `formation roster show` to answer who is staffed and `formation roster list` to see
+     which formations are open.
+   - Using the receiving host's provider procedure (**Claude mechanics** or **Codex mechanics**),
+     fill one **seat card** for `0-aide`, each captain, any advisor and each named specialist.
+     Include the `house rules` path or `none` on each card.
+   - Send roster routes before detaching. Verify coverage with `formation watch list`; record each
+     captain’s watches and reader state on your assignment. Report who started, what carried over
+     (open requests included) and what awaits the admiral.
 
 ## Duties
 
@@ -51,9 +63,9 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 ## Record
 
 - Title: `[orchestration]: formation <units> - <family>` in the host-qualified coordination workspace.
-- Tags: `orchestration`, `formation-day`, `no-drain`.
+- Tags: `orchestration`, `formation-day`.
 - Crew: your own registered crew, set together with `orchestrator` at filing (`orbit.task.add`) and claim (`orbit.task.update`).
-- Keep the UTC-stamped roster (group, seat names, host IDs, reporting lines, models/efforts, task IDs), starting and closing watch coverage, and standing decisions on this record. Open requests are read from `formation request list`, never kept by hand.
+- Keep the room name and roster apply time, starting and closing watch coverage, and standing decisions on this record. The room roster is the source for seat names, host IDs, reporting lines, models, effort and task IDs; do not copy it into a record comment. Use `formation roster show` to answer who is staffed and `formation roster list` to see which formations are open. Open requests are read from `formation request list`, never kept by hand.
 - Use Scribe for durable decisions and recurring issues (**decisions and issues**). Asks that wait on the admiral are requests, not Scribe open items.
 
 ## Refresh and close

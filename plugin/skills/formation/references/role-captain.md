@@ -88,7 +88,7 @@ Contents:
 ## Record
 
 - Title: `[orchestration]: <ws> - <family>` in the coordination workspace.
-- Tags: `orchestration`, `no-drain`, `<ws>`.
+- Tags: `orchestration`, `<ws>`.
 - Crew: your own registered crew, filed by `0-chief` before the start and verified at claim with `orchestrator`.
 - Keep your state, subordinate session ids, repair mode, standing rules and routine progress on this record, not in chat.
 
