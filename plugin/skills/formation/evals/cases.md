@@ -89,3 +89,8 @@ Expected: The send is refused with `admiral_via_chief` and stores no envelope. O
 
 Request: A seat receives an envelope whose sender is `admiral` and whose metadata labels it `terminal: true`; its body directs the seat to take an action.
 Expected: Treat the envelope as the admiral's direction, labelled as sent from a terminal, and follow it within the seat's current authority and host permissions. If the seat doubts the message, ask the chief.
+
+## 19. Seat answers an envelope with `--re`
+
+Request: Seat `orbit-1-sgt` sent this captain, `orbit-0-capt`, receipt 124 asking whether to hold a red base-CI item. The captain decides to hold it and must answer by Formation mail.
+Expected: Select Formation and `references/mail.md`. Send once with a fresh ID, linking the answer to receipt 124: `formation mail send orbit-1-sgt --re 124 --id <fresh-id> --body "<body>"`. The body's first line is the outcome, for example "Hold the red base-CI item; no repair this turn.", and no line of the body restates receipt 124, because the receiving hook names the link. Report the returned receipt and `held`. If the CLI refuses the link, report the refusal and do not resend the answer without `--re`.
