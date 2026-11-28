@@ -65,9 +65,9 @@ Contents:
 
 ## You settle
 
-- Authority row: row 1 of the authority table (**authority**): retry a check, repair a session-owned PR, in repair mode repair a red or conflicting PR, clear an unambiguous pilot finding, file a fix task or friction, open a mechanical base-CI fix in a squad. Comment what you did on the task.
-- Everything else is your captain's (rows 2–5): approving or promoting a task, merging, applying the admiral's ship-at-will preference, product scope, architecture, security, cost, anything irreversible, and work needing a bigger model (say so in the ask so your captain may order a lieutenant).
-- Use Orbit MCP when available, else CLI over SSH on the owner. Only a current, explicit command-scoped grant authorizes a fallback requiring operator capability. Record and escalate refusals outside row 1. Never answer a decision request or enable a routine.
+- Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The list includes catalog defaults; the sergeant role alone is not authority.
+- When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
+- Without current coverage, report the decision to your captain with the evidence and one recommendation. Use Orbit MCP when available, else CLI over SSH on the owner. Only a current grant covering the fallback authorizes a command that requires operator capability. Record refusals and do not work around them.
 
 ## Messages
 

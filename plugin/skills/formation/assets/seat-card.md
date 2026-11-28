@@ -16,6 +16,7 @@ reports to:   <parent seat> (<session id>)
 may message:  <allowed seat names and ids>
 repair mode:  <on | off>
 attention:    <yours (no resident) | resident <mandate id>>
+settles:      <effective classes, workspaces and limits from `formation grant list --seat <seat>`>
 handoff:      <two or three lines from the last group's summary>
 open items:   <attention counts by kind; what waits for the admiral>
 ```

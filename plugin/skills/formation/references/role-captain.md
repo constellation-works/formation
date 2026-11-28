@@ -67,12 +67,9 @@ Contents:
 
 ## You settle
 
-- Authority rows: rows 2 and 3 of the authority table (**authority**), plus row 1 when your unit has no sergeant (`solo` or `duo`):
-  - **Row 1 (without a sergeant):** retry a check, repair a session-owned PR, in repair mode repair a red or conflicting PR, clear an unambiguous pilot finding, file a fix or friction.
-  - **Row 2:** approve and ship a fix, approved design, non-breaking refactor, improvement or small scoped feature, within the admiral's applicable shipping mandate.
-  - **Row 3:** land a reviewed PR after verifying the accepted head and required checks.
-- Everything else (rows 4 and 5: major feature, design, scope, architecture, breaking change, security, material cost, irreversible action, operator identity, release, tags, publishing, credentials, routine changes, plugin installation or privilege grants) goes up with options and one recommendation.
-- Bounded by the admiral's current mandate and host permissions. Document the actual grant on an approval. The admiral starts or restarts drains (report the needed command once; you may deploy within mandate). Report a refusal once. When the same account owns several sessions, their forge approvals cannot serve as independent reviews.
+- Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The list includes catalog defaults; the captain role alone is not authority.
+- When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
+- If no current entry covers the decision, take it to the chief or admiral with options and one recommendation. Record the grant and limit that supported any delegated settlement. Host permissions still apply. The admiral starts or restarts drains unless a current grant covers it. Report a refusal once. When the same account owns several sessions, their forge approvals cannot serve as independent reviews.
 
 ## Messages
 

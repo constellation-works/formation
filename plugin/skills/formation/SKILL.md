@@ -31,7 +31,7 @@ The admiral talks to the chief, aide and captains. Keep one attention owner per 
 - Open [startup](references/start.md) when opening a shift, filing records with crews or staffing units.
 - Open [running the shift](references/run.md) when resizing a unit, toggling repair mode, adding reinforcements or managing watches mid-shift.
 - Open [close-out](references/close-out.md) on the admiral’s authenticated `formation-complete` direction.
-- Open [authority](references/authority.md) to check the full rank authority table, overrides and escalation bounds.
+- Open [authority](references/authority.md) for the built-in class catalog, grant precedence and escalation bounds.
 - Open [decisions and issues](references/records.md) when something awaits an admiral decision, sets standing policy or repeats.
 - Open [handoff and replacement](references/continuity.md) when a seat approaches its context limit, refreshes or changes hands.
 - Open [Claude mechanics](references/provider-claude.md) when staffing, waking, refreshing or archiving Claude sessions.

@@ -18,7 +18,7 @@ once:                        # staffed once, whatever the units
     started_by: chief        # or opened directly by the admiral
     claude_detach: true
     on_demand: true
-    reports_to: chief        # reaches the chief only; no authority row
+    reports_to: chief        # reaches the chief only; role grants no default authority
     role: references/role-advisor.md
     record:
       title: "[advisor]: formation <group> - <family>"
@@ -32,7 +32,7 @@ once:                        # staffed once, whatever the units
     started_by: chief
     claude_detach: true
     role: references/role-aide.md
-    relays_to: [captain]     # the admiral's quoted words, to the owner; it holds no authority
+    relays_to: [captain]     # relays the admiral's quoted words to the owner; the relay adds no authority
     record: none             # agent notes under its own author name
   specialist:                # one per subject the admiral names; none by default
     name: "1-spec-{subject}"

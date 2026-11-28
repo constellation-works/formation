@@ -12,7 +12,7 @@
 
 Names are lowercase letters, digits and hyphens, at most 24 characters. Use `0-chief`, `0-advisor`, `0-aide`, `<ws>-0-capt`, `<ws>-1-lt`, `<ws>-1-sgt`, `<ws>-1-sentry` and `1-spec-<subject>`. A second lieutenant is `<ws>-1-lt2`. The Constellation aliases for constellation, orbit-decision-mail and constellation-site are const, odm and site. Record any other alias with its full workspace. Title a visible chat with the seat name followed by a short duty.
 
-The admiral ranks above the chief. The admiral is a person, never a session: the one who gives the formation order and the only one who settles what the authority table reserves.
+The admiral ranks above the chief. The admiral is a person, never a session: the one who gives the formation order and holds classes with no other current entry, including the two classes that can never be granted.
 
 The chief keeps the roster and advises. While a unit has work running it wakes about every two hours and reads the pull requests merged since its last wake. A defect goes to that workspace's captain. A rule, design or role file that fell short goes to whoever writes the formation's designs.
 
