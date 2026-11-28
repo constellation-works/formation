@@ -1,0 +1,4 @@
+room earlier, closed <timestamp> by chief, roster applied <timestamp> by chief
+admiral
+├─ captain  captain  app  —  —  —  not joined
+└─ chief  chief  —  —  —  —  seen <timestamp>, 0 unread

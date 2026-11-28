@@ -4,9 +4,12 @@ mod audit;
 
 mod exec;
 
+mod presence;
+
 use crate::composition::MailContext;
 pub(crate) use audit::record_delivery;
 pub(crate) use exec::{App, RoomAccess, exec};
+pub(crate) use presence::held;
 
 pub(crate) struct Ctx<'a> {
     pub(crate) env: &'a crate::Env,

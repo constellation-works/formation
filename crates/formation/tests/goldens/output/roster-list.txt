@@ -1,0 +1,3 @@
+ROOM     STATUS  OPENED                CLOSED                CLOSED BY                 SEATS  WORKSPACES  LAST SEEN
+later    active  <timestamp>  -                     -          1 joined (no roster)  -           -
+earlier  closed  <timestamp>  <timestamp>  chief                  1/2 held  app         <timestamp>

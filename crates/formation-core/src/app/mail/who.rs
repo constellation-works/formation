@@ -1,4 +1,5 @@
-use super::{Error, Outcome, SeatRef, SeatStatus, Store, rule, touch};
+use super::{Error, Outcome, SeatRef, SeatStatus, Store, touch};
+use crate::runtime;
 use formation_store::contract::rfc3339;
 
 pub(super) fn run(store: &Store, caller: SeatRef<'_>, now: i64) -> Result<Outcome, Error> {
@@ -19,7 +20,7 @@ pub(crate) fn statuses(
             name: mailbox.name,
             undelivered: mailbox.undelivered,
             unacknowledged: mailbox.unacknowledged,
-            held: rule::held(mailbox.seen, now),
+            held: runtime::held(mailbox.seen, now),
             seen: if mailbox.seen > 0 {
                 rfc3339(mailbox.seen)
             } else {

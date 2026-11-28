@@ -16,10 +16,10 @@ repository = "https://github.com/constellation-works/formation"
 
 [workspace.dependencies]
 # Shared infrastructure pinned together at the scaffold revision. cw-testkit is dev-only.
-cw-base = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
-cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
-cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
-cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "13e8954eee4967ad1565bdea8738d36ab0d38b3e" }
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "env-filter"] }

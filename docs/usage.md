@@ -208,3 +208,17 @@ presence and undelivered mail. Unjoined planned seats and joined seats absent
 from the roster are identified. The command does not renew presence. A room
 without an applied roster lists its joined seats. Version 2 roster seats may
 include the optional string fields `model`, `effort` and `record`.
+
+Run `formation roster list [--status active|closed] [--json]` to see rooms under
+the Formation home, newest first. The opening time comes from the roster
+application or the first recorded join. Rooms with neither timestamp appear
+last. The list reports held planned seats over the planned count, or the
+joined count when there is no roster. It also shows roster workspaces and the
+latest presence across all joined seats. The command leaves the home
+untouched and reports each unreadable room on stderr.
+
+Run `formation roster close [--room <room>] [--json]` from a joined session to
+record its seat and the time of closure. The first close is reported on
+subsequent calls. A closed room shows each seat's last presence, and
+`roster apply` returns `room_closed`. Mail and watches continue to work. Room
+paths outside the home work with `show` and `close`.

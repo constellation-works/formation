@@ -1,0 +1,8 @@
+List rooms in the Formation home, newest first
+
+Usage: formation roster list [OPTIONS]
+
+Options:
+      --status <STATUS>  Keep rooms of this status. Defaults to both statuses [possible values: active, closed]
+      --json             Print the result as JSON
+  -h, --help             Print help

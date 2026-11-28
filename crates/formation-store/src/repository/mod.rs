@@ -10,6 +10,8 @@ mod message;
 
 mod request;
 
+mod room;
+
 mod seat;
 
 mod roster;
@@ -41,6 +43,22 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// First successful join recorded by the room, if available.
+    pub fn first_join(&self) -> Result<Option<String>, cw_base::Error> {
+        if self.reader.version() < 3 {
+            return Ok(None);
+        }
+        audit::first_join(&self.reader)
+    }
+
+    /// Close time and seat, if the room has been closed.
+    pub fn closure(&self) -> Result<Option<(i64, String)>, cw_base::Error> {
+        if !sqlite::has_room_close(self.reader.version()) {
+            return Ok(None);
+        }
+        room::closure(&self.reader)
+    }
+
     /// Applied roster visible at the snapshot.
     pub fn roster(&self) -> RosterRead<'_> {
         RosterRead {
@@ -112,6 +130,16 @@ pub struct Tx<'a> {
 }
 
 impl Tx<'_> {
+    /// Close time and seat inside this write transaction.
+    pub fn closure(&self) -> Result<Option<(i64, String)>, cw_base::Error> {
+        room::closure(self.conn)
+    }
+
+    /// Record the first and only close of this room.
+    pub fn close_room(&self, at: i64, seat: &str) -> Result<(), cw_base::Error> {
+        room::close(self.conn, at, seat)
+    }
+
     /// Applied roster records in this transaction.
     pub fn roster(&self) -> RosterSeats<'_> {
         RosterSeats { conn: self.conn }

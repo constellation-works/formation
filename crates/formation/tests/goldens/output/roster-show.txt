@@ -1,4 +1,4 @@
-room show-room, roster applied <timestamp> by chief
+room show-room, active, roster applied <timestamp> by chief
 admiral
 └─ chief  chief  —  opus  high  record-id  held, 0 unread
    └─ worker  worker  —  —  —  —  not joined

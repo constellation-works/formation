@@ -14,6 +14,19 @@ pub struct SeatsRead<'a> {
 }
 
 impl SeatsRead<'_> {
+    /// Joined seats and their last presence, without reading mailbox counts.
+    pub fn presence(&self) -> Result<Vec<(String, i64)>, Error> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT name, seen FROM seats")
+            .map_err(error::sql)?;
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(error::sql)?
+            .collect::<Result<_, _>>()
+            .map_err(error::sql)
+    }
+
     /// Whether a seat with this name has joined.
     pub fn contains(&self, name: &str) -> Result<bool, Error> {
         self.conn

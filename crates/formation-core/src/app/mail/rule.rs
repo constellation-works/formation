@@ -1,13 +1,6 @@
-//! Pure mail validation and presence policy.
+//! Pure mail validation.
 
 use super::{Error, refused};
-
-pub(super) const PRESENCE_SECONDS: i64 = 90;
-
-/// Whether a seat last seen at `seen` (0 when never) holds its mailbox at `now`.
-pub(super) fn held(seen: i64, now: i64) -> bool {
-    seen > now - PRESENCE_SECONDS
-}
 
 pub(super) fn name(name: &str) -> Result<(), Error> {
     if name.len() <= 96 && formation_store::contract::identifier(name) {

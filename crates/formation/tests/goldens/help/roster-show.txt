@@ -1,4 +1,4 @@
-Show the roster and live seats in a room
+Show a room's roster and seat presence
 
 Usage: formation roster show [OPTIONS] [ROOM]
 

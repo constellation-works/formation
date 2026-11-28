@@ -1,4 +1,5 @@
 use super::{Error, Outcome, SeatRef, Store, Tx, refused, rule, touch};
+use crate::runtime;
 
 /// Joined seats named in an `unknown_recipient` refusal.
 const LISTED_SEATS: usize = 32;
@@ -46,7 +47,7 @@ fn deliver(
     let Some(seen) = tx.seats().seen(to)? else {
         return Err(unknown_recipient(tx.seats().names(LISTED_SEATS + 1)?, to));
     };
-    let held = rule::held(seen, now);
+    let held = runtime::held(seen, now);
 
     if let Some(prior) = tx.messages().prior_delivery(&sender, &id)? {
         if prior.recipient == to && prior.body == body {

@@ -1,0 +1,1 @@
+[{"closed_at":null,"closed_by":null,"last_seen":null,"opened_at":"<timestamp>","room":"later","seats":{"held":0,"joined":1,"planned":null},"status":"active","workspaces":[]},{"closed_at":"<timestamp>","closed_by":"chief","last_seen":"<timestamp>","opened_at":"<timestamp>","room":"earlier","seats":{"held":1,"joined":2,"planned":2},"status":"closed","workspaces":["app"]}]
