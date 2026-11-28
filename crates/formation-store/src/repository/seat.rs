@@ -152,6 +152,7 @@ impl Seats<'_> {
         let provider = match provider {
             HookProvider::Claude => "claude",
             HookProvider::Codex => "codex",
+            HookProvider::Antigravity => "antigravity",
         };
         self.conn
             .execute(

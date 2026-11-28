@@ -24,7 +24,9 @@ pub(crate) use grant::{
     room_list as grant_room_list, seat_list as grant_seat_list, write as grant_write,
 };
 pub(crate) use hook::{
-    hook_error, hook_json, hook_rewake, hook_usage, prompt as hook_prompt, stop as hook_stop,
+    antigravity_prompt as hook_antigravity_prompt, antigravity_stop as hook_antigravity_stop,
+    empty_object as hook_empty, hook_error, hook_json, hook_rewake, hook_usage,
+    prompt as hook_prompt, stop as hook_stop,
 };
 pub(crate) use mail::{failure as mail_failure, result as mail_result};
 pub(crate) use request::write as request;

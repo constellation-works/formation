@@ -57,6 +57,26 @@ pub(super) const ROSTER_DETAILS: cw_sqlite::Step = cw_sqlite::Step::sql(
      CREATE TABLE roster_application (applied_at INTEGER NOT NULL, applied_by TEXT) STRICT;",
 );
 
+/// Admit Antigravity in the hook provider check without changing existing rows.
+pub(super) const HOOK_PROVIDER: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "CREATE TABLE seats_next(
+                name TEXT PRIMARY KEY,
+                session_id TEXT UNIQUE,
+                seen INTEGER NOT NULL,
+                hook_provider TEXT
+                    CHECK(hook_provider IN ('claude', 'codex', 'antigravity')),
+                hook_busy INTEGER CHECK(hook_busy IN (0, 1)),
+                wake_requested INTEGER NOT NULL DEFAULT 0
+                    CHECK(wake_requested IN (0, 1))
+            ) STRICT;
+            INSERT INTO seats_next(
+                name, session_id, seen, hook_provider, hook_busy, wake_requested)
+            SELECT name, session_id, seen, hook_provider, hook_busy, wake_requested
+              FROM seats;
+            DROP TABLE seats;
+            ALTER TABLE seats_next RENAME TO seats;",
+);
+
 /// The admiral's seat, present in every room and bound to no session.
 ///
 /// A seat that an earlier build let a session join under the reserved name loses its binding.

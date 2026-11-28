@@ -22,7 +22,7 @@ pub(crate) enum Command {
     Roster(roster::Roster),
     /// Exchange messages in a private local room.
     Mail(mail::Mail),
-    /// Hand unread mail to a Claude Code or Codex session.
+    /// Hand unread mail to a Claude Code, Codex or Antigravity session.
     Hook(hook::Hook),
     /// Manage the room's watches and wait for probe results.
     Watch(watch::Watch),

@@ -34,6 +34,8 @@ pub enum HookProvider {
     Claude,
     /// Codex.
     Codex,
+    /// Antigravity IDE, app or CLI.
+    Antigravity,
 }
 
 /// Invalid caller session identifier.

@@ -613,9 +613,10 @@ fn waiting_line(waiting: i64) -> String {
     }
 }
 
+/// Antigravity publishes no separate cap, so it uses the Codex budget.
 fn character_limit(provider: Provider) -> usize {
     match provider {
         Provider::Claude => 9_000,
-        Provider::Codex => 8_000,
+        Provider::Codex | Provider::Antigravity => 8_000,
     }
 }

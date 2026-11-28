@@ -702,3 +702,78 @@ fn a_release_twenty_two_room_upgrades_for_request_mail_and_keeps_plain_mail()
     assert_eq!(unread[0].id, "plain-1");
     Ok(())
 }
+
+#[test]
+fn upgrade_admits_antigravity_without_granting_a_codex_wake()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("receiver")?;
+    store.write(|tx| {
+        tx.seats().bind("captain", Some(&session))?;
+        tx.seats().bind("chief", None)?;
+        tx.seats().mark_hook(&session, HookProvider::Codex, false)?;
+        Ok(())
+    })?;
+
+    let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    connection.execute_batch(
+        "CREATE TABLE seats_prior(
+            name TEXT PRIMARY KEY,
+            session_id TEXT UNIQUE,
+            seen INTEGER NOT NULL,
+            hook_provider TEXT CHECK(hook_provider IN ('claude', 'codex')),
+            hook_busy INTEGER CHECK(hook_busy IN (0, 1)),
+            wake_requested INTEGER NOT NULL DEFAULT 0 CHECK(wake_requested IN (0, 1))
+        ) STRICT;
+        INSERT INTO seats_prior(
+            name, session_id, seen, hook_provider, hook_busy, wake_requested)
+        SELECT name, session_id, seen, hook_provider, hook_busy, wake_requested FROM seats;
+        DROP TABLE seats;
+        ALTER TABLE seats_prior RENAME TO seats;
+        PRAGMA user_version = 24;",
+    )?;
+    assert!(
+        connection
+            .execute(
+                "UPDATE seats SET hook_provider = 'antigravity' WHERE name = 'captain'",
+                [],
+            )
+            .is_err(),
+        "version 24 must refuse an antigravity hook provider"
+    );
+    drop(connection);
+
+    let snapshot = store.read()?;
+    assert_eq!(
+        snapshot.seats().idle_codex("captain")?,
+        Some(session.clone())
+    );
+    drop(snapshot);
+    let still_old = Connection::open(root.path().join("inbox.sqlite3"))?;
+    assert_eq!(
+        still_old.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?,
+        24
+    );
+    drop(still_old);
+
+    assert!(store.write(|tx| {
+        tx.seats()
+            .mark_hook(&session, HookProvider::Antigravity, false)
+    })?);
+    assert_eq!(store.read()?.seats().idle_codex("captain")?, None);
+    assert!(!store.write(|tx| tx.seats().claim_codex_wake("captain", &session))?);
+
+    let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    let provider: String = connection.query_row(
+        "SELECT hook_provider FROM seats WHERE name = 'captain'",
+        [],
+        |row| row.get(0),
+    )?;
+    assert_eq!(provider, "antigravity");
+    assert_eq!(
+        connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?,
+        25
+    );
+    Ok(())
+}

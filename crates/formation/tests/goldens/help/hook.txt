@@ -1,9 +1,9 @@
-Hand unread mail to a Claude Code or Codex session
+Hand unread mail to a Claude Code, Codex or Antigravity session
 
 Usage: formation hook [OPTIONS] --provider <PROVIDER> --event <EVENT>
 
 Options:
-      --provider <PROVIDER>  Host that supplies the hook input [possible values: claude, codex]
+      --provider <PROVIDER>  Host that supplies the hook input [possible values: claude, codex, antigravity]
       --event <EVENT>        Lifecycle event that invoked this command [possible values: user-prompt, stop]
       --hold <SECONDS>       Seconds a Stop hook may wait for mail (nonnegative) [default: 0]
   -h, --help                 Print help
@@ -13,3 +13,4 @@ Reads the host's JSON from stdin (maximum 1 MiB). A Claude Stop delivery exits 2
 Examples:
   formation hook --provider claude --event user-prompt
   formation hook --provider codex --event stop
+  formation hook --provider antigravity --event user-prompt

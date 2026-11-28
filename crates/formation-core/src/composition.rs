@@ -12,11 +12,16 @@ const ENV_FORMATION_HOME: &str = "FORMATION_HOME";
 /// Default room name or path (overridden by `--room`).
 const ENV_FORMATION_ROOM: &str = "FORMATION_ROOM";
 
-/// Claude Code session identifier (takes precedence over `CODEX_THREAD_ID`).
+/// Claude Code session identifier.
+///
+/// Takes precedence over `CODEX_THREAD_ID` and `ANTIGRAVITY_CONVERSATION_ID`.
 const ENV_CLAUDE_SESSION: &str = "CLAUDE_CODE_SESSION_ID";
 
-/// Codex thread identifier (used when `CLAUDE_CODE_SESSION_ID` is unset).
+/// Codex thread identifier, used when `CLAUDE_CODE_SESSION_ID` is unset.
 const ENV_CODEX_SESSION: &str = "CODEX_THREAD_ID";
+
+/// Antigravity conversation identifier, used when the Claude and Codex ids are unset.
+const ENV_ANTIGRAVITY_SESSION: &str = "ANTIGRAVITY_CONVERSATION_ID";
 
 /// User home directory used for `~/.formation` and `~` room paths.
 const ENV_HOME: &str = "HOME";
@@ -32,6 +37,7 @@ pub struct Env {
     seat: Option<String>,
     claude_session: Option<OsString>,
     codex_session: Option<OsString>,
+    antigravity_session: Option<OsString>,
     terminal: bool,
     pub(crate) actor: Option<String>,
     pub(crate) cwd: Option<PathBuf>,
@@ -47,6 +53,7 @@ impl Env {
             seat: None,
             claude_session: std::env::var_os(ENV_CLAUDE_SESSION),
             codex_session: std::env::var_os(ENV_CODEX_SESSION),
+            antigravity_session: std::env::var_os(ENV_ANTIGRAVITY_SESSION),
             terminal: false,
             actor: std::env::var("USER")
                 .or_else(|_| std::env::var("USERNAME"))
@@ -393,7 +400,11 @@ fn named_seat<'a>(env: &'a Env, session: Option<&SessionId>) -> Result<Option<&'
 }
 
 fn resolve_session(env: &Env) -> Result<Option<SessionId>, Error> {
-    let raw = env.claude_session.as_ref().or(env.codex_session.as_ref());
+    let raw = env
+        .claude_session
+        .as_ref()
+        .or(env.codex_session.as_ref())
+        .or(env.antigravity_session.as_ref());
     let Some(raw) = raw else {
         return Ok(None);
     };
