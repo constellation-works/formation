@@ -21,9 +21,10 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
      seat or unit is an edit to the file followed by another `formation roster apply`.
    - Use `formation roster show` to answer who is staffed and `formation roster list` to see
      which formations are open.
-   - Using the receiving host's provider procedure ([**Claude mechanics**](provider-claude.md), [**Codex mechanics**](provider-codex.md) or [**Antigravity mechanics**](provider-antigravity.md)),
+   - Using the receiving host's provider procedure ([**Claude mechanics**](provider-claude.md) or [**Codex mechanics**](provider-codex.md)),
      fill one **seat card** for `0-aide`, each captain, any advisor and each named specialist.
      Include the `house rules` path or `none` on each card.
+   - Antigravity is not a supported roster host. Use [**Antigravity mechanics**](provider-antigravity.md) only for a manually tracked conversation exchanging seat mail outside the roster.
    - Send roster routes before detaching. Verify coverage with `formation watch list`; record each
      captain’s watches and reader state on your assignment. Report who started, what carried over
      (open requests included) and what awaits the admiral.
