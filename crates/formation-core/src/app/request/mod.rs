@@ -28,6 +28,8 @@ pub struct Open {
     pub recommendation: String,
     /// Whether this request is holding up work.
     pub blocking: bool,
+    /// Target workspace: `all` or a workspace in the applied roster; absent keeps the asker's own.
+    pub workspace: Option<String>,
     /// Option to settle with the caller's own authority, when opening and settling at once.
     pub settle: Option<String>,
 }

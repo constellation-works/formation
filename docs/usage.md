@@ -164,9 +164,13 @@ formation request show <request>
 `open` records a one-line ask, a record pointer, and two to four uniquely labeled options.
 `--recommend` names one of the labels. `--blocking` records that the asker's work is waiting.
 The ID includes the originating room's name. The applied roster supplies the asker's
-workspace (`all` for a seat with no workspace) and parent. The holder receives one envelope
-as ordinary room mail. With `--settle <label>`, the asker instead uses their own
-effective authority to open and settle in one step.
+workspace (`all` for a seat with no workspace) and parent. `--workspace <name>` names the
+workspace the request concerns instead: `all`, or a workspace of any seat in the applied
+roster, so an advisor or aide with no workspace can ask about one. An unknown name is refused
+with `unknown_workspace`, leaving the request and mail unchanged. `--settle` and a later
+`settle` check grants against that workspace. The holder and settlement authority are
+unchanged. The holder receives one envelope as ordinary room mail. With `--settle <label>`,
+the asker instead uses their own effective authority to open and settle in one step.
 
 The chief holds every request a captain, advisor or aide opens. An explicit `reports_to`
 is honored when it names a chief seat; with none, the sole chief in the applied roster

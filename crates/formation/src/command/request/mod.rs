@@ -43,6 +43,9 @@ enum Verb {
         /// Mark the request as blocking the asker's work.
         #[arg(long)]
         blocking: bool,
+        /// Workspace the request concerns: `all` or one in the roster (default: your own).
+        #[arg(long, value_name = "WORKSPACE")]
+        workspace: Option<String>,
         /// Open and settle with this option under your own authority.
         #[arg(long, value_name = "LABEL")]
         settle: Option<String>,
@@ -134,6 +137,7 @@ pub(crate) fn run(env: Env, args: Request, queue: &dyn Fn(&str) -> bool) -> Exit
             options,
             recommendation,
             blocking,
+            workspace,
             settle,
         } => Command::Change {
             change: Change::Open(request::Open {
@@ -143,6 +147,7 @@ pub(crate) fn run(env: Env, args: Request, queue: &dyn Fn(&str) -> bool) -> Exit
                 options,
                 recommendation,
                 blocking,
+                workspace,
                 settle,
             }),
             queue,

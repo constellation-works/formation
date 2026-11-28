@@ -64,6 +64,7 @@ impl Mutation<'_> {
         let options = rule::options(&input.options)?;
         rule::require_option(&options, &input.recommendation)?;
 
+        let workspace = rule::workspace(self.actor, self.roster, input.workspace)?;
         let id = format!(
             "req-{}-{}",
             room_label(room),
@@ -78,12 +79,7 @@ impl Mutation<'_> {
             id,
             asker: self.actor.name.clone(),
             class: input.class,
-            workspace: self
-                .actor
-                .workspace
-                .as_deref()
-                .unwrap_or(grant::ALL_WORKSPACES)
-                .to_owned(),
+            workspace,
             record,
             ask,
             options,
