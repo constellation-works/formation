@@ -2,7 +2,7 @@
 
 use super::house::{self, Entry, HouseFile};
 use super::{
-    Audience, Change, Outcome, catalog, notify_changed, require_joined_caller_tx,
+    Audience, Change, Notifier, Outcome, catalog, notify_changed, require_joined_caller_tx,
     require_roster_tx, snapshot_effective,
 };
 use crate::composition::Caller;
@@ -110,7 +110,10 @@ pub(super) fn load(
                 entries: loaded.grants,
                 classes: loaded.classes,
             },
-            Some(loaded_by.as_str()),
+            Notifier {
+                seat: loaded_by.as_str(),
+                terminal: matches!(caller, Caller::Admiral),
+            },
             now_sec,
         )?;
         loaded.notified.clone_from(&notified);

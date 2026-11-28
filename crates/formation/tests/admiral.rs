@@ -16,6 +16,22 @@ const CHIEF: &str = "chief-session";
 
 const CAPTAIN: &str = "captain-session";
 
+const OPEN_REQUEST: &[&str] = &[
+    "open",
+    "--class",
+    "design",
+    "--record",
+    "task-ref",
+    "--ask",
+    "Share the cache?",
+    "--option",
+    "a: Share",
+    "--option",
+    "b: Keep separate",
+    "--recommend",
+    "a",
+];
+
 /// One room, `trial`, in a disposable Formation home with a chief and a captain joined.
 struct Home(TempRoot);
 
@@ -76,6 +92,25 @@ impl Home {
         support::on_terminal(cmd)
     }
 
+    /// Any Formation command with its stdout on a terminal.
+    fn terminal_cmd(&self, session: Option<&str>, args: &[&str]) -> support::OnTerminal {
+        let mut cmd = self.command(session);
+        cmd.args(args);
+        support::on_terminal(cmd)
+    }
+
+    /// Run a request command as a joined session in room `trial`, printing JSON.
+    fn request_ok(&self, session: &str, args: &[&str]) -> Value {
+        let out = self
+            .command(Some(session))
+            .args(["request", "--room", "trial", "--json"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+
     fn ok(&self, session: &str, args: &[&str]) -> Value {
         let mut full = vec!["--room", "trial", "--json"];
         full.extend_from_slice(args);
@@ -99,6 +134,10 @@ impl Home {
             ],
             "routes": []
         });
+        self.apply_roster_value(room, &roster);
+    }
+
+    fn apply_roster_value(&self, room: &str, roster: &Value) {
         let mut child = self
             .command(None)
             .args(["roster", "apply", "--room", room])
@@ -111,7 +150,7 @@ impl Home {
             .stdin
             .take()
             .unwrap()
-            .write_all(&serde_json::to_vec(&roster).unwrap())
+            .write_all(&serde_json::to_vec(roster).unwrap())
             .unwrap();
         let out = child.wait_with_output().unwrap();
         assert!(out.status.success(), "{out:?}");
@@ -555,7 +594,8 @@ fn a_room_from_the_current_release_lists_the_admiral_once_opened() {
     let home = Home::new();
     // Undo the admiral steps, so the file is what release 19 wrote.
     home.sql(
-        "DROP TABLE room_house_catalog;
+        "ALTER TABLE messages DROP COLUMN request_id;
+         DROP TABLE room_house_catalog;
          ALTER TABLE room_grant DROP COLUMN origin;
          ALTER TABLE messages DROP COLUMN terminal;
          DELETE FROM seats WHERE name = 'admiral';
@@ -576,4 +616,480 @@ fn a_room_from_the_current_release_lists_the_admiral_once_opened() {
         .split_whitespace()
         .collect();
     assert_eq!(row, ["admiral", "0", "0", "-", "-"]);
+}
+
+#[test]
+fn a_passed_request_lands_in_the_admirals_mailbox_and_terminal_settlement_clears_both() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    // Plain chief mail stays unacknowledged when a passed request is settled.
+    home.ok(
+        CHIEF,
+        &[
+            "send",
+            "admiral",
+            "--id",
+            "plain-1",
+            "--body",
+            "Shift update.",
+        ],
+    );
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    assert_eq!(opened["holder"], "chief");
+
+    let passed = home.request_ok(CHIEF, &["pass", id, "--recommend", "a"]);
+    assert_eq!(passed["holder"], "admiral");
+    assert_eq!(passed["holder_kind"], "admiral");
+
+    let inbox = json_of(&home.terminal(None, &["inbox"]));
+    let messages = inbox["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    let req_mail: Vec<_> = messages
+        .iter()
+        .filter(|message| message["body"].as_str().unwrap().contains(id))
+        .collect();
+    assert_eq!(req_mail.len(), 1, "{messages:?}");
+    assert_eq!(req_mail[0]["sender"], "chief");
+
+    let waiting = json_of(&home.terminal_cmd(
+        None,
+        &[
+            "request",
+            "--room",
+            "trial",
+            "--json",
+            "list",
+            "--waiting",
+            "admiral",
+        ],
+    ));
+    let waiting_rows = waiting.as_array().unwrap();
+    assert_eq!(waiting_rows.len(), 1);
+    assert_eq!(waiting_rows[0]["id"], id);
+
+    // Advising an admiral-held request from a non-chief seat succeeds without mailing admiral.
+    home.request_ok(
+        CAPTAIN,
+        &["advise", id, "--recommend", "b", "--note", "Extra context"],
+    );
+    assert_eq!(
+        json_of(&home.terminal(None, &["inbox"]))["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    // Settling from the terminal needs no grant and no `--source`.
+    let settled = json_of(&home.terminal_cmd(
+        None,
+        &[
+            "request", "--room", "trial", "--json", "settle", id, "--option", "a",
+        ],
+    ));
+    assert_eq!(settled["state"], "settled");
+    assert_eq!(settled["settlement"]["seat"], "admiral");
+    assert_eq!(settled["settlement"]["option"], "a");
+    assert_eq!(settled["settlement"]["grant_id"], Value::Null);
+    assert_eq!(settled["settlement"]["terminal"], true);
+    assert!(settled["settlement"].get("source").is_none());
+    assert!(settled["settlement"].get("entered_by").is_none());
+
+    let shown_json =
+        json_of(&home.terminal_cmd(None, &["request", "--room", "trial", "--json", "show", id]));
+    assert_eq!(shown_json["settlement"]["seat"], "admiral");
+    assert_eq!(shown_json["settlement"]["terminal"], true);
+
+    let shown_text = home.terminal_cmd(None, &["request", "--room", "trial", "show", id]);
+    assert!(shown_text.status.success(), "{}", shown_text.stderr);
+    assert!(
+        shown_text
+            .stdout
+            .contains("Settled by admiral (from a terminal) at "),
+        "{}",
+        shown_text.stdout
+    );
+    assert!(
+        shown_text.stdout.contains(": a (grant admiral)"),
+        "{}",
+        shown_text.stdout
+    );
+
+    // The request's envelope is gone from the admiral's inbox; plain mail stays.
+    let inbox_after = json_of(&home.terminal(None, &["inbox"]));
+    let after_messages = inbox_after["messages"].as_array().unwrap();
+    assert_eq!(after_messages.len(), 1, "{after_messages:?}");
+    assert_eq!(after_messages[0]["id"], "plain-1");
+
+    let waiting_after = json_of(&home.terminal_cmd(
+        None,
+        &[
+            "request",
+            "--room",
+            "trial",
+            "--json",
+            "list",
+            "--waiting",
+            "admiral",
+        ],
+    ));
+    assert_eq!(waiting_after, json!([]));
+
+    // The asker receives one terminal-marked envelope from the admiral.
+    let captain_inbox = home.ok(CAPTAIN, &["inbox"]);
+    let notices: Vec<_> = captain_inbox["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|message| message["body"].as_str().unwrap().contains(id))
+        .collect();
+    assert_eq!(notices.len(), 1, "{captain_inbox}");
+    assert_eq!(notices[0]["sender"], "admiral");
+    assert_eq!(notices[0]["terminal"], true);
+
+    let settle_event = home
+        .audit()
+        .into_iter()
+        .rev()
+        .find(|event| event["command"] == "request settle")
+        .unwrap();
+    assert_eq!(settle_event["caller"], "admiral");
+    assert_eq!(settle_event["terminal"], true);
+    assert_eq!(settle_event["target"], id);
+}
+
+#[test]
+fn request_and_grant_terminal_commands_use_the_only_active_room() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["pass", id]);
+
+    let waiting = home.terminal_cmd(None, &["request", "--json", "list", "--waiting", "admiral"]);
+    assert!(waiting.status.success(), "{}", waiting.stderr);
+    let requests: Value = serde_json::from_str(&waiting.stdout).unwrap();
+    assert_eq!(requests.as_array().unwrap().len(), 1, "{requests}");
+    assert_eq!(requests[0]["id"], id);
+
+    let grant = home.terminal_cmd(
+        None,
+        &[
+            "grant",
+            "add",
+            "--to",
+            "chief",
+            "--class",
+            "direction",
+            "--workspace",
+            "all",
+        ],
+    );
+    assert!(grant.status.success(), "{}", grant.stderr);
+    let grant: Value = serde_json::from_str(&grant.stdout).unwrap();
+    assert_eq!(grant["source"], "admiral");
+}
+
+#[test]
+fn a_non_chief_request_without_a_parent_does_not_mail_the_admiral() {
+    let home = Home::new();
+    let worker = home.piped(
+        Some("worker-session"),
+        &["join", "worker", "--room", "trial"],
+    );
+    assert!(worker.status.success(), "{worker:?}");
+    home.apply_roster_value(
+        "trial",
+        &json!({
+            "version": 2,
+            "seats": [
+                {"name": "chief", "role": "chief", "host": "claude-desktop"},
+                {"name": "worker", "role": "worker", "host": "headless"}
+            ],
+            "routes": []
+        }),
+    );
+
+    let opened = home.request_ok("worker-session", OPEN_REQUEST);
+    assert_eq!(opened["state"], "open");
+
+    let inbox = json_of(&home.terminal(None, &["inbox"]));
+    assert_eq!(inbox["messages"], json!([]));
+}
+
+#[test]
+fn terminal_settlement_refuses_chat_only_admiral_source_flags() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["pass", id]);
+
+    terminal_refused(
+        &home.terminal_cmd(
+            None,
+            &[
+                "request",
+                "--room",
+                "trial",
+                "--json",
+                "settle",
+                id,
+                "--option",
+                "a",
+                "--admiral",
+                "--source",
+                "chief chat 12:00",
+            ],
+        ),
+        "source_from_terminal",
+    );
+
+    let still_open = home.request_ok(CHIEF, &["show", id]);
+    assert_eq!(still_open["state"], "open");
+    assert_eq!(still_open["holder"], "admiral");
+    let inbox = json_of(&home.terminal(None, &["inbox"]));
+    assert_eq!(inbox["messages"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn chat_settlement_from_a_joined_seat_keeps_source_and_clears_the_admirals_inbox() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["pass", id]);
+    assert_eq!(
+        json_of(&home.terminal(None, &["inbox"]))["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let settled = home.request_ok(
+        CHIEF,
+        &[
+            "settle",
+            id,
+            "--option",
+            "b",
+            "--admiral",
+            "--source",
+            "chief chat 14:00",
+        ],
+    );
+    assert_eq!(settled["settlement"]["seat"], "admiral");
+    assert_eq!(settled["settlement"]["source"], "chief chat 14:00");
+    assert_eq!(settled["settlement"]["entered_by"], "chief");
+    assert!(settled["settlement"].get("terminal").is_none());
+
+    let shown = home.terminal_cmd(None, &["request", "--room", "trial", "show", id]);
+    assert!(shown.status.success(), "{}", shown.stderr);
+    assert!(shown.stdout.contains("Source: chief chat 14:00"));
+    assert!(shown.stdout.contains("Entered by: chief"));
+    assert!(!shown.stdout.contains("from a terminal"));
+
+    // Settling through chat also clears the admiral's inbox envelope and waiting queue.
+    assert_eq!(
+        json_of(&home.terminal(None, &["inbox"]))["messages"],
+        json!([])
+    );
+    assert_eq!(
+        home.request_ok(CHIEF, &["list", "--waiting", "admiral"]),
+        json!([])
+    );
+
+    let captain_inbox = home.ok(CAPTAIN, &["inbox"]);
+    let notice = &captain_inbox["messages"][0];
+    assert_eq!(notice["sender"], "admiral");
+    assert!(notice.get("terminal").is_none());
+}
+
+#[test]
+fn terminal_reopen_overturns_a_seats_settlement_and_mails_both_seats() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    // Grant design to chief from the terminal, then let chief settle captain's request.
+    json_of(&home.terminal_cmd(
+        None,
+        &[
+            "grant",
+            "add",
+            "--room",
+            "trial",
+            "--to",
+            "chief",
+            "--class",
+            "design",
+            "--workspace",
+            "all",
+        ],
+    ));
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["settle", id, "--option", "a"]);
+
+    let reopened = json_of(&home.terminal_cmd(
+        None,
+        &["request", "--room", "trial", "--json", "reopen", id],
+    ));
+    assert_eq!(reopened["state"], "open");
+    assert_eq!(reopened["holder"], "admiral");
+    assert_eq!(reopened["overturned"][0]["seat"], "chief");
+    assert_eq!(reopened["overturned"][0]["option"], "a");
+
+    for seat_session in [CAPTAIN, CHIEF] {
+        let inbox = home.ok(seat_session, &["inbox"]);
+        let reopened_mail: Vec<_> = inbox["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|message| {
+                message["sender"] == "admiral"
+                    && message["body"].as_str().unwrap().contains("reopened")
+                    && message["body"].as_str().unwrap().contains(id)
+            })
+            .collect();
+        assert_eq!(reopened_mail.len(), 1, "{seat_session}: {inbox}");
+        assert_eq!(reopened_mail[0]["terminal"], true);
+    }
+
+    let reopen_event = home
+        .audit()
+        .into_iter()
+        .rev()
+        .find(|event| event["command"] == "request reopen")
+        .unwrap();
+    assert_eq!(reopen_event["caller"], "admiral");
+    assert_eq!(reopen_event["terminal"], true);
+    assert_eq!(reopen_event["target"], id);
+}
+
+#[test]
+fn grants_from_the_terminal_use_admiral_without_self_entered_and_sessions_cannot_impersonate() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    let added = json_of(&home.terminal_cmd(
+        None,
+        &[
+            "grant",
+            "add",
+            "--room",
+            "trial",
+            "--to",
+            "chief",
+            "--class",
+            "direction",
+            "--workspace",
+            "all",
+        ],
+    ));
+    let grant_id = added["id"].as_i64().unwrap();
+    assert_eq!(added["entered_by"], "admiral");
+    assert_eq!(added["source"], "admiral");
+    assert_eq!(added["self_entered"], false);
+    assert_eq!(added["notified"], json!(["chief"]));
+
+    let listed = json_of(&home.terminal_cmd(None, &["grant", "list", "--room", "trial", "--json"]));
+    assert_eq!(listed["grants"][0]["source"], "admiral");
+    assert_eq!(listed["grants"][0]["entered_by"], "admiral");
+    assert_eq!(listed["grants"][0]["self_entered"], false);
+
+    let table = home.terminal_cmd(None, &["grant", "list", "--room", "trial"]);
+    assert!(table.status.success(), "{}", table.stderr);
+    assert!(table.stdout.contains("admiral"), "{}", table.stdout);
+    assert!(!table.stdout.contains("self-entered"), "{}", table.stdout);
+
+    let chief_mail = home.ok(CHIEF, &["inbox"]);
+    assert_eq!(chief_mail["messages"][0]["sender"], "admiral");
+    assert_eq!(chief_mail["messages"][0]["terminal"], true);
+
+    let withheld = json_of(&home.terminal_cmd(
+        None,
+        &[
+            "grant",
+            "withhold",
+            "--room",
+            "trial",
+            "--to",
+            "captain",
+            "--class",
+            "land",
+            "--workspace",
+            "site",
+        ],
+    ));
+    assert_eq!(withheld["entered_by"], "admiral");
+    assert_eq!(withheld["source"], "admiral");
+    assert_eq!(withheld["self_entered"], false);
+
+    let id_text = grant_id.to_string();
+    let revoked =
+        json_of(&home.terminal_cmd(None, &["grant", "revoke", &id_text, "--room", "trial"]));
+    assert_eq!(revoked["revoked"], true);
+    assert_eq!(revoked["revoked_by"], "admiral");
+
+    let events = home.audit();
+    for command in ["grant add", "grant withhold", "grant revoke"] {
+        let event = events
+            .iter()
+            .find(|event| event["command"] == command)
+            .unwrap();
+        assert_eq!(event["caller"], "admiral", "{command}");
+        assert_eq!(event["terminal"], true, "{command}");
+    }
+
+    // Sessions cannot impersonate admiral, and unjoined sessions stay refused on a terminal.
+    terminal_refused(
+        &home.terminal_cmd(
+            Some(CHIEF),
+            &[
+                "grant",
+                "add",
+                "--room",
+                "trial",
+                "--as",
+                "admiral",
+                "--to",
+                "chief",
+                "--class",
+                "direction",
+            ],
+        ),
+        "reserved_seat",
+    );
+    terminal_refused(
+        &home.terminal_cmd(
+            Some("stranger"),
+            &[
+                "grant",
+                "add",
+                "--room",
+                "trial",
+                "--to",
+                "chief",
+                "--class",
+                "direction",
+            ],
+        ),
+        "seat_required",
+    );
+    terminal_refused(
+        &home.terminal_cmd(
+            Some(CHIEF),
+            &[
+                "request", "--room", "trial", "--as", "admiral", "--json", "list",
+            ],
+        ),
+        "reserved_seat",
+    );
 }

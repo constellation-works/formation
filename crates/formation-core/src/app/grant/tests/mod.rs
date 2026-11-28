@@ -360,6 +360,20 @@ fn self_entered_matches_caller_seat_or_rank() {
         0,
     );
     assert!(!is_self_entered(&outside_session, &roster));
+
+    let admiral_entered = make_grant(
+        5,
+        GrantEffect::Grant,
+        GrantTargetKind::Rank,
+        "chief",
+        "direction",
+        "all",
+        GrantOrigin::Room,
+        Some("admiral"),
+        100,
+        0,
+    );
+    assert!(!is_self_entered(&admiral_entered, &roster));
 }
 
 #[test]
@@ -374,7 +388,7 @@ fn audit_metadata_holds_identifiers_only() {
         workspace: "all".to_owned(),
         limit: Some("secret limit words".to_owned()),
         lifetime: "day".to_owned(),
-        source: "private admiral chat text".to_owned(),
+        source: Some("private admiral chat text".to_owned()),
         queue: &queue,
     };
     assert_eq!(GrantApp::audit(&add_cmd), Some("grant add"));

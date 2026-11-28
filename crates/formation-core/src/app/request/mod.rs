@@ -72,7 +72,7 @@ pub enum Action {
         option: String,
         /// Optional explanation of the choice.
         note: Option<String>,
-        /// Admiral answer source; absence means delegated settlement.
+        /// Admiral chat answer source; absence means delegated settlement or a terminal call.
         source: Option<String>,
     },
     /// Overturn a settlement and return it to the admiral.
@@ -122,7 +122,7 @@ impl<'a> App for RequestApp<'a> {
     type Outcome = Outcome;
 
     fn room_access<'cmd>(_: &'cmd Command<'a>) -> RoomAccess<'cmd> {
-        RoomAccess::OptionalSeat
+        RoomAccess::OptionalMember
     }
 
     fn audit(cmd: &Command<'a>) -> Option<&'static str> {

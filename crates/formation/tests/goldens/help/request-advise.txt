@@ -8,7 +8,7 @@ Arguments:
 Options:
       --recommend <LABEL>  Label of the option you recommend
       --room <NAME|PATH>   Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>          Joined seat to act as (default: this session's seat)
+      --as <SEAT>          Joined seat to act as (default: session seat; terminal settle and reopen use admiral)
       --note <TEXT>        Explain the recommendation
       --json               Print machine-readable JSON
   -h, --help               Print help

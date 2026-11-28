@@ -5,7 +5,7 @@ Usage: formation request list [OPTIONS]
 Options:
       --room <NAME|PATH>        Room name or directory path (default: $FORMATION_ROOM or session file)
       --waiting <SEAT|admiral>  Show open requests held by a seat or by the admiral (default: any state)
-      --as <SEAT>               Joined seat to act as (default: this session's seat)
+      --as <SEAT>               Joined seat to act as (default: session seat; terminal settle and reopen use admiral)
       --settled-by <SEAT>       Show only decisions made by this seat
       --json                    Print machine-readable JSON
       --since <TIME>            Show activity at or after an RFC 3339 time, or settlements when using --settled-by

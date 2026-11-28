@@ -11,7 +11,7 @@ pub(crate) struct Request {
     /// Room name or directory path (default: $FORMATION_ROOM or session file).
     #[arg(long, global = true, value_name = "NAME|PATH")]
     room: Option<String>,
-    /// Joined seat to act as (default: this session's seat).
+    /// Joined seat to act as (default: session seat; terminal settle and reopen use admiral).
     #[arg(id = "as_seat", long = "as", global = true, value_name = "SEAT")]
     as_seat: Option<String>,
     /// Print machine-readable JSON.
@@ -62,7 +62,8 @@ enum Verb {
         #[arg(long, value_name = "TEXT")]
         note: String,
     },
-    /// Record a decision under your authority and mail the asker.
+    /// Record a decision under your authority, or as the admiral from a terminal, and mail the
+    /// asker.
     Settle {
         /// Request identifier.
         #[arg(value_name = "REQUEST")]
@@ -73,10 +74,10 @@ enum Verb {
         /// Explain the decision.
         #[arg(long, value_name = "TEXT")]
         note: Option<String>,
-        /// Record the admiral's answer.
+        /// Record the admiral's chat answer from a joined seat.
         #[arg(long, requires = "source")]
         admiral: bool,
-        /// Where the admiral gave the answer.
+        /// Where the admiral gave the answer (required with --admiral).
         #[arg(long, requires = "admiral", value_name = "TEXT")]
         source: Option<String>,
     },
@@ -85,7 +86,7 @@ enum Verb {
         /// Request identifier.
         #[arg(value_name = "REQUEST")]
         id: String,
-        /// Record the admiral's action from a joined seat.
+        /// Record the admiral's action from a joined seat (not needed at a terminal).
         #[arg(long)]
         admiral: bool,
     },

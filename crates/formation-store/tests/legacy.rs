@@ -19,8 +19,14 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     )
 }
 
+/// Undo the request-mail step, so the file matches release 22's schema.
+fn drop_request_mail(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    connection.execute_batch("ALTER TABLE messages DROP COLUMN request_id;")
+}
+
 /// Undo the house grants step, so the file matches release 21's schema.
 fn drop_house(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    drop_request_mail(connection)?;
     connection.execute_batch(
         "DROP TABLE room_house_catalog;
          ALTER TABLE room_grant DROP COLUMN origin;",
@@ -661,5 +667,35 @@ fn a_new_room_has_the_admiral_seat_from_the_start() -> Result<(), Box<dyn std::e
         snapshot.seats().by_session(&SessionId::try_new("any")?)?,
         None
     );
+    Ok(())
+}
+
+#[test]
+fn a_release_twenty_two_room_upgrades_for_request_mail_and_keeps_plain_mail()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        tx.seats().bind("chief", None)?;
+        tx.messages()
+            .insert("chief", "admiral", "plain-1", "Keep this mail", 100)
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_request_mail(&db)?;
+    db.execute_batch("PRAGMA user_version = 22;")?;
+    drop(db);
+
+    store.write(|tx| {
+        let receipt =
+            tx.messages()
+                .insert("chief", "admiral", "req-1", "Request req-r-1 passed.", 101)?;
+        tx.messages().mark_request(receipt, "req-r-1")?;
+        assert_eq!(tx.messages().ack_request("admiral", "req-r-1")?, 1);
+        Ok(())
+    })?;
+
+    let unread = store.read()?.messages().unread("admiral")?;
+    assert_eq!(unread.len(), 1);
+    assert_eq!(unread[0].id, "plain-1");
     Ok(())
 }

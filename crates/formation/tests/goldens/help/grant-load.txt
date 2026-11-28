@@ -4,7 +4,7 @@ Usage: formation grant load [OPTIONS]
 
 Options:
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>         Seat name for this command (default: seat recorded for this session, or none outside one)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session, or admiral at a terminal)
   -h, --help              Print help
 
 Reads a version 1 JSON grants file from standard input: standing grants and withholds in the

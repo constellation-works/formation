@@ -21,7 +21,8 @@ pub(crate) struct Grant {
     /// Room name or directory path (default: $FORMATION_ROOM or session file).
     #[arg(long, global = true, value_name = "NAME|PATH")]
     room: Option<String>,
-    /// Seat name for this command (default: seat recorded for this session, or none outside one).
+    /// Seat name for this command (default: seat recorded for this session, or admiral at a
+    /// terminal).
     #[arg(id = "as_seat", long = "as", global = true, value_name = "SEAT")]
     as_seat: Option<String>,
     #[command(subcommand)]

@@ -19,10 +19,10 @@ use crate::runtime::Ctx;
 use crate::runtime::RoomAccess;
 pub use catalog::{CATALOG, ClassSpec, DefaultHolder};
 use cw_base::{Error, Kind};
-pub use formation_store::contract::{GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind};
 use formation_store::contract::{
-    GrantOrigin as Origin, GrantRecord, HouseClass, NewGrant, RevokeStatus, rfc3339,
+    ADMIRAL, GrantOrigin as Origin, GrantRecord, HouseClass, NewGrant, RevokeStatus, rfc3339,
 };
+pub use formation_store::contract::{GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind};
 use formation_store::{RosterSeat, Snapshot, Store, Tx};
 pub use load::Loaded;
 pub use rule::{ALL_WORKSPACES, EffectiveEntry, EffectiveSeat};
@@ -42,8 +42,8 @@ pub enum Command<'a> {
         limit: Option<String>,
         /// Lifetime (`day`).
         lifetime: String,
-        /// Where the admiral gave this direction.
-        source: String,
+        /// Where the admiral gave this direction; optional from a terminal.
+        source: Option<String>,
         /// Queue a fixed wake for an idle Codex session.
         queue: &'a dyn Fn(&str) -> bool,
     },
@@ -59,8 +59,8 @@ pub enum Command<'a> {
         limit: Option<String>,
         /// Lifetime (`day`).
         lifetime: String,
-        /// Where the admiral gave this direction.
-        source: String,
+        /// Where the admiral gave this direction; optional from a terminal.
+        source: Option<String>,
         /// Queue a fixed wake for an idle Codex session.
         queue: &'a dyn Fn(&str) -> bool,
     },
@@ -169,7 +169,13 @@ struct MutationInput<'a> {
     workspace: &'a str,
     limit: Option<&'a str>,
     lifetime: &'a str,
-    source: &'a str,
+    source: Option<&'a str>,
+}
+
+/// Who sends grant-change notification envelopes.
+struct Notifier<'a> {
+    seat: &'a str,
+    terminal: bool,
 }
 
 /// The seats a change can reach and the classes in force after it.
@@ -199,7 +205,7 @@ impl<'a> App for GrantApp<'a> {
     type Outcome = Outcome;
 
     fn room_access<'cmd>(_: &'cmd Command<'a>) -> RoomAccess<'cmd> {
-        RoomAccess::OptionalSeat
+        RoomAccess::OptionalMember
     }
 
     fn audit(cmd: &Command<'a>) -> Option<&'static str> {
@@ -241,7 +247,7 @@ impl<'a> App for GrantApp<'a> {
                         workspace: &workspace,
                         limit: limit.as_deref(),
                         lifetime: &lifetime,
-                        source: &source,
+                        source: source.as_deref(),
                     },
                 )?;
                 wake_notified(ctx, &notified, queue);
@@ -268,7 +274,7 @@ impl<'a> App for GrantApp<'a> {
                         workspace: &workspace,
                         limit: limit.as_deref(),
                         lifetime: &lifetime,
-                        source: &source,
+                        source: source.as_deref(),
                     },
                 )?;
                 wake_notified(ctx, &notified, queue);
@@ -320,13 +326,14 @@ fn record_grant(
     store.write(|tx| {
         let roster = require_roster_tx(tx)?;
         let entered_by = require_joined_caller_tx(tx, caller, &roster)?;
+        let terminal = matches!(caller, Caller::Admiral);
 
         let house = tx.grants().house_classes()?;
         let classes = catalog::with_house(&house);
         rule::validate_class_for_mutation(input.class, &classes)?;
         let workspace = rule::validate_workspace(input.workspace)?;
         let lifetime = rule::validate_lifetime(input.lifetime)?;
-        let source = rule::validate_source(input.source)?;
+        let source = rule::resolve_source(input.source, terminal)?;
         let limit = rule::validate_limit(input.limit)?;
         let (target_kind, target) = rule::resolve_holder(input.to, &roster)?;
 
@@ -369,7 +376,10 @@ fn record_grant(
                 action,
                 self_entered,
             },
-            Some(entered_by.as_str()),
+            Notifier {
+                seat: entered_by.as_str(),
+                terminal,
+            },
             now_sec,
         )?;
 
@@ -392,6 +402,7 @@ fn revoke_grant(
     store.write(|tx| {
         let roster = require_roster_tx(tx)?;
         let revoked_by = require_joined_caller_tx(tx, caller, &roster)?;
+        let terminal = matches!(caller, Caller::Admiral);
 
         let house = tx.grants().house_classes()?;
         let classes = catalog::with_house(&house);
@@ -442,7 +453,10 @@ fn revoke_grant(
                 action: "revoked",
                 self_entered,
             },
-            Some(revoked_by.as_str()),
+            Notifier {
+                seat: revoked_by.as_str(),
+                terminal,
+            },
             now_sec,
         )?;
 
@@ -582,16 +596,16 @@ pub(super) fn find_roster_seat<'a>(
     })
 }
 
-/// Resolve the joined seat that enters a grant change.
+/// Resolve the joined seat or terminal admiral entering a grant change.
 ///
-/// A missing caller is a missing identity, not an admiral: a grant change
-/// needs a seat joined to this room until a verified terminal caller exists.
+/// A non-terminal call with no seat is a missing identity, not an admiral, and is refused.
 fn require_joined_caller_tx(
     tx: &Tx<'_>,
     caller: &Caller,
     roster: &[RosterSeat],
 ) -> Result<String, Error> {
     match caller {
+        Caller::Admiral => Ok(ADMIRAL.to_owned()),
         Caller::Explicit(name) => {
             if tx.seats().seen(name)?.is_some() {
                 Ok(name.clone())
@@ -610,7 +624,7 @@ fn require_joined_caller_tx(
             }
         }
         Caller::Session(session) => tx.seats().by_session(session)?.ok_or_else(seat_required),
-        Caller::None | Caller::Admiral => Err(seat_required()),
+        Caller::None => Err(seat_required()),
         Caller::Join { .. } => Err(Error::new(
             Kind::Internal,
             "missing_context",
@@ -675,10 +689,10 @@ fn notify_changed(
     before: &[(String, EffectiveSeat)],
     after_grants: &[GrantRecord],
     change: &Change<'_>,
-    actor_seat: Option<&str>,
+    notifier: Notifier<'_>,
     now_sec: i64,
 ) -> Result<Vec<String>, Error> {
-    let sender = actor_seat.unwrap_or("formation");
+    let sender = notifier.seat;
     let mut next_seq = tx.messages().next_receipt()?;
     let mut notified = Vec::new();
 
@@ -716,8 +730,12 @@ fn notify_changed(
         }
         next_seq += 1;
 
-        tx.messages()
+        let receipt = tx
+            .messages()
             .insert(sender, seat_name, &message_id, &body, now_sec)?;
+        if notifier.terminal {
+            tx.messages().mark_terminal(receipt)?;
+        }
         notified.push(seat_name.clone());
     }
 

@@ -35,3 +35,7 @@ pub(super) const TERMINAL: cw_sqlite::Step = cw_sqlite::Step::sql(
     "ALTER TABLE messages ADD COLUMN terminal INTEGER NOT NULL DEFAULT 0
          CHECK(terminal IN (0, 1));",
 );
+
+/// Request identifier carried by an envelope that routes a request to the admiral.
+pub(super) const REQUEST: cw_sqlite::Step =
+    cw_sqlite::Step::sql("ALTER TABLE messages ADD COLUMN request_id TEXT;");

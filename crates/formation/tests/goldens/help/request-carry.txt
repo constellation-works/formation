@@ -5,6 +5,6 @@ Usage: formation request carry [OPTIONS] --from <ROOM>
 Options:
       --from <ROOM>       Source room name or path
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --as <SEAT>         Joined seat to act as (default: session seat; terminal settle and reopen use admiral)
       --json              Print machine-readable JSON
   -h, --help              Print help

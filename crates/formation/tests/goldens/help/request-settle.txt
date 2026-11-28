@@ -1,4 +1,4 @@
-Record a decision under your authority and mail the asker
+Record a decision under your authority, or as the admiral from a terminal, and mail the asker
 
 Usage: formation request settle [OPTIONS] --option <LABEL> <REQUEST>
 
@@ -8,9 +8,9 @@ Arguments:
 Options:
       --option <LABEL>    Label of the option you choose
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --as <SEAT>         Joined seat to act as (default: session seat; terminal settle and reopen use admiral)
       --note <TEXT>       Explain the decision
-      --admiral           Record the admiral's answer
+      --admiral           Record the admiral's chat answer from a joined seat
       --json              Print machine-readable JSON
-      --source <TEXT>     Where the admiral gave the answer
+      --source <TEXT>     Where the admiral gave the answer (required with --admiral)
   -h, --help              Print help

@@ -50,6 +50,9 @@ struct Payload<'a> {
 impl<'a> Payload<'a> {
     fn new(record: &'a Request) -> Self {
         let (state, holder, holder_kind, settlement) = match &record.state {
+            RequestState::Open { holder: Some(seat) } if seat == "admiral" => {
+                ("open", Some("admiral"), Some("admiral"), None)
+            }
             RequestState::Open { holder: Some(seat) } => {
                 ("open", Some(seat.as_str()), Some("seat"), None)
             }
@@ -183,8 +186,13 @@ fn write_detail(out: &mut impl Write, record: &Payload<'_>) -> io::Result<()> {
     for settlement in record.overturned {
         writeln!(
             out,
-            "Overturned settlement by {} at {}: {}",
+            "Overturned settlement by {}{} at {}: {}",
             settlement.seat,
+            if settlement.terminal {
+                " (from a terminal)"
+            } else {
+                ""
+            },
             timestamp(settlement.at)?,
             settlement.option
         )?;
@@ -192,19 +200,24 @@ fn write_detail(out: &mut impl Write, record: &Payload<'_>) -> io::Result<()> {
     if let Some(settlement) = record.settlement {
         writeln!(
             out,
-            "Settled by {} at {}: {} (grant {})",
+            "Settled by {}{} at {}: {} (grant {})",
             settlement.seat,
+            if settlement.terminal {
+                " (from a terminal)"
+            } else {
+                ""
+            },
             timestamp(settlement.at)?,
             settlement.option,
             grant(settlement)
         )?;
         if let Some(source) = &settlement.source {
             writeln!(out, "Source: {source}")?;
-            writeln!(
-                out,
-                "Entered by: {}",
-                settlement.entered_by.as_deref().unwrap_or("none")
-            )?;
+            if let Some(entered_by) = &settlement.entered_by {
+                writeln!(out, "Entered by: {entered_by}")?;
+            } else if !settlement.terminal {
+                writeln!(out, "Entered by: none")?;
+            }
         }
         if let Some(limit) = &settlement.limit {
             writeln!(out, "Limit: {}", limit.escape_debug())?;
@@ -260,7 +273,7 @@ fn write_row(
 }
 
 fn grant(settlement: &RequestSettlement) -> String {
-    if settlement.source.is_some() {
+    if settlement.terminal || settlement.source.is_some() || settlement.seat == "admiral" {
         return "admiral".to_owned();
     }
     settlement
