@@ -7,7 +7,9 @@ mod support;
 
 use cw_testkit::TempRoot;
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 const CHIEF: &str = "chief-session";
@@ -55,6 +57,25 @@ impl Home {
         support::on_terminal(cmd)
     }
 
+    fn terminal_default(&self, session: Option<&str>, args: &[&str]) -> support::OnTerminal {
+        let mut cmd = self.command(session);
+        cmd.args(["mail", "--json"]).args(args);
+        support::on_terminal(cmd)
+    }
+
+    fn terminal_default_with_room_env(
+        &self,
+        session: Option<&str>,
+        room: &str,
+        args: &[&str],
+    ) -> support::OnTerminal {
+        let mut cmd = self.command(session);
+        cmd.env("FORMATION_ROOM", room)
+            .args(["mail", "--json"])
+            .args(args);
+        support::on_terminal(cmd)
+    }
+
     fn ok(&self, session: &str, args: &[&str]) -> Value {
         let mut full = vec!["--room", "trial", "--json"];
         full.extend_from_slice(args);
@@ -63,7 +84,7 @@ impl Home {
         serde_json::from_slice(&out.stdout).unwrap()
     }
 
-    fn apply_roster(&self) {
+    fn apply_roster(&self, room: &str) {
         let roster = json!({
             "version": 2,
             "seats": [
@@ -80,7 +101,7 @@ impl Home {
         });
         let mut child = self
             .command(None)
-            .args(["roster", "apply", "--room", "trial"])
+            .args(["roster", "apply", "--room", room])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -94,6 +115,62 @@ impl Home {
             .unwrap();
         let out = child.wait_with_output().unwrap();
         assert!(out.status.success(), "{out:?}");
+    }
+
+    fn send_to_admiral(&self, session: &str, room: &str, id: &str, body: &str) -> Value {
+        let out = self.piped(
+            Some(session),
+            &[
+                "--room", room, "send", "admiral", "--id", id, "--body", body,
+            ],
+        );
+        assert!(out.status.success(), "{out:?}");
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+
+    fn close_room(&self, session: &str, room: &str) {
+        let out = self
+            .command(Some(session))
+            .args(["roster", "close", "--room", room])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+
+    fn snapshot(&self) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+        fn visit(root: &Path, directory: &Path, entries: &mut BTreeMap<PathBuf, Option<Vec<u8>>>) {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                let relative = path.strip_prefix(root).unwrap().to_path_buf();
+                if path.is_dir() {
+                    entries.insert(relative, None);
+                    visit(root, &path, entries);
+                } else {
+                    entries.insert(relative, Some(std::fs::read(path).unwrap()));
+                }
+            }
+        }
+
+        let root = self.0.path();
+        let mut entries = BTreeMap::new();
+        visit(root, root, &mut entries);
+        entries
+    }
+
+    fn assert_unchanged(&self, before: &BTreeMap<PathBuf, Option<Vec<u8>>>) {
+        let after = self.snapshot();
+        let changed = before
+            .iter()
+            .filter_map(|(path, contents)| (after.get(path) != Some(contents)).then_some(path))
+            .collect::<Vec<_>>();
+        let added = after
+            .keys()
+            .filter(|path| !before.contains_key(*path))
+            .collect::<Vec<_>>();
+        assert!(
+            changed.is_empty() && added.is_empty(),
+            "home files changed: {changed:?}; added: {added:?}"
+        );
     }
 
     fn database(&self) -> std::path::PathBuf {
@@ -198,6 +275,83 @@ fn a_terminal_call_with_no_session_is_the_admiral_and_the_audit_says_so() {
 }
 
 #[test]
+fn the_admiral_inbox_defaults_to_the_only_active_room() {
+    let home = Home::new();
+    home.apply_roster("trial");
+    let sent = home.send_to_admiral(CHIEF, "trial", "default-1", "Read this room.");
+
+    let closed = home.piped(
+        Some("old-room-chief"),
+        &["join", "chief", "--room", "closed"],
+    );
+    assert!(closed.status.success(), "{closed:?}");
+    home.close_room("old-room-chief", "closed");
+
+    let inbox = json_of(&home.terminal_default(None, &["inbox"]));
+    assert_eq!(inbox["messages"][0]["receipt"], sent["receipt"]);
+    assert_eq!(inbox["messages"][0]["body"], "Read this room.");
+}
+
+#[test]
+fn ambiguous_and_missing_active_rooms_are_named_in_room_required_refusals() {
+    let home = Home::new();
+    let joined = home.piped(
+        Some("second-room-chief"),
+        &["join", "chief", "--room", "second"],
+    );
+    assert!(joined.status.success(), "{joined:?}");
+
+    let before = home.snapshot();
+    let ambiguous = home.terminal_default(None, &["inbox"]);
+    terminal_refused(&ambiguous, "room_required");
+    let message = &ambiguous.stderr;
+    assert!(message.contains("multiple rooms are active"), "{message}");
+    assert!(message.contains("trial"), "{message}");
+    assert!(message.contains("second"), "{message}");
+    home.assert_unchanged(&before);
+
+    home.close_room(CHIEF, "trial");
+    home.close_room("second-room-chief", "second");
+    let none = home.terminal_default(None, &["inbox"]);
+    terminal_refused(&none, "room_required");
+    let message = &none.stderr;
+    assert!(message.contains("no room is active"), "{message}");
+}
+
+#[test]
+fn explicit_room_options_precede_the_default_and_named_seats_still_need_a_room() {
+    let home = Home::new();
+    home.apply_roster("trial");
+    let trial = home.send_to_admiral(CHIEF, "trial", "trial-1", "From trial.");
+
+    let joined = home.piped(
+        Some("second-room-chief"),
+        &["join", "chief", "--room", "second"],
+    );
+    assert!(joined.status.success(), "{joined:?}");
+    home.apply_roster("second");
+    let second = home.send_to_admiral("second-room-chief", "second", "second-1", "From second.");
+
+    let from_environment =
+        json_of(&home.terminal_default_with_room_env(None, "second", &["inbox"]));
+    assert_eq!(
+        from_environment["messages"][0]["receipt"],
+        second["receipt"]
+    );
+
+    let from_option = json_of(&home.terminal_default_with_room_env(
+        None,
+        "second",
+        &["--room", "trial", "inbox"],
+    ));
+    assert_eq!(from_option["messages"][0]["receipt"], trial["receipt"]);
+
+    let named = home.terminal_default(None, &["--as", "chief", "inbox"]);
+    terminal_refused(&named, "room_required");
+    assert!(named.stderr.contains("pass --room"));
+}
+
+#[test]
 fn a_script_or_an_unjoined_session_still_needs_a_seat_and_an_explicit_seat_is_unchanged() {
     let home = Home::new();
     refused(
@@ -294,7 +448,7 @@ fn only_the_chief_mails_the_admiral_and_he_reads_and_acknowledges_it() {
         "no_roster",
     );
 
-    home.apply_roster();
+    home.apply_roster("trial");
     let out = home.piped(Some(CAPTAIN), &[&["--room", "trial"][..], &send].concat());
     refused(&out, "admiral_via_chief");
     assert!(String::from_utf8_lossy(&out.stderr).contains("formation request open"));
