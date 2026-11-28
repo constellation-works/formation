@@ -4,6 +4,7 @@ Usage: formation roster <COMMAND>
 
 Commands:
   check  Validate one version 1 or 2 JSON roster on stdin (maximum 256 KiB)
+  show   Show the roster and live seats in a room
   apply  Apply a version 2 JSON roster to an existing room
   help   Print this message or the help of the given subcommand(s)
 

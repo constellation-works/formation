@@ -16,6 +16,9 @@ fn seat(name: &str, role: &str, workspace: Option<&str>, reports_to: Option<&str
         name: name.to_owned(),
         role: role.to_owned(),
         workspace: workspace.map(str::to_owned),
+        model: None,
+        effort: None,
+        record: None,
         reports_to: reports_to.map(str::to_owned),
     }
 }

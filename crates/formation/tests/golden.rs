@@ -48,6 +48,7 @@ fn help_and_roster_output() {
         ("help/roster.txt", vec!["roster", "--help"]),
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
         ("help/roster-apply.txt", vec!["roster", "apply", "--help"]),
+        ("help/roster-show.txt", vec!["roster", "show", "--help"]),
         ("help/watch.txt", vec!["watch", "--help"]),
         ("help/watch-add.txt", vec!["watch", "add", "--help"]),
         ("help/watch-remove.txt", vec!["watch", "remove", "--help"]),
@@ -722,4 +723,86 @@ fn request_output() {
     goldens
         .check("output/request-show.txt", &normalize(shown))
         .unwrap();
+}
+
+#[test]
+fn roster_show_compares_planned_and_joined_without_touching_presence() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    let room = "show-room";
+    let session = [("CLAUDE_CODE_SESSION_ID", "show-session")];
+    let joined = in_room_env(
+        &root,
+        &cwd,
+        &session,
+        &["mail", "join", "chief", "--room", room],
+    );
+    assert!(joined.status.success());
+    in_room(&root, &cwd, &["mail", "join", "extra", "--room", room]);
+    let no_roster = in_room(&root, &cwd, &["roster", "show", room, "--json"]);
+    assert!(no_roster.contains("\"roster_applied\":false"));
+    let roster = br#"{"version":2,"routes":[],"seats":[
+        {"name":"chief","role":"chief","host":"headless",
+         "model":"opus","effort":"high","record":"record-id"},
+        {"name":"worker","role":"worker","host":"headless","reports_to":"chief"}]}"#;
+    let mut child = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(["roster", "apply", "--room", room])
+        .env("CLAUDE_CODE_SESSION_ID", "show-session")
+        .current_dir(&cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(roster).unwrap();
+    assert!(child.wait_with_output().unwrap().status.success());
+    let room_path = root.home().join(".formation/rooms").join(room);
+    let store = formation_store::Store::open(&room_path).unwrap();
+    in_room(
+        &root,
+        &cwd,
+        &[
+            "mail", "send", "extra", "--room", room, "--as", "chief", "--id", "one", "--body",
+            "hello",
+        ],
+    );
+    let who: serde_json::Value = serde_json::from_str(&in_room(
+        &root,
+        &cwd,
+        &["mail", "who", "--room", room, "--as", "chief", "--json"],
+    ))
+    .unwrap();
+    let before = store.read().unwrap().seats().mailboxes().unwrap();
+    let shown = in_room_env(&root, &cwd, &session, &["roster", "show", "--json"]);
+    assert!(
+        shown.status.success(),
+        "{}",
+        String::from_utf8_lossy(&shown.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    assert_eq!(value["applied_by"], "chief");
+    assert_eq!(value["seats"][0]["model"], "opus");
+    assert!(value["seats"][1]["live"].is_null());
+    assert_eq!(value["not_on_roster"][0]["name"], "extra");
+    assert_eq!(value["seats"][0]["live"], who["seats"][0]);
+    assert_eq!(value["not_on_roster"][0], who["seats"][1]);
+    let after = store.read().unwrap().seats().mailboxes().unwrap();
+    assert_eq!(
+        before.iter().map(|seat| seat.seen).collect::<Vec<_>>(),
+        after.iter().map(|seat| seat.seen).collect::<Vec<_>>()
+    );
+    let human = in_room(&root, &cwd, &["roster", "show", room]);
+    goldens
+        .check("output/roster-show.txt", &redact_timestamps(&human))
+        .unwrap();
+    goldens
+        .check(
+            "output/roster-show.json",
+            &redact_timestamps(std::str::from_utf8(&shown.stdout).unwrap()),
+        )
+        .unwrap();
+    let missing = run(&["roster", "show"], b"");
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("room_required"));
 }

@@ -1,0 +1,10 @@
+Show the roster and live seats in a room
+
+Usage: formation roster show [OPTIONS] [ROOM]
+
+Arguments:
+  [ROOM]  Room name or directory path; defaults to the joined session room
+
+Options:
+      --json  Print the result as JSON
+  -h, --help  Print help

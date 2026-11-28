@@ -48,3 +48,11 @@ pub(super) const ROSTER: cw_sqlite::Step = cw_sqlite::Step::sql(
         name TEXT PRIMARY KEY, role TEXT NOT NULL, workspace TEXT, reports_to TEXT
     ) STRICT;",
 );
+
+/// Roster display fields and application stamp.
+pub(super) const ROSTER_DETAILS: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE roster_seat ADD COLUMN model TEXT;
+     ALTER TABLE roster_seat ADD COLUMN effort TEXT;
+     ALTER TABLE roster_seat ADD COLUMN record TEXT;
+     CREATE TABLE roster_application (applied_at INTEGER NOT NULL, applied_by TEXT) STRICT;",
+);

@@ -1,0 +1,5 @@
+room show-room, roster applied <timestamp> by chief
+admiral
+└─ chief  chief  —  opus  high  record-id  held, 0 unread
+   └─ worker  worker  —  —  —  —  not joined
+not on the roster: extra (seen never, 1 unread)
