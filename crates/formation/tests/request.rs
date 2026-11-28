@@ -64,7 +64,17 @@ impl Room {
     }
 
     fn apply_roster(&self) {
-        let roster = json!({
+        self.apply(&self.default_roster());
+    }
+
+    fn apply(&self, roster: &Value) {
+        let mut command = self.command();
+        command.args(["roster", "apply", "--room", "trial"]);
+        success(run_with_input(&mut command, roster));
+    }
+
+    fn default_roster(&self) -> Value {
+        json!({
             "version": 2,
             "seats": [
                 {"name": CHIEF, "role": "chief", "host": "claude-desktop"},
@@ -76,10 +86,7 @@ impl Room {
                  "workspace": "app", "reports_to": CAPTAIN}
             ],
             "routes": []
-        });
-        let mut command = self.command();
-        command.args(["roster", "apply", "--room", "trial"]);
-        success(run_with_input(&mut command, &roster));
+        })
     }
 
     fn request(&self, seat: Option<&str>, args: &[&str]) -> Output {
@@ -192,6 +199,116 @@ fn open_reports_the_parent_and_delivers_through_the_hook() {
     );
     assert!(opened_text.contains("Request: req-trial-"));
     assert!(opened_text.contains(&format!("Holder: {CHIEF}")));
+}
+
+fn seat(name: &str, role: &str, reports_to: Option<&str>) -> Value {
+    let mut seat = json!({"name": name, "role": role, "host": "claude-desktop"});
+    if role == "captain" {
+        seat["workspace"] = json!("app");
+    }
+    if let Some(parent) = reports_to {
+        seat["reports_to"] = json!(parent);
+    }
+    seat
+}
+
+fn roster(seats: &[Value]) -> Value {
+    json!({"version": 2, "seats": seats, "routes": []})
+}
+
+fn chief_mail(room: &Room, id: &str) -> usize {
+    room.inbox(CHIEF)
+        .iter()
+        .filter(|message| message["body"].as_str().unwrap().contains(id))
+        .count()
+}
+
+#[test]
+fn captain_advisor_and_aide_requests_are_held_by_the_chief() {
+    const AIDE: &str = "shift-aide";
+    for explicit in [true, false] {
+        let parent = explicit.then_some(CHIEF);
+        let room = Room::new(&[CHIEF, CAPTAIN, ADVISOR, AIDE]);
+        room.apply(&roster(&[
+            seat(CHIEF, "chief", None),
+            seat(CAPTAIN, "captain", parent),
+            seat(ADVISOR, "advisor", parent),
+            seat(AIDE, "aide", parent),
+        ]));
+        for asker in [CAPTAIN, ADVISOR, AIDE] {
+            let opened = room.json(Some(asker), OPEN);
+            let id = opened["id"].as_str().unwrap();
+            assert_eq!(opened["holder"], CHIEF, "{asker} explicit={explicit}");
+            assert_eq!(chief_mail(&room, id), 1, "{asker} explicit={explicit}");
+            room.assert_mail(CHIEF, asker, id);
+            let shown = room.json(None, &["show", id]);
+            assert_eq!(shown["holder"], CHIEF);
+        }
+        let waiting = room.json(None, &["list", "--waiting", CHIEF]);
+        assert_eq!(waiting.as_array().unwrap().len(), 3);
+    }
+}
+
+#[test]
+fn a_chief_request_without_a_unique_chief_is_refused_and_changes_nothing() {
+    let cases = [
+        (
+            "no chief",
+            roster(&[seat(CAPTAIN, "captain", None)]),
+            "chief_required",
+        ),
+        (
+            "two chiefs",
+            roster(&[
+                seat(CHIEF, "chief", None),
+                seat("second-chief", "chief", None),
+                seat(CAPTAIN, "captain", None),
+            ]),
+            "chief_ambiguous",
+        ),
+        (
+            "parent is a captain",
+            roster(&[
+                seat(CHIEF, "chief", None),
+                seat(CAPTAIN, "captain", Some(CHIEF)),
+                seat(ADVISOR, "advisor", Some(CAPTAIN)),
+            ]),
+            "request_parent_not_chief",
+        ),
+    ];
+    for (label, roster, code) in cases {
+        let asker = if label == "parent is a captain" {
+            ADVISOR
+        } else {
+            CAPTAIN
+        };
+        let room = Room::new(&[CHIEF, CAPTAIN, ADVISOR, "second-chief"]);
+        room.apply(&roster);
+        let before = (room.inbox(CHIEF), room.inbox("second-chief"));
+        let error = room.refuse(Some(asker), OPEN, code);
+        assert!(error["error"].as_str().is_some(), "{label}: {error}");
+        assert_eq!(room.json(None, &["list"]), json!([]), "{label}");
+        assert_eq!(
+            before,
+            (room.inbox(CHIEF), room.inbox("second-chief")),
+            "{label}"
+        );
+        assert!(room.inbox(CAPTAIN).is_empty(), "{label}");
+    }
+}
+
+#[test]
+fn subordinates_keep_their_parent_and_a_chief_request_escalates_to_the_admiral() {
+    let room = Room::new(&[CHIEF, CAPTAIN, WORKER]);
+    room.apply_roster();
+    let opened = room.json(Some(WORKER), OPEN);
+    assert_eq!(opened["holder"], CAPTAIN);
+    room.assert_mail(CAPTAIN, WORKER, opened["id"].as_str().unwrap());
+
+    let own = room.json(Some(CHIEF), OPEN);
+    assert_eq!(own["holder"], "admiral");
+    let waiting = room.json(None, &["list", "--waiting", "admiral"]);
+    assert_eq!(waiting.as_array().unwrap().len(), 1);
 }
 
 #[test]

@@ -69,6 +69,11 @@ impl Mutation<'_> {
             room_label(room),
             self.tx.requests().new_suffix()?
         );
+        let holder = if input.settle.is_some() {
+            None
+        } else {
+            rule::holder(self.actor, self.roster)?
+        };
         let mut request = Request {
             id,
             asker: self.actor.name.clone(),
@@ -87,7 +92,7 @@ impl Mutation<'_> {
             opened_at: self.now,
             updated_at: self.now,
             state: RequestState::Open {
-                holder: self.actor.reports_to.clone(),
+                holder: holder.clone(),
             },
             advice: Vec::new(),
             overturned: Vec::new(),
@@ -97,7 +102,7 @@ impl Mutation<'_> {
             ("opened and settled", Some(request.asker.clone()))
         } else {
             grant::validate_class(&request.class, &self.tx.grants().active()?)?;
-            ("opened", self.actor.reports_to.clone())
+            ("opened", holder)
         };
 
         self.tx.requests().insert(&request)?;
