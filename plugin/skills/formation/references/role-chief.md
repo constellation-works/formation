@@ -50,6 +50,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
   1. **Settle under a grant.** If the list covers the class, workspace and limit, run `formation request settle <request> --option <label> --note "<…>"`. The settlement cites the grant.
   2. **Ask the advisor.** For a design, an architecture question or a conflict between units, when `0-advisor` is staffed, message it to `advise` on the request, then weigh its recommendation.
   3. **Pass the rest** with one recommendation: `formation request pass <request> --recommend <label> --note "<…>"`. It moves to the admiral's queue.
+- Passing with `formation request pass` puts the request in the admiral's mailbox as well as in the chief's `formation request list --waiting admiral`; these are two views of the same request, and settling from either view settles that one record.
 - A grant permits and never obliges. A holder unsure of a request passes it up with what it found.
 - When he answers a request in your chat, record it with `formation request settle <request> --option <label> --admiral --source "<chat and time>"`, then return his quoted decision (with source) to the owning captain.
 - Resolve Orbit through MCP first; use the owner's CLI over SSH in a login shell only when MCP lacks the operation or host. Contact the admiral on a capability refusal and never work around it.

@@ -36,6 +36,25 @@ The effective list applies the most specific matching entry: a seat entry before
 
 The admiral remains the only default holder of `credentials` and `grant`; neither class can be granted. A grant never changes host permissions. It is Formation's record of who may decide, not a capability or a tracker permission.
 
+From a terminal, the admiral lists requests waiting on him with
+`formation request list --waiting admiral` and settles one directly with
+`formation request settle <request> --option <label>`; neither a grant nor
+`--source` is needed.
+
+He can enter a day grant from the terminal with
+`formation grant add --to <rank|seat> --class <class> --workspace <workspace|all> [--limit <text>]`,
+then check it with `formation grant list`.
+
+A joined seat uses
+`formation request settle <request> --option <label> --admiral --source "<chat and time>"`
+only to record an answer the admiral gave in a chat.
+
+Formation cannot prove a terminal caller is the admiral: every session runs as
+the operator, and a session can clear its own session variables while holding a
+terminal. The audit entry names the caller `admiral` and labels the call as
+terminal-originated; it is evidence to compare with the operator's actions, not
+a lock against impersonation.
+
 Use Orbit MCP and its returned workspace selector. If MCP lacks the operation or owner, use the owner's CLI over SSH in the workspace checkout with a login shell. Attribute tool calls with the actual model. Constellation's RB-17 covers host access. Contact the admiral on a capability refusal.
 
 Where `override` appears on a seat's current list, scope it to one refused tracker command for an act already covered by that seat's authority and record first use of each kind. A sergeant without such a covering entry does not use an override.
