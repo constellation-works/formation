@@ -144,6 +144,8 @@ fn add_check_and_revoke_direction_for_chief() {
         &[
             "grant",
             "add",
+            "--as",
+            "site-capt",
             "--room",
             &room,
             "--to",
@@ -161,7 +163,7 @@ fn add_check_and_revoke_direction_for_chief() {
     );
     let grant_id = added["id"].as_i64().unwrap();
     assert_eq!(added["self_entered"], false);
-    assert_eq!(added["entered_by"], Value::Null);
+    assert_eq!(added["entered_by"], "site-capt");
     assert_eq!(added["notified"], json!(["0-chief"]));
 
     let checked = ok_json(
@@ -183,7 +185,19 @@ fn add_check_and_revoke_direction_for_chief() {
     assert_eq!(checked["grant_id"], grant_id);
 
     let id_text = grant_id.to_string();
-    let revoked = ok_json(&root, &["grant", "revoke", &id_text, "--room", &room], &[]);
+    let revoked = ok_json(
+        &root,
+        &[
+            "grant",
+            "revoke",
+            &id_text,
+            "--room",
+            &room,
+            "--as",
+            "site-capt",
+        ],
+        &[],
+    );
     assert_eq!(revoked["revoked"], true);
     assert_eq!(revoked["notified"], json!(["0-chief"]));
 
@@ -205,9 +219,105 @@ fn add_check_and_revoke_direction_for_chief() {
         "not_authorized"
     );
     assert_eq!(
-        err_code(&root, &["grant", "revoke", &id_text, "--room", &room], &[]),
+        err_code(
+            &root,
+            &[
+                "grant",
+                "revoke",
+                &id_text,
+                "--room",
+                &room,
+                "--as",
+                "site-capt"
+            ],
+            &[]
+        ),
         "grant_already_revoked"
     );
+}
+
+#[test]
+fn grant_writes_refuse_a_caller_without_a_joined_seat_and_change_nothing() {
+    let (root, room) = setup_room();
+    let added = ok_json(
+        &root,
+        &[
+            "grant",
+            "add",
+            "--room",
+            &room,
+            "--as",
+            "0-chief",
+            "--to",
+            "captain",
+            "--class",
+            "land",
+            "--workspace",
+            "orbit",
+            "--source",
+            "chief chat",
+        ],
+        &[],
+    );
+    let id = added["id"].as_i64().unwrap().to_string();
+    let before = ok_json(&root, &["grant", "list", "--room", &room, "--json"], &[]);
+
+    // No seat and no session, and a session that never joined this room.
+    let unjoined = [("CLAUDE_CODE_SESSION_ID", "sess-ghost")];
+    let callers: [&[(&str, &str)]; 2] = [&[], &unjoined];
+    for env in callers {
+        for args in [
+            vec![
+                "grant",
+                "add",
+                "--room",
+                &room,
+                "--to",
+                "chief",
+                "--class",
+                "direction",
+                "--source",
+                "chat",
+            ],
+            vec![
+                "grant", "withhold", "--room", &room, "--to", "captain", "--class", "land",
+                "--source", "chat",
+            ],
+            vec!["grant", "revoke", &id, "--room", &room],
+        ] {
+            assert_eq!(err_code(&root, &args, env), "seat_required", "{args:?}");
+        }
+    }
+
+    // A seat on the roster that never joined the room is not a joined seat.
+    assert_eq!(
+        err_code(
+            &root,
+            &["grant", "revoke", &id, "--room", &room, "--as", "orbit-sgt",],
+            &[]
+        ),
+        "seat_required"
+    );
+
+    assert_eq!(
+        ok_json(&root, &["grant", "list", "--room", &room, "--json"], &[]),
+        before
+    );
+
+    // Read-only views keep working without a caller.
+    ok_json(
+        &root,
+        &[
+            "grant", "list", "--room", &room, "--json", "--seat", "0-chief",
+        ],
+        &[],
+    );
+    let revoked = ok_json(
+        &root,
+        &["grant", "revoke", &id, "--room", &room, "--as", "0-chief"],
+        &[],
+    );
+    assert_eq!(revoked["revoked_by"], "0-chief");
 }
 
 #[test]
@@ -221,6 +331,8 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
                 &[
                     "grant",
                     "add",
+                    "--as",
+                    "0-chief",
                     "--room",
                     &room,
                     "--to",
@@ -246,6 +358,8 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
             &[
                 "grant",
                 "add",
+                "--as",
+                "0-chief",
                 "--room",
                 &room,
                 "--to",
@@ -269,6 +383,8 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
         &[
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -290,6 +406,8 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
             &[
                 "grant",
                 "add",
+                "--as",
+                "0-chief",
                 "--room",
                 &room,
                 "--to",
@@ -314,6 +432,8 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
             &[
                 "grant",
                 "add",
+                "--as",
+                "0-chief",
                 "--room",
                 &room,
                 "--to",
@@ -342,6 +462,8 @@ fn withhold_removes_land_for_one_workspace_captain_only() {
         &[
             "grant",
             "withhold",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -449,6 +571,8 @@ fn precedence_and_same_timestamp_tie_in_list_and_check() {
         &[
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -469,6 +593,8 @@ fn precedence_and_same_timestamp_tie_in_list_and_check() {
         &[
             "grant",
             "withhold",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -522,6 +648,8 @@ fn precedence_and_same_timestamp_tie_in_list_and_check() {
         &[
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -714,6 +842,8 @@ fn mails_one_envelope_only_to_joined_seats_whose_effective_list_changed() {
         &[
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -739,6 +869,8 @@ fn mails_one_envelope_only_to_joined_seats_whose_effective_list_changed() {
         &[
             "grant",
             "withhold",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -760,7 +892,13 @@ fn mails_one_envelope_only_to_joined_seats_whose_effective_list_changed() {
 
     // 3. Revoke chief's grant -> only `0-chief` gets 1 more envelope (total 2).
     let id_text = added["id"].as_i64().unwrap().to_string();
-    ok_json(&root, &["grant", "revoke", &id_text, "--room", &room], &[]);
+    ok_json(
+        &root,
+        &[
+            "grant", "revoke", &id_text, "--room", &room, "--as", "0-chief",
+        ],
+        &[],
+    );
     assert_eq!(inbox_count("0-chief"), 2);
     assert_eq!(inbox_count("orbit-capt"), 0);
     assert_eq!(inbox_count("site-capt"), 1);
@@ -771,6 +909,8 @@ fn mails_one_envelope_only_to_joined_seats_whose_effective_list_changed() {
         &[
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -802,6 +942,8 @@ fn every_grant_command_refuses_room_without_applied_roster() {
         vec![
             "grant",
             "add",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -818,6 +960,8 @@ fn every_grant_command_refuses_room_without_applied_roster() {
         vec![
             "grant",
             "withhold",
+            "--as",
+            "0-chief",
             "--room",
             &room,
             "--to",
@@ -831,7 +975,7 @@ fn every_grant_command_refuses_room_without_applied_roster() {
             "--source",
             "chat",
         ],
-        vec!["grant", "revoke", "1", "--room", &room],
+        vec!["grant", "revoke", "1", "--room", &room, "--as", "0-chief"],
         vec!["grant", "list", "--room", &room],
         vec!["grant", "list", "--room", &room, "--seat", "0-chief"],
         vec![

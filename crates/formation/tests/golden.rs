@@ -507,6 +507,8 @@ fn grant_list_output() {
             "withhold",
             "--room",
             &room,
+            "--as",
+            "0-chief",
             "--to",
             "captain",
             "--class",

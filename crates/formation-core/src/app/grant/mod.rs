@@ -101,7 +101,7 @@ pub struct GrantView {
     pub lifetime: GrantLifetime,
     /// Operator direction source text.
     pub source: String,
-    /// Seat that entered the grant, or `None` outside a session.
+    /// Seat that entered the grant; `None` only for a record from an earlier build.
     pub entered_by: Option<String>,
     /// When entered, as RFC 3339 UTC.
     pub entered_at: Option<String>,
@@ -122,7 +122,7 @@ pub enum Outcome {
     Revoked {
         /// Revoked grant identifier.
         id: i64,
-        /// Seat that revoked it, or `None` outside a session.
+        /// Seat that revoked it; `None` only for a record from an earlier build.
         revoked_by: Option<String>,
         /// When revoked, as RFC 3339 UTC.
         revoked_at: Option<String>,
@@ -273,7 +273,7 @@ fn record_grant(
 ) -> Result<(Outcome, Vec<String>), Error> {
     store.write(|tx| {
         let roster = require_roster_tx(tx)?;
-        let entered_by = resolve_caller_tx(tx, caller, &roster)?;
+        let entered_by = require_joined_caller_tx(tx, caller, &roster)?;
 
         rule::validate_class_for_mutation(input.class, CATALOG)?;
         let workspace = rule::validate_workspace(input.workspace)?;
@@ -295,7 +295,7 @@ fn record_grant(
             limit,
             lifetime,
             source,
-            entered_by: entered_by.as_deref(),
+            entered_by: Some(entered_by.as_str()),
             entered_at: now_sec,
             entered_at_ns: now_ns,
         })?;
@@ -315,7 +315,7 @@ fn record_grant(
             &inserted,
             action,
             self_entered,
-            entered_by.as_deref(),
+            Some(entered_by.as_str()),
             now_sec,
         )?;
 
@@ -337,13 +337,13 @@ fn revoke_grant(
 ) -> Result<(Outcome, Vec<String>), Error> {
     store.write(|tx| {
         let roster = require_roster_tx(tx)?;
-        let revoked_by = resolve_caller_tx(tx, caller, &roster)?;
+        let revoked_by = require_joined_caller_tx(tx, caller, &roster)?;
 
         let joined: HashSet<String> = tx.seats().all_names()?.into_iter().collect();
         let before_grants = tx.grants().active()?;
         let before_map = snapshot_effective(&roster, &joined, &before_grants);
 
-        let revoked = match tx.grants().revoke(id, revoked_by.as_deref(), now_sec)? {
+        let revoked = match tx.grants().revoke(id, Some(revoked_by.as_str()), now_sec)? {
             RevokeStatus::Revoked(record) => *record,
             RevokeStatus::NotFound => {
                 return Err(rule::refused(
@@ -370,14 +370,14 @@ fn revoke_grant(
             &revoked,
             "revoked",
             self_entered,
-            revoked_by.as_deref(),
+            Some(revoked_by.as_str()),
             now_sec,
         )?;
 
         Ok((
             Outcome::Revoked {
                 id,
-                revoked_by,
+                revoked_by: Some(revoked_by),
                 revoked_at: rfc3339(now_sec),
                 notified: notified.clone(),
             },
@@ -500,15 +500,26 @@ pub(super) fn find_roster_seat<'a>(
     })
 }
 
-fn resolve_caller_tx(
+/// Resolve the joined seat that enters a grant change.
+///
+/// A missing caller is a missing identity, not an admiral: a grant change
+/// needs a seat joined to this room until a verified terminal caller exists.
+fn require_joined_caller_tx(
     tx: &Tx<'_>,
     caller: &Caller,
     roster: &[RosterSeat],
-) -> Result<Option<String>, Error> {
+) -> Result<String, Error> {
     match caller {
         Caller::Explicit(name) => {
-            if roster.iter().any(|seat| seat.name == *name) || tx.seats().seen(name)?.is_some() {
-                Ok(Some(name.clone()))
+            if tx.seats().seen(name)?.is_some() {
+                Ok(name.clone())
+            } else if roster.iter().any(|seat| seat.name == *name) {
+                Err(rule::refused(
+                    "seat_required",
+                    format!(
+                        "seat `{name}` has not joined this room; run `formation mail join` first"
+                    ),
+                ))
             } else {
                 Err(rule::refused(
                     "unknown_seat",
@@ -516,14 +527,21 @@ fn resolve_caller_tx(
                 ))
             }
         }
-        Caller::Session(session) => tx.seats().by_session(session),
-        Caller::None => Ok(None),
+        Caller::Session(session) => tx.seats().by_session(session)?.ok_or_else(seat_required),
+        Caller::None => Err(seat_required()),
         Caller::Join { .. } => Err(Error::new(
             Kind::Internal,
             "missing_context",
             std::io::Error::other("grant caller context unavailable"),
         )),
     }
+}
+
+fn seat_required() -> Error {
+    rule::refused(
+        "seat_required",
+        "pass --as <seat> or join this room from your session before changing a grant",
+    )
 }
 
 fn validate_caller_snapshot(
