@@ -1,0 +1,8 @@
+Record the room's close as the joined seat
+
+Usage: formation roster close [OPTIONS]
+
+Options:
+      --room <ROOM>  Room name or directory path. Defaults to the joined session room
+      --json         Print the result as JSON
+  -h, --help         Print help

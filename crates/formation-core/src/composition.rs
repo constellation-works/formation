@@ -103,6 +103,11 @@ struct ResolvedRoom {
     record: String,
 }
 
+pub(crate) struct DiscoveredRoom {
+    pub(crate) name: String,
+    pub(crate) store: Result<Store, Error>,
+}
+
 #[derive(Debug, thiserror::Error)]
 enum ComposeError {
     #[error("room required: pass --room or set FORMATION_ROOM")]
@@ -189,6 +194,25 @@ pub(crate) fn compose_room(env: &Env) -> Result<MailContext, Error> {
     })
 }
 
+pub(crate) fn discover_rooms(env: &Env) -> Result<Vec<DiscoveredRoom>, Error> {
+    let home = formation_home(env)?.join("rooms");
+    Store::room_names(&home)?
+        .into_iter()
+        .map(|name| {
+            let path = home.join(&name);
+            let name = if validate_identifier(&name, ComposeError::InvalidRoom).is_ok() {
+                name
+            } else {
+                absolute_record(&path)?
+            };
+            Ok(DiscoveredRoom {
+                name,
+                store: Store::open(&path),
+            })
+        })
+        .collect()
+}
+
 pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
     let room = resolve_room(env, session.as_ref())?;
@@ -198,11 +222,7 @@ pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
         validate_identifier(seat, ComposeError::InvalidSeat)?;
         Caller::Explicit(seat.to_owned())
     } else if let Some(session_id) = session {
-        if store.read()?.seats().by_session(&session_id)?.is_some() {
-            Caller::Session(session_id)
-        } else {
-            Caller::None
-        }
+        Caller::Session(session_id)
     } else {
         Caller::None
     };

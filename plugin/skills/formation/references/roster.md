@@ -33,3 +33,15 @@ metadata and live presence with undelivered mail. Omit the room to use the
 calling session's joined room. Planned seats that have not joined and joined
 seats absent from the roster are identified. This read does not renew presence.
 Version 2 seats accept optional `model`, `effort` and `record` strings.
+
+Use `formation roster list [--status active|closed] [--json]` to list home
+rooms newest first, with opening and closure stamps, seat counts, workspaces
+and the latest presence. Unreadable rooms are reported on stderr.
+
+## Close a room
+
+Run `formation roster close [--room <room>]` from a joined session after the
+formation has ended. It records the seat and time, defaults to the joined
+room and reports the original stamp on subsequent calls. `roster show`
+reports closure and last presence. Closed rooms still take mail and keep
+their watches. `roster apply` refuses with `room_closed`.

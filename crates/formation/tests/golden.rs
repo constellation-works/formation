@@ -49,6 +49,8 @@ fn help_and_roster_output() {
         ("help/roster-check.txt", vec!["roster", "check", "--help"]),
         ("help/roster-apply.txt", vec!["roster", "apply", "--help"]),
         ("help/roster-show.txt", vec!["roster", "show", "--help"]),
+        ("help/roster-list.txt", vec!["roster", "list", "--help"]),
+        ("help/roster-close.txt", vec!["roster", "close", "--help"]),
         ("help/watch.txt", vec!["watch", "--help"]),
         ("help/watch-add.txt", vec!["watch", "add", "--help"]),
         ("help/watch-remove.txt", vec!["watch", "remove", "--help"]),
@@ -805,4 +807,241 @@ fn roster_show_compares_planned_and_joined_without_touching_presence() {
     let missing = run(&["roster", "show"], b"");
     assert!(!missing.status.success());
     assert!(String::from_utf8_lossy(&missing.stderr).contains("room_required"));
+}
+
+#[test]
+fn roster_close_and_list_preserve_the_first_close_and_mail() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let cwd = &root.home();
+    let rooms = cwd.join(".formation/rooms");
+    let session = [("CLAUDE_CODE_SESSION_ID", "chief-session")];
+    let joined = in_room_env(
+        &root,
+        cwd,
+        &session,
+        &["mail", "join", "chief", "--room", "earlier"],
+    );
+    assert!(joined.status.success(), "{joined:?}");
+    in_room(&root, cwd, &["mail", "join", "solo", "--room", "later"]);
+    let applied = apply_roster(&root, "earlier");
+    assert!(applied.status.success(), "{applied:?}");
+    let store = formation_store::Store::open(&rooms.join("earlier")).unwrap();
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
+    store
+        .write(|tx| {
+            tx.roster().stamp(now - 600, Some("chief"))?;
+            tx.seats().touch("chief", now)?;
+            Ok(())
+        })
+        .unwrap();
+
+    let close = in_room_env(&root, cwd, &session, &["roster", "close"]);
+    assert!(close.status.success(), "{close:?}");
+    let close_text = String::from_utf8(close.stdout).unwrap();
+    goldens
+        .check("output/roster-close.txt", &redact_timestamps(&close_text))
+        .unwrap();
+    let after_close = room_files(&rooms.join("earlier"));
+    let repeat = in_room(&root, cwd, &["roster", "close", "--room", "earlier"]);
+    assert_eq!(repeat, close_text);
+    assert_eq!(after_close, room_files(&rooms.join("earlier")));
+    let close_json = in_room(
+        &root,
+        cwd,
+        &["roster", "close", "--room", "earlier", "--json"],
+    );
+    goldens
+        .check("output/roster-close.json", &redact_timestamps(&close_json))
+        .unwrap();
+    let closed: serde_json::Value = serde_json::from_str(&close_json).unwrap();
+    assert_eq!(closed["closed_by"], "chief");
+
+    let show = in_room(&root, cwd, &["roster", "show", "earlier"]);
+    goldens
+        .check("output/roster-show-closed.txt", &redact_timestamps(&show))
+        .unwrap();
+    let show = in_room(&root, cwd, &["roster", "show", "earlier", "--json"]);
+    let show: serde_json::Value = serde_json::from_str(&show).unwrap();
+    assert_eq!(show["status"], "closed");
+    assert_eq!(show["closed_at"], closed["closed_at"]);
+    let chief = show["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|seat| seat["name"] == "chief")
+        .unwrap();
+    assert_eq!(chief["live"]["held"], false);
+    assert!(chief["live"]["seen"].is_string());
+
+    let refused = apply_roster(&root, "earlier");
+    assert!(!refused.status.success());
+    let error: serde_json::Value = serde_json::from_slice(&refused.stderr).unwrap();
+    assert_eq!(error["code"], "room_closed");
+    in_room(&root, cwd, &["mail", "join", "late", "--room", "earlier"]);
+    in_room(
+        &root,
+        cwd,
+        &[
+            "mail",
+            "send",
+            "late",
+            "--room",
+            "earlier",
+            "--as",
+            "chief",
+            "--id",
+            "one",
+            "--body",
+            "mail after close",
+        ],
+    );
+    let inbox = in_room(
+        &root,
+        cwd,
+        &["mail", "inbox", "--room", "earlier", "--as", "late"],
+    );
+    assert!(inbox.contains("mail after close"));
+    let latest = now + 60;
+    store.write(|tx| tx.seats().touch("late", latest)).unwrap();
+
+    let before = room_files(&cwd.join(".formation"));
+    let list = in_room(&root, cwd, &["roster", "list"]);
+    goldens
+        .check("output/roster-list.txt", &redact_timestamps(&list))
+        .unwrap();
+    let list = in_room(&root, cwd, &["roster", "list", "--json"]);
+    goldens
+        .check("output/roster-list.json", &redact_timestamps(&list))
+        .unwrap();
+    let list: Vec<serde_json::Value> = serde_json::from_str(&list).unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0]["room"], "later");
+    assert_eq!(list[1]["room"], "earlier");
+    assert_eq!(list[1]["closed_at"], closed["closed_at"]);
+    assert_eq!(list[1]["closed_by"], "chief");
+    assert_eq!(
+        list[0]["seats"],
+        serde_json::json!({"held":0,"planned":null,"joined":1})
+    );
+    assert_eq!(
+        list[1]["seats"],
+        serde_json::json!({"held":1,"planned":2,"joined":2})
+    );
+    assert_eq!(
+        list[1]["last_seen"],
+        formation_store::contract::rfc3339(latest).unwrap(),
+    );
+    for (index, status) in ["active", "closed"].into_iter().enumerate() {
+        let filtered = in_room(
+            &root,
+            cwd,
+            &["roster", "list", "--status", status, "--json"],
+        );
+        let filtered: Vec<serde_json::Value> = serde_json::from_str(&filtered).unwrap();
+        assert_eq!(filtered, list[index..=index]);
+    }
+    assert_eq!(before, room_files(&cwd.join(".formation")));
+}
+
+#[test]
+fn roster_list_leaves_empty_and_unreadable_rooms_alone() {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+
+    let root = TempRoot::new("FORMATION").unwrap();
+    let cwd = &root.home();
+    let home = cwd.join(".formation");
+    let empty = in_room_env(&root, cwd, &[], &["roster", "list", "--json"]);
+    assert!(empty.status.success(), "{empty:?}");
+    assert_eq!(empty.stdout, b"[]\n");
+    assert!(!home.exists());
+    let external = cwd.join("outside");
+    let external = external.to_str().unwrap();
+    let session = [("CLAUDE_CODE_SESSION_ID", "external-session")];
+    let joined = in_room_env(
+        &root,
+        cwd,
+        &session,
+        &["mail", "join", "chief", "--room", external],
+    );
+    assert!(joined.status.success(), "{joined:?}");
+    let closed = in_room_env(
+        &root,
+        cwd,
+        &session,
+        &["roster", "close", "--room", external],
+    );
+    assert!(closed.status.success(), "{closed:?}");
+    let shown = in_room(&root, cwd, &["roster", "show", external]);
+    assert!(shown.contains("closed"));
+    let shown = in_room(&root, cwd, &["roster", "show", external, "--json"]);
+    let shown: serde_json::Value = serde_json::from_str(&shown).unwrap();
+    assert!(!shown["roster_applied"].as_bool().unwrap());
+    in_room(&root, cwd, &["mail", "join", "chief", "--room", "healthy"]);
+    let unjoined = in_room_env(&root, cwd, &[], &["roster", "close", "--room", "healthy"]);
+    assert!(!unjoined.status.success(), "{unjoined:?}");
+    assert!(String::from_utf8_lossy(&unjoined.stderr).contains("seat_required"));
+    in_room(
+        &root,
+        cwd,
+        &["mail", "join", "chief", "--room", "missing-wal"],
+    );
+    std::fs::remove_file(home.join("rooms/missing-wal/inbox.sqlite3-wal")).unwrap();
+    let broken = home.join("rooms/broken");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&broken)
+        .unwrap();
+    let db = broken.join("inbox.sqlite3");
+    std::fs::write(&db, b"not a room database").unwrap();
+    std::fs::set_permissions(&db, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    let before = room_files(&home);
+    let output = in_room_env(&root, cwd, &[], &["roster", "list", "--json"]);
+    assert!(output.status.success(), "{output:?}");
+    let list: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0]["room"], "healthy");
+    assert_eq!(list[0]["status"], "active");
+    let diagnostics = String::from_utf8(output.stderr).unwrap();
+    let lines: Vec<_> = diagnostics.lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].contains("room broken:"));
+    assert!(lines[1].contains("room missing-wal:"));
+    assert_eq!(before, room_files(&home));
+}
+
+fn apply_roster(root: &TempRoot, room: &str) -> Output {
+    let mut child = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(["roster", "apply", "--room", room])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(
+            br#"{"version":2,"routes":[],"seats":[
+        {"name":"chief","role":"chief","host":"headless"},
+        {"name":"captain","role":"captain","host":"headless","workspace":"app"}]}"#,
+        )
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+fn room_files(root: &std::path::Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(root).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_dir() {
+            files.extend(room_files(&entry.path()));
+        } else {
+            files.insert(entry.path(), std::fs::read(entry.path()).unwrap());
+        }
+    }
+    files
 }

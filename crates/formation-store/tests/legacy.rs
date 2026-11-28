@@ -21,7 +21,8 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
 
 fn drop_roster_details(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     connection.execute_batch(
-        "DROP TABLE roster_application;
+        "DROP TABLE room_close;
+         DROP TABLE roster_application;
          ALTER TABLE roster_seat DROP COLUMN model;
          ALTER TABLE roster_seat DROP COLUMN effort;
          ALTER TABLE roster_seat DROP COLUMN record;",
@@ -508,5 +509,37 @@ fn request_history_upgrade_reads_version_sixteen_before_and_after_write()
     assert!(store.read()?.requests().list()?.is_empty());
     store.write(|_| Ok(()))?;
     assert!(store.read()?.requests().list()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn room_close_upgrades_version_eighteen_after_reading_it_as_active()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        tx.seats().bind("chief", None)?;
+        tx.roster().stamp(200, Some("chief"))
+    })?;
+    let path = root.path().join("inbox.sqlite3");
+    let db = Connection::open(&path)?;
+    db.execute_batch("DROP TABLE room_close; PRAGMA user_version = 18;")?;
+    drop(db);
+    // The old binary would have left its WAL companions in place.
+    store.read()?;
+    let before = std::fs::read(&path)?;
+    {
+        let snapshot = store.read_strict()?;
+        assert_eq!(snapshot.closure()?, None);
+        assert_eq!(
+            snapshot.roster().application()?,
+            Some((200, Some("chief".to_owned())))
+        );
+    }
+    assert_eq!(before, std::fs::read(&path)?);
+    store.write(|tx| tx.close_room(300, "chief"))?;
+    let snapshot = store.read_strict()?;
+    assert_eq!(snapshot.closure()?, Some((300, "chief".to_owned())));
+    assert_eq!(snapshot.seats().names()?, ["chief"]);
     Ok(())
 }

@@ -39,6 +39,11 @@ impl Store {
         })
     }
 
+    /// List room directory entries under the supplied rooms root without creating it.
+    pub fn room_names(rooms: &Path) -> Result<Vec<String>, Error> {
+        cw_fs::list(rooms).map_err(|error| Failure::from(error).into())
+    }
+
     /// Read the room recorded for `session`, if any.
     pub fn session_room(sessions_dir: &Path, session: &SessionId) -> Result<Option<String>, Error> {
         crate::repository::session::read(sessions_dir, session).map_err(Into::into)
@@ -64,6 +69,15 @@ impl Store {
     pub fn read(&self) -> Result<Snapshot, Error> {
         Ok(Snapshot {
             reader: sqlite::open(&self.root).read().map_err(Failure::from)?,
+        })
+    }
+
+    /// Open one committed snapshot without creating or updating WAL sidecars.
+    pub fn read_strict(&self) -> Result<Snapshot, Error> {
+        Ok(Snapshot {
+            reader: sqlite::open(&self.root)
+                .read_strict()
+                .map_err(Failure::from)?,
         })
     }
 

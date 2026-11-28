@@ -8,6 +8,8 @@ mod message;
 
 mod request;
 
+mod room;
+
 mod seat;
 
 mod watch;
@@ -34,6 +36,8 @@ pub(crate) const REQUEST_SCHEMA_VERSION: u32 = 16;
 
 pub(crate) const REQUEST_HISTORY_SCHEMA_VERSION: u32 = 17;
 
+pub(crate) const ROOM_CLOSE_SCHEMA_VERSION: u32 = 19;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -53,4 +57,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     request::CREATE,
     request::HISTORY,
     seat::ROSTER_DETAILS,
+    room::CLOSE,
 ];

@@ -7,13 +7,13 @@ status: Accepted
 feature: roster
 doc_role: scope
 summary: Two read commands list the formations in the home and show one formation's seats beside their live state, and a recorded close tells an ended formation from a running one.
-stage: idea
-next: Build `roster show`, after the task that adds `roster apply`.
+stage: building
+next: Wire roster apply and close into the startup and close-out references.
 ---
 
 # Formation — Roster view
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)).
 
 ## Problem
 
