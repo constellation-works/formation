@@ -14,6 +14,8 @@ mod roster;
 
 mod watch;
 
+mod status;
+
 pub(crate) use common::Mode;
 pub(crate) use common::attached_to_terminal;
 pub(crate) use common::error;
@@ -29,6 +31,7 @@ pub(crate) use hook::{
 pub(crate) use mail::{failure as mail_failure, result as mail_result};
 pub(crate) use request::write as request;
 pub(crate) use roster::result as roster_result;
+pub(crate) use status::write as status;
 pub(crate) use watch::{
     checked as watch_checked, exited as watch_exited, list as watch_list, payload as watch_payload,
     set_payload as watch_set_payload, write as watch_write,

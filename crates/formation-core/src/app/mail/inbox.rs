@@ -15,7 +15,7 @@ pub(super) fn run(
     let mut refresh = start;
 
     loop {
-        let mail = store.read()?.messages().unread(&seat)?;
+        let mail = read_snapshot(&store.read()?, &seat)?;
         if !mail.is_empty() || start.elapsed() >= timeout {
             return Ok(Outcome::Inbox(mail));
         }
@@ -28,4 +28,12 @@ pub(super) fn run(
             refresh = Instant::now();
         }
     }
+}
+
+// Read unread mail without renewing presence.
+pub(crate) fn read_snapshot(
+    snapshot: &formation_store::Snapshot,
+    seat: &str,
+) -> Result<Vec<formation_store::contract::Message>, Error> {
+    snapshot.messages().unread(seat)
 }

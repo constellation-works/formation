@@ -37,6 +37,7 @@ fn help_and_roster_output() {
     let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
     for (name, args) in [
         ("help/root.txt", vec!["--help"]),
+        ("help/status.txt", vec!["status", "--help"]),
         ("help/mail.txt", vec!["mail", "--help"]),
         ("help/mail-join.txt", vec!["mail", "join", "--help"]),
         ("help/mail-who.txt", vec!["mail", "who", "--help"]),
@@ -802,6 +803,39 @@ fn roster_show_compares_planned_and_joined_without_touching_presence() {
         &root,
         &cwd,
         &[
+            "watch", "add", "check", "--room", room, "--as", "chief", "--", "true",
+        ],
+    );
+    in_room(
+        &root,
+        &cwd,
+        &[
+            "request",
+            "open",
+            "--room",
+            room,
+            "--as",
+            "chief",
+            "--json",
+            "--class",
+            "land",
+            "--record",
+            "change",
+            "--ask",
+            "Land?",
+            "--option",
+            "a: Yes",
+            "--option",
+            "b: No",
+            "--recommend",
+            "a",
+        ],
+    );
+
+    in_room(
+        &root,
+        &cwd,
+        &[
             "mail", "send", "extra", "--room", room, "--as", "chief", "--id", "one", "--body",
             "hello",
         ],
@@ -812,6 +846,43 @@ fn roster_show_compares_planned_and_joined_without_touching_presence() {
         &["mail", "who", "--room", room, "--as", "chief", "--json"],
     ))
     .unwrap();
+    #[cfg(unix)]
+    {
+        let terminal_json = |args: &[&str]| {
+            let mut command = root.command(env!("CARGO_BIN_EXE_formation"));
+            command.args(args).current_dir(&cwd);
+            let output = support::on_terminal(command);
+            assert!(output.status.success(), "{}", output.stderr);
+            serde_json::from_str::<serde_json::Value>(&output.stdout).unwrap()
+        };
+        let status = terminal_json(&["status", "--room", room, "--json"]);
+        let log = terminal_json(&["mail", "log", "--room", room, "--json"]);
+        let requests = terminal_json(&["request", "list", "--room", room, "--json"]);
+        let watches: serde_json::Value = serde_json::from_str(&in_room(
+            &root,
+            &cwd,
+            &["watch", "list", "--room", room, "--as", "chief", "--json"],
+        ))
+        .unwrap();
+        assert_eq!(
+            status["requests"]["admiral"],
+            requests.as_array().unwrap().len()
+        );
+        assert_eq!(
+            status["watches_on"],
+            watches["watches"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|watch| watch["state"] == "on")
+                .count()
+        );
+        assert_eq!(status["reader"]["active"], watches["reader"]["active"]);
+        assert_eq!(status["recent"], log["messages"]);
+        assert_eq!(status["roster"]["seats"].as_array().unwrap().len(), 2);
+        assert_eq!(status["roster"]["not_on_roster"][0]["name"], "extra");
+        assert!(status["roster"]["seats"][1]["live"].is_null());
+    }
     let before = store.read().unwrap().seats().mailboxes().unwrap();
     let shown = in_room_env(&root, &cwd, &session, &["roster", "show", "--json"]);
     assert!(
@@ -1267,4 +1338,56 @@ fn mail_log_and_show_output() {
     cmd.current_dir(&cwd)
         .args(["mail", "log", "--room", room, "--full", "--limit", "100"]);
     assert!(support::on_terminal(cmd).stdout.contains("probe\nfull"));
+}
+
+#[test]
+fn status_output_is_read_only() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    let room = "status-room";
+    for seat in ["chief", "worker", "other"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", room]);
+    }
+    for (to, id) in [("worker", "one"), ("other", "two")] {
+        in_room(
+            &root,
+            &cwd,
+            &[
+                "mail", "send", to, "--room", room, "--as", "chief", "--id", id, "--body", "hello",
+            ],
+        );
+    }
+    let store =
+        formation_store::Store::open(&root.home().join(".formation/rooms").join(room)).unwrap();
+    let before = store.read().unwrap().seats().mailboxes().unwrap();
+    let args = ["status", "--room", room, "--as", "worker"];
+    let text = in_room(&root, &cwd, &args);
+    let json = in_room(
+        &root,
+        &cwd,
+        &["status", "--room", room, "--as", "worker", "--json"],
+    );
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["inbox"].as_array().unwrap().len(), 1);
+    assert_eq!(value["recent"].as_array().unwrap().len(), 1);
+    assert_eq!(value["recent"][0]["id"], "one");
+    assert!(!value["roster"]["roster_applied"].as_bool().unwrap());
+    let after = store.read().unwrap().seats().mailboxes().unwrap();
+    assert_eq!(
+        before
+            .iter()
+            .map(|seat| (seat.seen, seat.undelivered, seat.unacknowledged))
+            .collect::<Vec<_>>(),
+        after
+            .iter()
+            .map(|seat| (seat.seen, seat.undelivered, seat.unacknowledged))
+            .collect::<Vec<_>>()
+    );
+    goldens
+        .check("output/status.txt", &redact_timestamps(&text))
+        .unwrap();
+    goldens
+        .check("output/status.json", &redact_timestamps(&json))
+        .unwrap();
 }

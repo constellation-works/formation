@@ -2,11 +2,11 @@
 
 mod ack;
 
-mod inbox;
+pub(crate) mod inbox;
 
 mod join;
 
-mod log;
+pub(crate) mod log;
 
 mod rule;
 
