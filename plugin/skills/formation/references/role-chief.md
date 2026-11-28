@@ -12,7 +12,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
    - If you run on a model other than a card names, set the matching registered crew. If no registered crew matches a seat's model, tell the admiral once, leave the field as filed and note it on the record; never pick a near match.
 4. File each captain's proposed assignment (and an advisor's if starting one) in the coordination workspace via `orbit.task.add` (with title, description, `acceptance_criteria`, complexity, role tags, and explicit `crew` and `orchestrator` set together to that seat's registered crew), ready to write on its seat card.
 5. Open the shift Scribe group with the admiral's actual typed line and join once (`scribe group join <group> --as 0-chief --author <your model name> --role chief`). Join Formation mail once (`formation mail join`, or `formation mail join 0-chief --room <group>` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail. If you received a seat card, save it to `<seat_dir>/card.md`.
-6. Using the receiving host's provider procedure (**Claude mechanics** or **Codex mechanics**), fill one **seat card** for `0-aide`, each captain, any advisor and each named specialist. Send roster routes before detaching. Verify starting watch coverage with `formation watch list`, stamp the roster comment in UTC on your assignment, and tell the admiral who started, what carried over and what awaits them.
+6. Using the receiving host's provider procedure (**Claude mechanics** or **Codex mechanics**), fill one **seat card** for `0-aide`, each captain, any advisor and each named specialist. Send roster routes before detaching. Verify starting watch coverage with `formation watch list`, stamp the roster comment in UTC on your assignment, and tell the admiral who started, what carried over (open requests included) and what awaits them.
 
 ## Duties
 
@@ -23,13 +23,19 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 - Add or resize units on the admiral's direction, keeping an existing captain and assignment on resize. Start an optional `0-advisor` on first need, and add a standing specialist only on the admiral's direction.
 - Alert the responsible captain immediately whenever you learn the admiral started a drain.
 - Keep chief fallback probes unconfigured until the seat-network design settles their recipient (`0-aide` vs `0-chief`).
+- At each wake, and at the end of any turn the admiral is in, present `formation request list --waiting admiral` with each item's options and one recommendation. Then present each settlement under a grant since the last time (`formation request list --since <last time>`; `formation request show <request>` gives the seat, choice, grant and limit). When he overturns one, record it with `formation request reopen <request> --admiral`.
 - End every turn with the outcome first, then the evidence pointer, then the ask.
 
 ## You settle
 
 - Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The catalog default is `staffing`; the list supplies any further reach.
 - When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
-- If no current entry covers the decision, pass it to the admiral with full options and one recommendation, then return the admiral's quoted decision (with source) to the owning captain.
+- Hold every request first. Every request a captain, the advisor or the aide opens names you as holder. Triage each in this order:
+  1. **Settle under a grant.** If the list covers the class, workspace and limit, run `formation request settle <request> --option <label> --note "<…>"`. The settlement cites the grant.
+  2. **Ask the advisor.** For a design, an architecture question or a conflict between units, when `0-advisor` is staffed, message it to `advise` on the request, then weigh its recommendation.
+  3. **Pass the rest** with one recommendation: `formation request pass <request> --recommend <label> --note "<…>"`. It moves to the admiral's queue.
+- A grant permits and never obliges. A holder unsure of a request passes it up with what it found.
+- When he answers a request in your chat, record it with `formation request settle <request> --option <label> --admiral --source "<chat and time>"`, then return his quoted decision (with source) to the owning captain.
 - Resolve Orbit through MCP first; use the owner's CLI over SSH in a login shell only when MCP lacks the operation or host. Contact the admiral on a capability refusal and never work around it.
 
 ## Messages
@@ -44,12 +50,12 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 - Title: `[orchestration]: formation <units> - <family>` in the host-qualified coordination workspace.
 - Tags: `orchestration`, `formation-day`, `no-drain`.
 - Crew: your own registered crew, set together with `orchestrator` at filing (`orbit.task.add`) and claim (`orbit.task.update`).
-- Keep the UTC-stamped roster (group, seat names, host IDs, reporting lines, models/efforts, task IDs), starting and closing watch coverage, open items with full options and recommendations, and standing decisions on this record.
-- Use Scribe for open items, durable decisions and recurring issues (**decisions and issues**).
+- Keep the UTC-stamped roster (group, seat names, host IDs, reporting lines, models/efforts, task IDs), starting and closing watch coverage, and standing decisions on this record. Open requests are read from `formation request list`, never kept by hand.
+- Use Scribe for durable decisions and recurring issues (**decisions and issues**). Asks that wait on the admiral are requests, not Scribe open items.
 
 ## Refresh and close
 
-- Keep your open items, options and recommendations on your assignment, and preserve the admiral's conversation through host compaction (**handoff and replacement**). After compaction or refresh, re-read `<seat_dir>/card.md` (if present), your assignment and this role file; do not join Scribe again.
+- Keep your standing decisions on your assignment, and preserve the admiral's conversation through host compaction (**handoff and replacement**). After compaction or refresh, re-read `<seat_dir>/card.md` (if present), your assignment and this role file; do not join Scribe again.
 - Replace a captain only when refresh fails or the admiral orders it, quoting the admiral's agreement on the record and updating the roster.
 - On the admiral's authenticated `formation-complete` in your chat, follow **close-out**: capture `formation watch list --json`, stop new work, tell captains, specialists and any advisor to close, issue `formation watch stop`, and verify overnight residents with the admiral.
 - Before retiring sessions, record shift measures and watch verification, write your execution summary, move your assignment to `review`, run your Scribe session pass, run `scribe group close <group>` once all captains report review, retire roster sessions and leave `0-aide` to the admiral.

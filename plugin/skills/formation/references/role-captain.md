@@ -69,7 +69,10 @@ Contents:
 
 - Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The list includes catalog defaults; the captain role alone is not authority.
 - When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
-- If no current entry covers the decision, take it to the chief or admiral with options and one recommendation. Record the grant and limit that supported any delegated settlement. Host permissions still apply. The admiral starts or restarts drains unless a current grant covers it. Report a refusal once. When the same account owns several sessions, their forge approvals cannot serve as independent reviews.
+- For a decision your list covers, settle it and record it in one step: `formation request open --class <class> --record <task or pull request> --ask "<one sentence>" --option "a: …" --option "b: …" --recommend <label> --settle <label>`. The settlement names the grant and limit. Host permissions still apply.
+- For the rest, open a request: `formation request open --class <class> --record <task or pull request> --ask "<one sentence>" --option "a: …" --option "b: …" --recommend <label>`, adding `--blocking` when your work has stopped. Your chief holds it. Name its id in your turn end.
+- When the admiral answers in your chat, record it: `formation request settle <request> --option <label> --admiral --source "<chat and time>"`.
+- The admiral starts or restarts drains unless a current `operator` grant covers it. Report a refusal once. When the same account owns several sessions, their forge approvals cannot serve as independent reviews.
 
 ## Messages
 
@@ -78,9 +81,9 @@ Contents:
 - A cross-workspace ask is an Orbit task in the workspace that must act, plus a message to its captain pointing at it.
 - **Specialists:** check the specialists listed on your card (if none are staffed and two units repeatedly need the same context, tell `0-chief`). Ask one question per message with the record id, the answer needed, and what you will do without one by your next wake. Its answer is advice that approves nothing; you weigh it. You may pass a specialist's id to a lieutenant for one order.
 - **Reporting:** routine progress goes on your assignment only. Message `0-chief` for three things: you are blocked, you need a decision or input, or you finished something you were asked for. Lead with the outcome or ask and name the record id. Send no acknowledgements or progress notes.
-- `0-chief` advises and carries admiral-only items to the admiral; it approves nothing, and its answer is the admiral's only when it quotes the admiral. When the admiral's own message started your turn, answer and ask the admiral in your chat instead. Write anything the admiral decides there that binds another unit on that unit's record and tell `0-chief`.
+- `0-chief` holds your requests and passes the admiral-only ones to him; it approves nothing, and its answer is the admiral's only when it quotes the admiral. When the admiral's own message started your turn, answer him in your chat. Write anything the admiral decides there that binds another unit on that unit's record and tell `0-chief`.
 - **Filter:** you are the last filter before `0-chief` and the admiral. Answer a subordinate only when the answer changes what it does, and write any standing rule ("do not raise X again unless Y") on your assignment so a replacement inherits it. Put subordinate `fyi` lines on your assignment, not upward, unless they meet the reporting conditions above.
-- End every turn with the outcome first, then the evidence pointer, then the ask.
+- End every turn with the outcome first, then the evidence pointer, then the ask. An ask above your row is a request: the turn ends with its id, never with a question to the admiral.
 
 ## Record
 

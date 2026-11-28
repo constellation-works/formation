@@ -8,7 +8,9 @@ scribe entry add --tag open-item --author "$model" --project "$project" --relate
 scribe entry list --tag issue --status active
 ```
 
-An open item identifies the asker, blocking question, full options, recommendation with reason, where the answer must be entered, and affected record. Give the admiral the item ID. Append their exact answer, time and source using `scribe entry update`. Relay it to the owner. The owner retires the item with the result only after carrying the decision out. The aide can list and update items.
+Inside a formation an open item is a request, opened with `formation request open`. It records the asker, the one-line ask, full options, the recommendation with its reason, the record it concerns and its holder. Give the admiral the request id. When he answers in a seat’s chat, that seat records the answer with `formation request settle <request> --option <label> --admiral --source "<chat and time>"` and relays it to the owner. The settled request is the record.
+
+Outside a formation, an open item is a Scribe entry. It identifies the asker, blocking question, full options, recommendation with reason, where the answer must be entered, and affected record. Give the admiral the item ID. Append his exact answer, time and source using `scribe entry update`. Relay it to the owner. The owner retires the item with the result only after carrying the decision out. The aide can list and update items.
 
 Record a durable design, policy or grant under the decision tag. Include who decided, options shown, recommendation, rationale and record. Quote the admiral and give their reason only if stated. A chief or captain records its own reasoning. Supersede a reversal with a new entry. A choice limited to one task stays on that task.
 
