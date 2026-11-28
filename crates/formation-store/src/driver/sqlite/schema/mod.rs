@@ -38,6 +38,8 @@ pub(crate) const REQUEST_HISTORY_SCHEMA_VERSION: u32 = 17;
 
 pub(crate) const ROOM_CLOSE_SCHEMA_VERSION: u32 = 19;
 
+pub(crate) const TERMINAL_MAIL_SCHEMA_VERSION: u32 = 21;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -58,4 +60,6 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     request::HISTORY,
     seat::ROSTER_DETAILS,
     room::CLOSE,
+    seat::ADMIRAL,
+    message::TERMINAL,
 ];

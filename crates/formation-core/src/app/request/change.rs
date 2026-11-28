@@ -263,7 +263,7 @@ fn joined_caller(tx: &Tx<'_>, caller: &Caller) -> Result<String, Error> {
             }
             Ok(name.clone())
         }
-        Caller::None | Caller::Join { .. } => Err(Failure::SeatRequired.into()),
+        Caller::None | Caller::Admiral | Caller::Join { .. } => Err(Failure::SeatRequired.into()),
     }
 }
 

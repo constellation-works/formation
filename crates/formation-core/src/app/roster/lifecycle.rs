@@ -200,7 +200,8 @@ fn summarize(room: &str, store: &Store, now: i64) -> Result<(Option<OffsetDateTi
         .transpose()
         .map_err(|error| Failure::InvalidOpenTime(room.to_owned(), error))?;
     let planned = (application.is_some() || !roster.is_empty()).then_some(roster.len());
-    let presence = snapshot.seats().presence()?;
+    let mut presence = snapshot.seats().presence()?;
+    presence.retain(|(name, _)| name != formation_store::contract::ADMIRAL);
     let held = presence
         .iter()
         .filter(|(name, seen)| {

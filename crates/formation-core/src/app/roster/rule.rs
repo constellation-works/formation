@@ -29,6 +29,9 @@ pub enum Error {
     /// Reporting lines contain a cycle.
     #[error("reports_to forms a cycle")]
     ParentCycle,
+    /// A seat takes the admiral's reserved name.
+    #[error("seat name `admiral` is reserved for the operator, who is in every room already")]
+    ReservedSeat,
     /// Unsupported schema or inconsistent draft entries.
     #[error("{0}")]
     Invalid(&'static str),
@@ -65,6 +68,9 @@ pub(super) fn validate(roster: &formation_store::Roster) -> Result<Summary, Erro
     for seat in &roster.seats {
         if !contract::identifier(&seat.name) || !seats.insert(seat.name.as_str()) {
             return Err(Error::Invalid("seat names must be unique identifiers"));
+        }
+        if seat.name == contract::ADMIRAL {
+            return Err(Error::ReservedSeat);
         }
         if seat
             .workspace

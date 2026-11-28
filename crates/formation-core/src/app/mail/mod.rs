@@ -24,6 +24,7 @@ use cw_base::{Error, Kind};
 use formation_store::SessionId;
 use formation_store::Store;
 use formation_store::Tx;
+use formation_store::contract::ADMIRAL;
 use formation_store::contract::Message;
 pub use formation_store::contract::SentMessage;
 use std::path::PathBuf;
@@ -102,14 +103,17 @@ pub struct SeatStatus {
     pub undelivered: i64,
     /// Envelopes addressed to the seat that it has not acknowledged, delivered or not.
     pub unacknowledged: i64,
-    /// Whether a process was waiting on the seat's mailbox within the presence window.
-    pub held: bool,
+    /// Whether a process was waiting on the seat's mailbox within the presence window, or `None`
+    /// for the admiral's seat, which has no presence.
+    pub held: Option<bool>,
     /// When the seat last renewed its presence, as RFC 3339 UTC, or `None` when it never has.
     pub seen: Option<String>,
 }
 
 #[derive(Clone, Copy)]
 pub(super) enum SeatRef<'a> {
+    /// The admiral, from a terminal. The seat exists in every room and has no presence.
+    Admiral,
     Name(&'a str),
     Session(&'a SessionId),
 }
@@ -128,6 +132,7 @@ impl<'a> App for Mail<'a> {
     fn preflight(cmd: &Command<'a>) -> Result<(), Error> {
         if let Command::Join(name) = cmd {
             rule::name(name)?;
+            rule::unreserved(name)?;
         }
         Ok(())
     }
@@ -139,7 +144,7 @@ impl<'a> App for Mail<'a> {
             | Command::Send { .. }
             | Command::Inbox(_)
             | Command::Sent(_)
-            | Command::Ack(_) => RoomAccess::Existing,
+            | Command::Ack(_) => RoomAccess::Member,
         }
     }
 
@@ -149,6 +154,18 @@ impl<'a> App for Mail<'a> {
             Command::Ack(_) => Some("mail ack"),
             Command::Send { .. } => Some("mail send"),
             Command::Who | Command::Inbox(_) | Command::Sent(_) => None,
+        }
+    }
+
+    /// `who` and `inbox` write for every caller (a seat's heartbeat, the admiral's audit event).
+    /// `sent` only reports, so it writes nothing for anyone (STD-01 R31).
+    fn admiral_audit(cmd: &Command<'a>) -> Option<&'static str> {
+        match cmd {
+            Command::Who => Some("mail who"),
+            Command::Inbox(_) => Some("mail inbox"),
+            Command::Join(_) | Command::Ack(_) | Command::Send { .. } | Command::Sent(_) => {
+                Self::audit(cmd)
+            }
         }
     }
 
@@ -178,6 +195,7 @@ impl<'a> App for Mail<'a> {
         }
 
         let seat = match &mail.caller {
+            Caller::Admiral => SeatRef::Admiral,
             Caller::Explicit(name) => SeatRef::Name(name),
             Caller::Session(session) => SeatRef::Session(session),
             Caller::Join { .. } | Caller::None => {
@@ -232,8 +250,10 @@ fn refused(code: &'static str, message: impl Into<String>) -> Error {
     Error::new(Kind::Refused, code, Refusal(message.into()))
 }
 
+/// Resolve the caller's seat and renew its presence. The admiral's seat has no presence.
 fn touch(tx: &Tx<'_>, caller: SeatRef<'_>, now: i64) -> Result<String, Error> {
     match caller {
+        SeatRef::Admiral => Ok(ADMIRAL.to_owned()),
         SeatRef::Name(name) => {
             if tx.seats().touch(name, now)? {
                 Ok(name.to_owned())

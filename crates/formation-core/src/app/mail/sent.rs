@@ -1,4 +1,4 @@
-use super::{Error, Outcome, SeatRef, Store, refused};
+use super::{ADMIRAL, Error, Outcome, SeatRef, Store, refused};
 
 pub(super) fn run(store: &Store, caller: SeatRef<'_>, limit: i64) -> Result<Outcome, Error> {
     if limit < 1 {
@@ -9,6 +9,7 @@ pub(super) fn run(store: &Store, caller: SeatRef<'_>, limit: i64) -> Result<Outc
     }
     let snapshot = store.read()?;
     let seat = match caller {
+        SeatRef::Admiral => ADMIRAL.to_owned(),
         SeatRef::Name(name) => {
             if !snapshot.seats().contains(name)? {
                 return Err(refused(

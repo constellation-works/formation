@@ -13,6 +13,7 @@ pub struct Messages<'a> {
     pub(crate) has_sent_column: bool,
     pub(crate) has_delivered_column: bool,
     pub(crate) has_watch_mail: bool,
+    pub(crate) has_terminal_mail: bool,
 }
 
 impl Messages<'_> {
@@ -24,10 +25,15 @@ impl Messages<'_> {
         } else {
             "NULL, NULL"
         };
+        let terminal = if self.has_terminal_mail {
+            "terminal"
+        } else {
+            "0"
+        };
         let mut statement = self
             .conn
             .prepare(&format!(
-                "SELECT receipt, id, sender, body, {sent}, {delivered}, {watch}
+                "SELECT receipt, id, sender, body, {sent}, {delivered}, {watch}, {terminal}
                    FROM messages
                   WHERE recipient = ?1 AND ack = 0
                   ORDER BY receipt
@@ -144,7 +150,8 @@ impl MessagesMut<'_> {
         let mut statement = self
             .conn
             .prepare(
-                "SELECT receipt, id, sender, body, sent, delivered, watch_name, watch_added_by
+                "SELECT receipt, id, sender, body, sent, delivered, watch_name, watch_added_by,
+                        terminal
                    FROM messages
                   WHERE recipient = ? AND ack = 0 AND delivered IS NULL ORDER BY receipt",
             )
@@ -225,6 +232,17 @@ impl MessagesMut<'_> {
             .map_err(error::sql)
     }
 
+    /// Record that the admiral sent a newly inserted envelope from a terminal.
+    pub fn mark_terminal(&self, receipt: i64) -> Result<(), Error> {
+        self.conn
+            .execute(
+                "UPDATE messages SET terminal = 1 WHERE receipt = ?1",
+                [receipt],
+            )
+            .map(|_| ())
+            .map_err(error::sql)
+    }
+
     /// Next monotonic receipt number within this write transaction.
     pub fn next_receipt(&self) -> Result<i64, Error> {
         self.conn
@@ -257,6 +275,7 @@ fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
         body: row.get(3)?,
         watch_name: row.get(6)?,
         watch_added_by: row.get(7)?,
+        terminal: row.get(8)?,
         sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
         delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
     })

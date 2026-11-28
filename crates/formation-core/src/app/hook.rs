@@ -572,6 +572,11 @@ fn entry_text(message: &Message) -> String {
              (sent {sent}, receipt {}, id {}):\n{}",
             message.receipt, message.id, message.body
         )
+    } else if message.terminal {
+        format!(
+            "\nFrom {}, sent from a terminal at {sent}, receipt {}, id {}:\n{}",
+            message.sender, message.receipt, message.id, message.body
+        )
     } else {
         format!(
             "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",

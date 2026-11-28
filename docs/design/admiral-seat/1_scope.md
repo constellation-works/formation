@@ -2,18 +2,18 @@
 title: Formation — Admiral seat
 owner: claude
 created_date: 2026-11-27
-updated_date: 2026-11-27
+updated_date: 2026-11-28
 status: Accepted
 feature: admiral-seat
 doc_role: scope
 summary: A terminal call with no agent session is the admiral, who is a member of every room without joining and has a mailbox where what waits on him lands.
-stage: idea
-next: Build the admiral caller and the seat in every room.
+stage: building
+next: Build phase 2, the default room, after the roster view's recorded close.
 ---
 
 # Formation — Admiral seat
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 of the [build](#build) is built: the admiral caller and seat, and mail from the terminal.
 
 ## Problem
 

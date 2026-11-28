@@ -683,7 +683,12 @@ fn stop_hold_delivers_a_send_from_another_process() {
         let hold = room.spawn_hook(provider, "stop", 5, &input);
         let sent = loop {
             let who = room.mail("sender", &["who"]);
-            if who["seats"][0]["held"] == true {
+            let captain = who["seats"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|seat| seat["name"] == "captain");
+            if captain.is_some_and(|seat| seat["held"] == true) {
                 break Some(room.send("notice", "While held."));
             }
             if start.elapsed() >= Duration::from_secs(5) {

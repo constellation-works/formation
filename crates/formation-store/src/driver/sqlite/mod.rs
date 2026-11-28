@@ -57,3 +57,7 @@ pub(crate) fn has_request_history(version: u32) -> bool {
 pub(crate) fn has_room_close(version: u32) -> bool {
     version >= schema::ROOM_CLOSE_SCHEMA_VERSION
 }
+
+pub(crate) fn has_terminal_mail(version: u32) -> bool {
+    version >= schema::TERMINAL_MAIL_SCHEMA_VERSION
+}

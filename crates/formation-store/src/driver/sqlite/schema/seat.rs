@@ -56,3 +56,14 @@ pub(super) const ROSTER_DETAILS: cw_sqlite::Step = cw_sqlite::Step::sql(
      ALTER TABLE roster_seat ADD COLUMN record TEXT;
      CREATE TABLE roster_application (applied_at INTEGER NOT NULL, applied_by TEXT) STRICT;",
 );
+
+/// The admiral's seat, present in every room and bound to no session.
+///
+/// A seat that an earlier build let a session join under the reserved name loses its binding.
+pub(super) const ADMIRAL: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "INSERT INTO seats (name, session_id, seen) VALUES ('admiral', NULL, 0)
+         ON CONFLICT(name) DO UPDATE SET session_id = NULL, hook_provider = NULL,
+             hook_busy = NULL, wake_requested = 0, seen = 0;
+     UPDATE hook_waiter SET session_id = NULL, pid = NULL, heartbeat = NULL, expires_at = NULL
+      WHERE seat = 'admiral';",
+);
