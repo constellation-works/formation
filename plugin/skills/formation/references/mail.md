@@ -47,3 +47,5 @@ Every room already has the reserved `admiral` seat; no session joins it. It has 
 Claude’s background `Stop` hook waits for 55 minutes (3,300 seconds) with one live waiter per seat. After it expires, stored mail waits for the seat’s next hook or inbox read.
 
 If a send to a Claude seat returns `"held": false`, use an authorized native Claude session message to the same open chat with the single line `Formation mail waiting`. If you are a Codex captain or a process, route the wake request to the chief or the seat’s captain, who can send that native message. For a closed or unloaded chat, ask the admiral to open it and start a turn.
+
+Use `formation mail log` to read recent room mail and `formation mail show <receipt>` for a complete envelope. The admiral sees the room; a seat sees only mail it sent or received. Log defaults to 50 newest envelopes; `--seat`, `--with`, `--since` (RFC 3339), `--limit`, `--no-watch` and `--full` control the view. Both support `--json` and do not change delivery or presence.

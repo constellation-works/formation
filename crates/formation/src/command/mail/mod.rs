@@ -6,6 +6,10 @@ mod inbox;
 
 mod join;
 
+mod log;
+
+mod show;
+
 mod send;
 
 mod sent;
@@ -40,6 +44,8 @@ enum Action {
     Send(send::Send),
     Inbox(inbox::Inbox),
     Sent(sent::Sent),
+    Log(log::Log),
+    Show(show::Show),
     Ack(ack::Ack),
 }
 
@@ -53,6 +59,8 @@ pub(crate) fn run(env: Env, args: Mail, queue: &dyn Fn(&str) -> bool) -> ExitCod
         Action::Send(args) => send::run(&env, args, queue, mode),
         Action::Inbox(args) => inbox::run(&env, args, mode),
         Action::Sent(args) => sent::run(&env, args, mode),
+        Action::Log(args) => log::run(&env, args, mode),
+        Action::Show(args) => show::run(&env, args, mode),
         Action::Ack(args) => ack::run(&env, args, mode),
     }
 }

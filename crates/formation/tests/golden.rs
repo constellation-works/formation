@@ -43,6 +43,8 @@ fn help_and_roster_output() {
         ("help/mail-send.txt", vec!["mail", "send", "--help"]),
         ("help/mail-inbox.txt", vec!["mail", "inbox", "--help"]),
         ("help/mail-sent.txt", vec!["mail", "sent", "--help"]),
+        ("help/mail-log.txt", vec!["mail", "log", "--help"]),
+        ("help/mail-show.txt", vec!["mail", "show", "--help"]),
         ("help/mail-ack.txt", vec!["mail", "ack", "--help"]),
         ("help/hook.txt", vec!["hook", "--help"]),
         ("help/roster.txt", vec!["roster", "--help"]),
@@ -1082,4 +1084,163 @@ fn room_files(root: &std::path::Path) -> std::collections::BTreeMap<std::path::P
         }
     }
     files
+}
+
+#[cfg(unix)]
+#[test]
+fn mail_log_and_show_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for seat in ["alpha", "beta", "gamma"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", room]);
+    }
+    for (sender, recipient, id, body) in [
+        ("alpha", "beta", "one", "first\nsecond"),
+        ("beta", "gamma", "two", "other"),
+    ] {
+        in_room(
+            &root,
+            &cwd,
+            &[
+                "mail", "send", recipient, "--as", sender, "--room", room, "--id", id, "--body",
+                body,
+            ],
+        );
+    }
+    for (name, args, env) in [
+        (
+            "output/mail-log.txt",
+            vec!["mail", "log", "--as", "admiral", "--room", room],
+            &HUMAN[..],
+        ),
+        (
+            "output/mail-log.json",
+            vec!["mail", "log", "--as", "admiral", "--room", room, "--json"],
+            &[][..],
+        ),
+        (
+            "output/mail-show.txt",
+            vec!["mail", "show", "1", "--as", "alpha", "--room", room],
+            &HUMAN[..],
+        ),
+        (
+            "output/mail-show.json",
+            vec![
+                "mail", "show", "1", "--as", "alpha", "--room", room, "--json",
+            ],
+            &[][..],
+        ),
+    ] {
+        let mut cmd = root.command(env!("CARGO_BIN_EXE_formation"));
+        cmd.current_dir(&cwd).args(&args);
+        for (key, value) in env {
+            cmd.env(key, value);
+        }
+        let output = support::on_terminal(cmd);
+        assert!(output.status.success(), "{:?}", output.stderr);
+        goldens
+            .check(name, &redact_timestamps(&output.stdout))
+            .unwrap();
+    }
+    let read = |seat: &str, extra: &[&str]| {
+        let mut args = vec!["mail", "log", "--as", seat, "--room", room, "--json"];
+        args.extend_from_slice(extra);
+        let mut cmd = root.command(env!("CARGO_BIN_EXE_formation"));
+        cmd.current_dir(&cwd).args(&args);
+        let result = support::on_terminal(cmd);
+        assert!(result.status.success(), "{:?}", result.stderr);
+        serde_json::from_str::<serde_json::Value>(&result.stdout).unwrap()
+    };
+    let store = formation_store::Store::open(root.path()).unwrap();
+    let before_presence = store.read().unwrap().seats().presence().unwrap();
+    let before_messages = read("admiral", &[]);
+
+    assert_eq!(
+        read("admiral", &[])["messages"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(
+        read("alpha", &["--seat", "gamma"])["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        read("admiral", &["--with", "gamma"])["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        read("admiral", &["--limit", "1"])["messages"][0]["id"],
+        "two"
+    );
+    assert_eq!(
+        read("admiral", &["--since", "2100-01-01T00:00:00Z"])["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+    let denied = in_room_env(
+        &root,
+        &cwd,
+        &[],
+        &["mail", "show", "2", "--as", "alpha", "--room", room],
+    );
+    assert!(!denied.status.success());
+    assert!(String::from_utf8_lossy(&denied.stderr).contains("mail_forbidden"));
+    let missing = in_room_env(
+        &root,
+        &cwd,
+        &[],
+        &["mail", "show", "999", "--as", "alpha", "--room", room],
+    );
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("unknown_receipt"));
+    assert_eq!(
+        before_presence,
+        store.read().unwrap().seats().presence().unwrap()
+    );
+    assert_eq!(before_messages, read("admiral", &[]));
+    store
+        .write(|tx| {
+            let receipt = tx
+                .messages()
+                .insert("beta", "gamma", "watch", "probe\nfull", 100)?;
+            tx.messages().mark_watch(receipt, "probe-watch", "beta")?;
+            for index in 0..50 {
+                tx.messages()
+                    .insert("beta", "gamma", &format!("bulk-{index}"), "bulk", 100)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        read("admiral", &[])["messages"].as_array().unwrap().len(),
+        50
+    );
+    let watches = read("admiral", &["--seat", "gamma", "--limit", "100"]);
+    assert!(
+        watches["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|message| message["watch_name"] == "probe-watch")
+    );
+    let no_watch = read("admiral", &["--no-watch", "--limit", "100"]);
+    assert!(
+        no_watch["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|message| message["watch_name"].is_null())
+    );
+    let mut cmd = root.command(env!("CARGO_BIN_EXE_formation"));
+    cmd.current_dir(&cwd)
+        .args(["mail", "log", "--room", room, "--full", "--limit", "100"]);
+    assert!(support::on_terminal(cmd).stdout.contains("probe\nfull"));
 }

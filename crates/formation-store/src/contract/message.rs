@@ -66,6 +66,33 @@ pub struct SentMessage {
     pub state: DeliveryState,
 }
 
+/// A stored envelope for read-only history.
+#[derive(Serialize)]
+pub struct LogMessage {
+    /// Durable receipt.
+    pub receipt: i64,
+    /// Sender's request identifier.
+    pub id: String,
+    /// Sending seat.
+    pub sender: String,
+    /// Addressed seat.
+    pub recipient: String,
+    /// Full message body.
+    pub body: String,
+    /// Storage time in RFC 3339, if known.
+    pub sent: Option<String>,
+    /// Delivery state.
+    pub state: DeliveryState,
+    /// Producing watch, if any.
+    pub watch_name: Option<String>,
+    /// Seat that added the watch, if any.
+    pub watch_added_by: Option<String>,
+    /// Whether sent from a terminal.
+    pub terminal: bool,
+    /// Hook delivery time, if known.
+    pub delivered: Option<String>,
+}
+
 /// One joined seat's mailbox, as listed for the room.
 pub struct Mailbox {
     /// Seat name.

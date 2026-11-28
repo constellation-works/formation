@@ -6,6 +6,8 @@ mod inbox;
 
 mod join;
 
+mod log;
+
 mod rule;
 
 pub(super) mod send;
@@ -26,7 +28,7 @@ use formation_store::Store;
 use formation_store::Tx;
 use formation_store::contract::ADMIRAL;
 use formation_store::contract::Message;
-pub use formation_store::contract::SentMessage;
+pub use formation_store::contract::{LogMessage, SentMessage};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -55,8 +57,28 @@ pub enum Command<'a> {
     Inbox(Duration),
     /// List the caller's newest sent envelopes, up to the supplied limit.
     Sent(i64),
+    /// Read room history.
+    Log(LogOptions),
+    /// Read one envelope.
+    Show(i64),
     /// Acknowledge a receipt.
     Ack(i64),
+}
+
+/// Filters for room history.
+pub struct LogOptions {
+    /// Seat participating in the envelope.
+    pub seat: Option<String>,
+    /// Other participating seat.
+    pub with: Option<String>,
+    /// RFC 3339 lower bound.
+    pub since: Option<String>,
+    /// Maximum result count.
+    pub limit: i64,
+    /// Exclude watch mail.
+    pub no_watch: bool,
+    /// Show full bodies.
+    pub full: bool,
 }
 
 /// Mail outcomes, independent of CLI presentation.
@@ -90,6 +112,15 @@ pub enum Outcome {
         /// Number of sent envelopes.
         total: i64,
     },
+    /// Room history and body presentation.
+    Log {
+        /// Matching envelopes.
+        messages: Vec<LogMessage>,
+        /// Whether to render complete bodies.
+        full: bool,
+    },
+    /// One envelope.
+    Show(LogMessage),
     /// Handled receipt.
     Ack(i64),
 }
@@ -144,6 +175,8 @@ impl<'a> App for Mail<'a> {
             | Command::Send { .. }
             | Command::Inbox(_)
             | Command::Sent(_)
+            | Command::Log(_)
+            | Command::Show(_)
             | Command::Ack(_) => RoomAccess::Member,
         }
     }
@@ -153,7 +186,11 @@ impl<'a> App for Mail<'a> {
             Command::Join(_) => Some("mail join"),
             Command::Ack(_) => Some("mail ack"),
             Command::Send { .. } => Some("mail send"),
-            Command::Who | Command::Inbox(_) | Command::Sent(_) => None,
+            Command::Who
+            | Command::Inbox(_)
+            | Command::Sent(_)
+            | Command::Log(_)
+            | Command::Show(_) => None,
         }
     }
 
@@ -163,9 +200,12 @@ impl<'a> App for Mail<'a> {
         match cmd {
             Command::Who => Some("mail who"),
             Command::Inbox(_) => Some("mail inbox"),
-            Command::Join(_) | Command::Ack(_) | Command::Send { .. } | Command::Sent(_) => {
-                Self::audit(cmd)
-            }
+            Command::Join(_)
+            | Command::Ack(_)
+            | Command::Send { .. }
+            | Command::Sent(_)
+            | Command::Log(_)
+            | Command::Show(_) => Self::audit(cmd),
         }
     }
 
@@ -228,6 +268,8 @@ impl<'a> App for Mail<'a> {
             }
             Command::Inbox(wait) => inbox::run(ctx, &mail.store, seat, wait),
             Command::Sent(limit) => sent::run(&mail.store, seat, limit),
+            Command::Log(options) => log::run(&mail.store, seat, options),
+            Command::Show(receipt) => log::show(&mail.store, seat, receipt),
             Command::Ack(receipt) => ack::run(&mail.store, seat, now, receipt),
         }
     }
@@ -236,7 +278,11 @@ impl<'a> App for Mail<'a> {
         match out {
             Outcome::Joined { seat, .. } => Some(seat.clone()),
             Outcome::Sent { receipt, .. } | Outcome::Ack(receipt) => Some(receipt.to_string()),
-            Outcome::Seats(_) | Outcome::Inbox(_) | Outcome::SentHistory { .. } => None,
+            Outcome::Seats(_)
+            | Outcome::Inbox(_)
+            | Outcome::SentHistory { .. }
+            | Outcome::Log { .. }
+            | Outcome::Show(_) => None,
         }
     }
 }

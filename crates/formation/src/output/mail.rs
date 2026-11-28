@@ -1,7 +1,7 @@
 //! Mail command output: wire shapes and human views.
 
 use super::common::Mode;
-use formation_core::app::mail::{Outcome, SentMessage};
+use formation_core::app::mail::{LogMessage, Outcome, SentMessage};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -52,6 +52,8 @@ fn payload(out: &Outcome) -> Value {
         }
         Outcome::Inbox(messages) => json!({"messages": messages}),
         Outcome::SentHistory { messages, total } => sent_history_payload(messages, *total),
+        Outcome::Log { messages, .. } => json!({"messages": messages}),
+        Outcome::Show(message) => json!({"message": message}),
         Outcome::Ack(receipt) => json!({"acknowledged": receipt}),
     }
 }
@@ -63,6 +65,8 @@ fn human(out: &Outcome) -> ExitCode {
         Outcome::Joined { .. }
         | Outcome::Sent { .. }
         | Outcome::SentHistory { .. }
+        | Outcome::Log { .. }
+        | Outcome::Show(_)
         | Outcome::Ack(_) => None,
     };
     if let Some(notice) = empty {
@@ -156,6 +160,37 @@ fn write_human(out: &mut impl Write, outcome: &Outcome) -> io::Result<()> {
             Ok(())
         }
         Outcome::SentHistory { messages, .. } => write_sent_history(out, messages, true),
+        Outcome::Log { messages, full } => {
+            let rows: Vec<[String; 7]> = messages
+                .iter()
+                .map(|message| {
+                    [
+                        message.sent.clone().unwrap_or_else(|| "-".to_owned()),
+                        match &message.watch_name {
+                            Some(name) => format!("{} (watch {})", message.sender, name),
+                            None => message.sender.clone(),
+                        },
+                        message.recipient.clone(),
+                        message.state.as_str().to_owned(),
+                        message.receipt.to_string(),
+                        message.id.clone(),
+                        message.body.lines().next().unwrap_or("").to_owned(),
+                    ]
+                })
+                .collect();
+            write_table(
+                out,
+                ["TIME", "FROM", "TO", "STATE", "RECEIPT", "ID", "FIRST LINE"],
+                &rows,
+            )?;
+            if *full {
+                for message in messages {
+                    writeln!(out, "\nReceipt {}:\n{}", message.receipt, message.body)?;
+                }
+            }
+            Ok(())
+        }
+        Outcome::Show(message) => write_log_message(out, message),
         Outcome::Ack(receipt) => writeln!(out, "Acknowledged receipt {receipt}"),
     }
 }
@@ -283,4 +318,28 @@ fn write_sent_history(
         }
     }
     Ok(())
+}
+
+fn write_log_message(out: &mut impl Write, message: &LogMessage) -> io::Result<()> {
+    writeln!(out, "Receipt {} (id {})", message.receipt, message.id)?;
+    writeln!(out, "From {} to {}", message.sender, message.recipient)?;
+    writeln!(
+        out,
+        "Sent {}, delivered {}, state {}",
+        message.sent.as_deref().unwrap_or("-"),
+        message.delivered.as_deref().unwrap_or("-"),
+        message.state.as_str()
+    )?;
+    if message.terminal {
+        writeln!(out, "Sent from a terminal")?;
+    }
+    if let Some(name) = &message.watch_name {
+        writeln!(
+            out,
+            "Watch {}, added by {}",
+            name,
+            message.watch_added_by.as_deref().unwrap_or("-")
+        )?;
+    }
+    writeln!(out, "{}", message.body)
 }

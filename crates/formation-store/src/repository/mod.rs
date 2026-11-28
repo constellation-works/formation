@@ -29,7 +29,7 @@ pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
 pub use grant::{GrantMut, GrantRead};
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
-pub use message::{Messages, MessagesMut, PriorDelivery};
+pub use message::{LogQuery, Messages, MessagesMut, PriorDelivery};
 pub use request::{RequestMut, RequestRead};
 pub use roster::{RosterRead, RosterSeat, RosterSeats};
 pub use seat::{Seats, SeatsRead};

@@ -1,0 +1,5 @@
+Receipt 1 (id one)
+From alpha to beta
+Sent <timestamp>, delivered -, state stored
+first
+second

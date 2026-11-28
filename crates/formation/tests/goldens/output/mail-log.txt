@@ -1,0 +1,3 @@
+TIME                  FROM   TO     STATE   RECEIPT  ID   FIRST LINE
+<timestamp>  beta   gamma  stored  2        two  other
+<timestamp>  alpha  beta   stored  1        one  first
