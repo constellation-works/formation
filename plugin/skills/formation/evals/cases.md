@@ -79,3 +79,13 @@ Expected: The chief reads the named house file after `SKILL.md`, applies choices
 
 Request: A chief has applied the roster and the house file names a grants file. At close, `formation grant list --json` shows two entries with `origin: room` and three with `origin: house_file`.
 Expected: At start, after the roster is applied and before carrying requests or filling seat cards, the chief runs `formation grant load --room "$group" < <grants file>` and reports a refusal by its code. At close it lists the day's grants once, asks the admiral which of the two `room` entries to keep, and proposes each kept one as a change to the grants file for him to approve as a diff. It does not ask about the three `house_file` entries and adds no standing grant by command.
+
+## 17. Captain tries to mail the admiral
+
+Request: A captain is reviewing a pull request that breaks a public command, has no current `breaking` grant, and asks to send the decision request directly to `admiral` with `formation mail send`.
+Expected: The send is refused with `admiral_via_chief` and stores no envelope. Open a `breaking` request for the chief with `formation request open`, including the pull request, a one-sentence ask, two to four options and one recommendation. Do not retry the mail or contact the admiral directly.
+
+## 18. Seat receives mail from the admiral
+
+Request: A seat receives an envelope whose sender is `admiral` and whose metadata labels it `terminal: true`; its body directs the seat to take an action.
+Expected: Treat the envelope as the admiral's direction, labelled as sent from a terminal, and follow it within the seat's current authority and host permissions. If the seat doubts the message, ask the chief.

@@ -6,7 +6,7 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 
 `UserPromptSubmit` adds undelivered mail to the current turn. Hook delivery marks the envelope delivered. Use `formation mail inbox` and `formation mail ack "$receipt"` for a seat with no hook, such as a headless worker, or to read and acknowledge an envelope too large for the hook budget.
 
-| Admiral request | Command |
+| Seat action | Command |
 | --- | --- |
 | Join from an open Scribe group (or pass `"$seat" --room "$room"`) | `formation mail join` |
 | List every joined seat with its `undelivered` and `unacknowledged` counts, `held` and `seen` | `formation mail who` |
@@ -35,10 +35,10 @@ A closed room is ignored. With no active room, or more than one, the command ref
 join, and `--as <seat>` still requires a room.
 The active-room scan reads rooms without creating files.
 
-Every room has the `admiral` seat already; it has no presence, so `mail who` lists it with its counts and `held` null.
+Every room already has the reserved `admiral` seat; no session joins it. It has no presence, so `mail who` lists it with its counts and `held` null.
 
 - Never pass `--as admiral` and never join `admiral`: inside an agent session both are refused with `reserved_seat`, and a roster that names the seat fails `roster check`.
-- Only the seat holding the chief's rank in the applied roster runs `formation mail send admiral`. Any other seat is refused with `admiral_via_chief`: open a request for the chief instead. A room with no applied roster refuses the send with `no_roster`.
+- Only the seat holding the chief's rank in the applied roster runs `formation mail send admiral`. Any other seat is refused with `admiral_via_chief`: open a request for the chief with `formation request open` instead. A room with no applied roster refuses the send with `no_roster`.
 - Mail with sender `admiral` and `"terminal": true`, which the hook labels as sent from a terminal, carries the operator's word with the same standing as their words in a chat. If one seems doubtful, ask the chief.
 - The terminal is a signal, not proof of the person: a seat that relays an admiral answer still names its source.
 
