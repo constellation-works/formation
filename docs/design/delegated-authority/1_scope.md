@@ -8,12 +8,12 @@ feature: delegated-authority
 doc_role: scope
 summary: Authority becomes a record the admiral changes with one command, every ask above a captain's row is a request that goes to the chief first, and the admiral reads one list of what no seat may settle.
 stage: building
-next: Build phase 2, the request record and routing rules.
+next: Build phase 3, the standing grants file and grant load.
 ---
 
 # Formation — Delegated authority
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 0 and the phase 1 command implementation are built; this phase completes the public skill changes before request work begins.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phases 0, 1 and 2 are built: the authority and request commands, and the public skill's request rule. Phase 3, standing grants, is next.
 
 ## Problem
 

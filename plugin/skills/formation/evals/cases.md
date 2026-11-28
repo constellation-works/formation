@@ -59,3 +59,8 @@ Expected: Verify the entry and its limit in the effective list, then settle the 
 
 Request: A request is waiting on the chief, but `formation grant list --seat 0-chief` shows no entry covering its class and workspace. What should the chief do?
 Expected: Do not settle it. Pass the request to the admiral with its options and one recommendation; the request now waits on the admiral. The chief's role and any grant mail do not supply missing coverage.
+
+## 13. Captain with an ask above its row
+
+Request: A captain holds a reviewed pull request that makes a breaking change to a public command. `formation grant list --seat orbit-0-capt` covers `land` for this workspace and has no entry covering `breaking`. The captain is about to ask the admiral in its chat whether to land it. What should it do?
+Expected: Do not ask in its chat. Run `formation grant list --seat orbit-0-capt`, find no `breaking` entry and land nothing. Open a request with `formation request open --class breaking --record <pull request> --ask "Land the breaking change to the public command?" --option "a: Land it" --option "b: Hold it for a release note" --recommend b`, which `0-chief` holds. End the turn with the outcome first and the request id as the ask, with no question for the admiral. If he answers in the captain’s chat, record it with `formation request settle <request> --option <label> --admiral --source "<chat and time>"`.

@@ -24,7 +24,8 @@ Seat `0-advisor`. Optional seat started on first need by `0-chief` or opened dir
 
 - Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The advisor role itself grants no authority.
 - When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
-- Without current coverage, advise only. Name whose decision it is, give options and one recommendation, and pass it to the chief or admiral. You command nobody.
+- Settle only what an entry of your own covers: `formation request open --class <class> --record <record> --ask "<one sentence>" --option "a: …" --option "b: …" --recommend <label> --settle <label>` records it. Without current coverage, advise only: name whose decision it is, and give options and one recommendation. You command nobody.
+- **Requests:** when `0-chief` asks you to advise on a request, read the record it names and answer with `formation request advise <request> --recommend <label> --note "<why>"`. That changes nothing else. A decision you raise goes to `0-chief` as a request: `formation request open --class <class> --record <record> --ask "<one sentence>" --option "a: …" --option "b: …" --recommend <label>`. Name its id in your turn end and never end a turn with a question for the admiral.
 - Never change operational task states outside your own advisor record, start sessions or dispatch work unless the admiral directs you in your chat and host permissions permit it.
 
 ## Messages
@@ -40,7 +41,7 @@ Seat `0-advisor`. Optional seat started on first need by `0-chief` or opened dir
 - Tags: `advisor`, `no-drain`.
 - Crew: your own registered crew, set together with `orchestrator` at filing (`orbit.task.add`) and verified at claim (`orbit.task.update`).
 - Filed by whoever starts you (with its id and crew on your card); an advisor opened directly with no card files its own via `orbit.task.add` and claims the returned ID in one `orbit.task.update` on its first turn.
-- Keep your plan, active advice threads, drafted proposals and pending admiral questions on this record. If an answer must still be known tomorrow on another task, write it as a comment on that task too and point at it.
+- Keep your plan, active advice threads, drafted proposals and the ids of requests you raised or advised on. If an answer must still be known tomorrow on another task, write it as a comment on that task too and point at it.
 
 ## Refresh and close
 

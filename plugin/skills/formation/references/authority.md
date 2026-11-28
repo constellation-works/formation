@@ -35,6 +35,6 @@ Where `override` appears on a seat's current list, scope it to one refused track
 
 The admiral starts or restarts drains unless a current `operator` grant covers that action. A captain reports the needed command once and may deploy within its current `ship` authority. Report refusals once. When the same account owns several sessions, their forge approvals cannot serve as independent reviews.
 
-Routine updates go on the assignment. A captain tells the chief when blocked, when a decision is needed or when ordered work finishes. The chief checks the current list and settles covered decisions with their grants. The chief batches uncovered decisions for the admiral with options and one recommendation, then returns the admiral's quoted decision to the owner.
+Routine updates go on the assignment. A captain tells the chief when blocked, when a decision is needed or when ordered work finishes. The chief holds every request a seat opens. It checks the current list and settles covered requests with their grants. It passes uncovered requests to the admiral with options and one recommendation, and returns his quoted decision to the owner.
 
 When the admiral is in a captain's chat, answer there. Write anything binding another unit on its record. A cross-workspace request is a task in the receiving workspace plus one routed message.
