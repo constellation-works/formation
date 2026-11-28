@@ -1,9 +1,11 @@
 //! Request input rules and read filters.
 
 use super::Filter;
+use crate::app::grant::ALL_WORKSPACES;
 use cw_base::{Error, Kind};
 use formation_store::RosterSeat;
 use formation_store::contract::{Request, RequestOption, RequestState, identifier};
+use std::collections::BTreeSet;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -36,6 +38,8 @@ pub(super) enum Failure {
     InvalidOptions,
     #[error("option {0:?} is unknown; choose one of {1}")]
     UnknownOption(String, String),
+    #[error("workspace {0:?} is not in the applied roster; choose `all`{1}")]
+    UnknownWorkspace(String, String),
     #[error("`--note` on a pass requires `--recommend <option>`")]
     NoteRequiresRecommendation,
     #[error("invalid `--since` {0:?}; use an RFC 3339 timestamp with an offset")]
@@ -70,6 +74,7 @@ impl From<Failure> for Error {
             Failure::InvalidText(_) => "invalid_request_text",
             Failure::InvalidOptions => "invalid_options",
             Failure::UnknownOption(..) => "unknown_option",
+            Failure::UnknownWorkspace(..) => "unknown_workspace",
             Failure::NoteRequiresRecommendation => "note_requires_recommendation",
             Failure::InvalidSince(_) => "invalid_since",
             Failure::MailIdentifierExhausted => {
@@ -178,6 +183,36 @@ pub(super) fn holder(asker: &RosterSeat, roster: &[RosterSeat]) -> Result<Option
         )
         .into()),
     }
+}
+
+/// Choose the workspace a new request targets.
+///
+/// An explicit `all` or a workspace some applied seat belongs to is kept; anything else is
+/// refused. With no value the request keeps the asker's own workspace, or `all` without one.
+pub(super) fn workspace(
+    asker: &RosterSeat,
+    roster: &[RosterSeat],
+    requested: Option<String>,
+) -> Result<String, Error> {
+    let Some(requested) = requested else {
+        return Ok(asker
+            .workspace
+            .as_deref()
+            .unwrap_or(ALL_WORKSPACES)
+            .to_owned());
+    };
+    let known: BTreeSet<&str> = roster
+        .iter()
+        .filter_map(|seat| seat.workspace.as_deref())
+        .collect();
+    if requested == ALL_WORKSPACES || known.contains(requested.as_str()) {
+        return Ok(requested);
+    }
+    let names = known
+        .iter()
+        .map(|name| format!(", `{name}`"))
+        .collect::<String>();
+    Err(Failure::UnknownWorkspace(requested, names).into())
 }
 
 pub(super) fn require_request(id: &str, record: Option<Request>) -> Result<Request, Error> {

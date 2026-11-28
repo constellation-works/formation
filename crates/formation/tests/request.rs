@@ -16,6 +16,8 @@ const ADVISOR: &str = "shift-advisor";
 
 const WORKER: &str = "app-worker";
 
+const WEB_CAPTAIN: &str = "web-captain";
+
 const OPEN: &[&str] = &[
     "open",
     "--class",
@@ -676,4 +678,89 @@ fn success(out: Output) -> String {
 
 fn parse(out: Output) -> Value {
     serde_json::from_str(&success(out)).unwrap()
+}
+
+fn two_workspace_roster() -> Value {
+    json!({
+        "version": 2,
+        "seats": [
+            {"name": CHIEF, "role": "chief", "host": "claude-desktop"},
+            {"name": CAPTAIN, "role": "captain", "host": "claude-desktop",
+             "workspace": "app", "reports_to": CHIEF},
+            {"name": WEB_CAPTAIN, "role": "captain", "host": "claude-desktop",
+             "workspace": "web", "reports_to": CHIEF},
+            {"name": ADVISOR, "role": "advisor", "host": "claude-desktop",
+             "reports_to": CHIEF}
+        ],
+        "routes": []
+    })
+}
+
+fn with_workspace<'a>(workspace: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = OPEN.to_vec();
+    args.extend(["--workspace", workspace]);
+    args.extend(extra);
+    args
+}
+
+#[test]
+fn open_names_a_roster_workspace_and_a_matching_grant_covers_it() {
+    let room = Room::new(&[CHIEF, CAPTAIN, WEB_CAPTAIN, ADVISOR]);
+    room.apply(&two_workspace_roster());
+
+    // An advisor with no workspace can name one; the default stays `all`.
+    let named = room.json(Some(ADVISOR), &with_workspace("web", &[]));
+    assert_eq!(named["workspace"], "web");
+    assert_eq!(named["holder"], CHIEF);
+    let shown = room.json(None, &["show", named["id"].as_str().unwrap()]);
+    assert_eq!(shown["workspace"], "web");
+    let text = success(room.request(None, &["show", named["id"].as_str().unwrap()]));
+    assert!(text.contains("(web)"), "{text}");
+    assert_eq!(room.json(Some(ADVISOR), OPEN)["workspace"], "all");
+
+    // The asker's own workspace is the default; an explicit value overrides it.
+    assert_eq!(room.json(Some(CAPTAIN), OPEN)["workspace"], "app");
+    assert_eq!(
+        room.json(Some(CAPTAIN), &with_workspace("web", &[]))["workspace"],
+        "web"
+    );
+    assert_eq!(
+        room.json(Some(CAPTAIN), &with_workspace("all", &[]))["workspace"],
+        "all"
+    );
+
+    // Grants are evaluated against the named workspace, not the asker's own.
+    let settle = ["--settle", "a"];
+    room.grant("add", ADVISOR, "app");
+    room.refuse(
+        Some(ADVISOR),
+        &with_workspace("web", &settle),
+        "not_authorized",
+    );
+    let covered = room.json(Some(ADVISOR), &with_workspace("app", &settle));
+    assert_eq!(covered["workspace"], "app");
+    assert_eq!(covered["state"], "settled");
+    assert_eq!(covered["settlement"]["seat"], ADVISOR);
+}
+
+#[test]
+fn open_refuses_an_unknown_workspace_and_changes_nothing() {
+    let room = Room::new(&[CHIEF, CAPTAIN, ADVISOR]);
+    room.apply(&two_workspace_roster());
+    let before = room.inbox(CHIEF).len();
+    for workspace in ["missing", "App", ""] {
+        let error = room.refuse(
+            Some(ADVISOR),
+            &with_workspace(workspace, &[]),
+            "unknown_workspace",
+        );
+        assert!(error["error"].as_str().unwrap().contains("`app`"));
+    }
+    room.refuse(
+        Some(ADVISOR),
+        &with_workspace("missing", &["--settle", "a"]),
+        "unknown_workspace",
+    );
+    assert_eq!(room.json(None, &["list"]), json!([]));
+    assert_eq!(room.inbox(CHIEF).len(), before);
 }
