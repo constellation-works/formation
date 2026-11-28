@@ -13,11 +13,11 @@ Use this procedure in a Claude Desktop Code chat that exposes the session tools.
 
 A named Sonnet in a duo selects a sergeant who watches on its own wakes. Keep Haiku for a Claude sentry. Apply the admiral’s actual model and effort choices to other seats. Check `get_session` on self before staffing. A child cannot exceed its parent’s model or starting effort. Ask for the required parent capacity if unavailable. Confirm the child’s effective settings. Where supported, `set_session_effort` changes effort for its next turn.
 
-On a requested formation in Constellation, turn off the Claude Docs connector for formation sessions before spawning if the app offers `set_session_connector_enabled`. Inherit the permission mode. Use `start_session` with fresh context, name, model, effort, filled background and prompt, on the admiral’s own initiating turn. Use `set_session_title` for readable titles. Shared-checkout seats use no worktree.
+On a requested formation in Constellation, turn off the Claude Docs connector for formation sessions before spawning if the app offers `set_session_connector_enabled`. Inherit the permission mode. Use `start_session` with fresh context, name, model, effort and filled seat card, on the admiral’s own initiating turn. Use `set_session_title` for readable titles. Shared-checkout seats use no worktree.
 
 Implementation lieutenants use their own persistent worktrees. A peer-initiated turn may require proposing the start for the admiral or waiting for their typed turn.
 
-Send the roster before `detach_session`. Detach the aide, captains, specialists, sergeants and sentries after briefing. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
+Send the roster before `detach_session`. Detach the aide, captains, advisor, specialists, sergeants and sentries after sending their seat card. Keep a lieutenant attached to its captain for turn-end results. Use native session messages by roster ID for same-host routes; an idle, detached Claude session starts a turn on a native peer message.
 
 For shared watches and cross-provider routes, join Formation mail once (`formation mail join`). `UserPromptSubmit` adds unread mail to a typed turn, and `Stop` uses `asyncRewake` (3300s hold, 3600s host timeout, one live waiter per seat) to wake the session if mail arrives while waiting. After the hold expires, mail waits for the next hook or [manual wake](mail.md#wake-an-unheld-claude-seat).
 

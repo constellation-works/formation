@@ -7,14 +7,31 @@ once:                        # staffed once, whatever the units
     name: 0-chief            # the session the admiral opens
     claude_model: its own           # Fable or Opus
     claude_effort: high             # a child's effort is clamped to this
-    record: "[orchestration]: formation <units> - <family>, tags orchestration, formation-day, no-drain"
+    role: references/role-chief.md
+    record:
+      title: "[orchestration]: formation <units> - <family>"
+      tags: [orchestration, formation-day, no-drain]
+      crew: the chief's
+      filed_by: chief
+  advisor:                   # optional, started on first need; model is a house choice
+    name: 0-advisor
+    started_by: chief        # or opened directly by the admiral
+    claude_detach: true
+    on_demand: true
+    reports_to: chief        # reaches the chief only; no authority row
+    role: references/role-advisor.md
+    record:
+      title: "[advisor]: formation <group> - <family>"
+      tags: [advisor, no-drain]
+      crew: the advisor's
+      filed_by: whoever starts it; an advisor with no card files its own
   aide:
     name: 0-aide
     claude_model: haiku
     claude_effort: high
     started_by: chief
     claude_detach: true
-    brief: assets/brief-aide.md
+    role: references/role-aide.md
     relays_to: [captain]     # the admiral's quoted words, to the owner; it holds no authority
     record: none             # agent notes under its own author name
   specialist:                # one per subject the admiral names; none by default
@@ -24,8 +41,8 @@ once:                        # staffed once, whatever the units
     started_by: chief
     claude_detach: true             # it reports to nobody; it answers the session that asked
     asked_by: [chief, captain, lieutenant]   # a lieutenant only when its captain passed it the id
-    brief: assets/brief-specialist.md
-    record: "none; a comment on the task an ask names"
+    role: references/role-specialist.md
+    record: none             # comments on the task an ask names when lasting
 
 ranks:
   captain:
@@ -36,8 +53,12 @@ ranks:
     claude_detach: true             # the admiral drives it; without the detach every turn would wake the chief
     reports_to: chief        # questions, blockers and results; the admiral directly when the admiral is in its chat
     peers: [captain]         # other captains, for cross-workspace asks
-    brief: assets/brief-captain.md
-    record: "[orchestration]: {ws} - {actual_model}"   # filed by the chief before the start; its id goes in the brief
+    role: references/role-captain.md
+    record:
+      title: "[orchestration]: <ws> - <family>"
+      tags: [orchestration, no-drain, "<ws>"]
+      crew: the captain's
+      filed_by: chief, before the start
     watch_reader: "formation watch run"   # attention-owning captains register attention/ci and start a reader; others stand by
     scribe_on: no            # captains are not switched on; /scribe on is the admiral's, per session
   lieutenant:
@@ -49,8 +70,11 @@ ranks:
     reports_to: captain
     on_demand: true          # started when the first heavy piece is ordered, then kept
     worktree: true           # its own worktree in its repo
-    brief: assets/brief-lieutenant.md
-    record: "the Orbit task it claims or is ordered onto"
+    role: references/role-lieutenant.md
+    record:
+      title: the task it is ordered onto or claims
+      tags: that task's
+      crew: its own, set when it claims
   sergeant:
     name: "{ws}-1-sgt"
     claude_model: sonnet
@@ -58,8 +82,11 @@ ranks:
     started_by: captain
     claude_detach: true
     reports_to: captain      # by message, only for a decision or input
-    brief: assets/brief-sergeant.md
-    record: "a comment on each task it touches"
+    role: references/role-sergeant.md
+    record:
+      title: the task it is ordered onto or claims
+      tags: that task's
+      crew: its own, set when it claims
   sentry:
     name: "{ws}-1-sentry"
     claude_model: haiku             # always; Sonnet named in a duo means a sergeant
@@ -69,7 +96,7 @@ ranks:
     reports_to: sergeant     # the captain in a duo; by message, only on a change
     watch: "formation watch add / pause / resume (room reader via formation watch run; wait --timeout 3600 standalone only)"
     probes: [scripts/attention-read.sh, scripts/ci-read.sh]
-    brief: assets/brief-sentry.md
+    role: references/role-sentry.md
     record: none
 
 units:                       # each has exactly one captain

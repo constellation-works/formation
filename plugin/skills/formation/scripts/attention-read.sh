@@ -9,7 +9,7 @@
 # Both reads are pinned to the selector's owner host. This probe holds no Operator
 # capability, so it covers the owner's agent-readable task kinds only. It never asks
 # for the Operator-only runtime and host kinds (run_failed, run_stuck, claim_stale,
-# host_unhealthy); those are read on an authorized path (references/sentry.md#coverage).
+# host_unhealthy); those are read on an authorized path (references/role-sentry.md#coverage).
 # Exit 0 with no output means nothing needs attention. A non-zero exit with one line
 # on stderr means the read failed, was truncated or degraded, the selector names no
 # owner (exit 2), or `orbit` is absent.

@@ -23,7 +23,7 @@ Formation staffs a working day of AI coding sessions: one chief, one captain per
 ```text
 You:      formation squad orbit, solo scribe
 chief:    Files the shift record, starts the aide and one captain per workspace,
-          and sends each its brief.
+          and sends each its seat card.
 captain:  orbit-0-capt starts a lieutenant, a sergeant and a sentry, then
           registers the attention and ci watches and runs the room's reader.
 sentry:   Watches orbit: a red check on a pull request is mailed to the sergeant.
@@ -57,7 +57,7 @@ make update-plugins
 
 ## Features
 
-- **Staffing skill.** Parses a formation order, fills each rank's brief, records the roster and runs the daily start, changes, reinforcements and close-out, for both Claude and Codex hosts.
+- **Staffing skill.** Parses a formation order, fills each seat's card, records the roster and runs the daily start, changes, reinforcements and close-out, for both Claude and Codex hosts.
 - **Roster check.** `formation roster check` validates names, ownership and the direction of each route. A passing check grants nothing and starts nothing.
 - **Seat mail.** `formation mail` handles join, who, send, inbox, ack and sent in a private SQLite room, with idempotent sends and per-seat presence.
 - **Delivery hooks.** `formation hook` adds unread mail to the next turn. A Claude Stop hook holds a waiter that wakes the chat when mail arrives, and an idle Codex seat can be woken through its queue.
