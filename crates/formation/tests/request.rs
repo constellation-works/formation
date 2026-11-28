@@ -128,6 +128,8 @@ impl Room {
                     action,
                     "--room",
                     "trial",
+                    "--as",
+                    CAPTAIN,
                     "--to",
                     seat,
                     "--class",
@@ -304,7 +306,9 @@ fn advice_pass_and_settlement_track_authority_and_send_mail() {
     let grant_id = grant["id"].to_string();
     let revoked = room
         .command()
-        .args(["grant", "revoke", &grant_id, "--room", "trial"])
+        .args([
+            "grant", "revoke", &grant_id, "--room", "trial", "--as", CAPTAIN,
+        ])
         .output()
         .unwrap();
     success(revoked);
@@ -389,8 +393,8 @@ fn admiral_answers_and_overturns_delegated_settlements() {
     room.apply_roster();
     let first = room.json(Some(CAPTAIN), OPEN);
     let id = first["id"].as_str().unwrap();
-    let missing = room.request(None, &["settle", id, "--option", "a", "--admiral"]);
-    assert!(!missing.status.success());
+    let missing = room.request(Some(CAPTAIN), &["settle", id, "--option", "a", "--admiral"]);
+    assert_eq!(missing.status.code(), Some(2));
     let answer = room.json(
         Some(CAPTAIN),
         &[
@@ -407,7 +411,7 @@ fn admiral_answers_and_overturns_delegated_settlements() {
     assert_eq!(answer["settlement"]["source"], "captain chat");
     assert_eq!(answer["settlement"]["entered_by"], CAPTAIN);
     room.refuse(Some(CHIEF), &["reopen", id], "admiral_required");
-    let reopened = room.json(None, &["reopen", id]);
+    let reopened = room.json(Some(CHIEF), &["reopen", id, "--admiral"]);
     assert_eq!(reopened["holder"], "admiral");
     assert_eq!(reopened["overturned"][0]["source"], "captain chat");
     let second = room.json(Some(CAPTAIN), OPEN);
@@ -424,6 +428,64 @@ fn admiral_answers_and_overturns_delegated_settlements() {
 }
 
 #[test]
+fn admiral_changes_refuse_a_caller_without_a_joined_seat_and_change_nothing() {
+    let room = Room::new(&[CHIEF, CAPTAIN]);
+    room.apply_roster();
+    let open = room.json(Some(CAPTAIN), OPEN);
+    let id = open["id"].as_str().unwrap();
+    let settled = room.json(Some(CAPTAIN), OPEN);
+    let settled_id = settled["id"].as_str().unwrap();
+    let answer = room.json(
+        Some(CAPTAIN),
+        &[
+            "settle",
+            settled_id,
+            "--option",
+            "a",
+            "--admiral",
+            "--source",
+            "captain chat",
+        ],
+    );
+    assert_eq!(answer["settlement"]["entered_by"], CAPTAIN);
+    let before = room.json(None, &["list"]);
+    let mail = (room.inbox(CHIEF).len(), room.inbox(CAPTAIN).len());
+
+    let settle = [
+        "settle",
+        id,
+        "--option",
+        "a",
+        "--admiral",
+        "--source",
+        "chat",
+    ];
+    let reopen = ["reopen", settled_id, "--admiral"];
+    for args in [&settle[..], &reopen[..]] {
+        let mut absent = args.to_vec();
+        absent.push("--json");
+        let out = room.request(None, &absent);
+        assert_eq!(out.status.code(), Some(1), "{out:?}");
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(error["code"], "seat_required");
+
+        let mut ghost = room.command();
+        ghost
+            .env("CLAUDE_CODE_SESSION_ID", "session-ghost")
+            .args(["request", "--room", "trial"])
+            .args(&absent);
+        let out = ghost.output().unwrap();
+        assert_eq!(out.status.code(), Some(1), "{out:?}");
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(error["code"], "seat_required");
+    }
+
+    assert_eq!(room.json(None, &["list"]), before);
+    assert_eq!(room.json(None, &["show", settled_id]), answer);
+    assert_eq!(mail, (room.inbox(CHIEF).len(), room.inbox(CAPTAIN).len()));
+}
+
+#[test]
 fn carry_preserves_open_history_and_maps_missing_holders() {
     let room = Room::new(&[CHIEF, CAPTAIN, WORKER]);
     room.apply_roster();
@@ -436,7 +498,7 @@ fn carry_preserves_open_history_and_maps_missing_holders() {
     let closed = room.json(Some(CAPTAIN), OPEN);
     let closed_id = closed["id"].as_str().unwrap();
     room.json(
-        None,
+        Some(CAPTAIN),
         &[
             "settle",
             closed_id,

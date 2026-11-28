@@ -296,14 +296,8 @@ fn admiral_change(
     let room = ctx.mail()?;
     let (request, recipients) = room.store.write(|tx| {
         let roster = grant::require_roster_tx(tx)?;
-        let entered = match &room.caller {
-            Caller::None => None,
-            caller @ (Caller::Explicit(_) | Caller::Session(_) | Caller::Join { .. }) => {
-                let name = joined_caller(tx, caller)?;
-                grant::find_roster_seat(&roster, &name)?;
-                Some(name)
-            }
-        };
+        let entered = joined_caller(tx, &room.caller)?;
+        grant::find_roster_seat(&roster, &entered)?;
         let Change::Existing { id, action } = change else {
             unreachable!()
         };
@@ -327,13 +321,13 @@ fn admiral_change(
                     limit: None,
                     note: checked_note(note)?,
                     source: Some(rule::text("source", &source)?.to_owned()),
-                    entered_by: entered,
+                    entered_by: Some(entered),
                     at: now,
                 });
                 "settled"
             }
             Action::Reopen { admiral } => {
-                if entered.is_some() && !admiral {
+                if !admiral {
                     return Err(Failure::AdmiralRequired.into());
                 }
                 let RequestState::Settled(settlement) = request.state else {
