@@ -1,0 +1,23 @@
+Grant an authority class to a rank or seat for the day
+
+Usage: formation grant add [OPTIONS] --to <RANK|SEAT> --class <CLASS> --source <TEXT>
+
+Options:
+      --room <NAME|PATH>           Room name or directory path (default: $FORMATION_ROOM or session file)
+      --to <RANK|SEAT>             Rank (e.g. chief, captain) or seat name in the applied roster
+      --as <SEAT>                  Seat name for this command (default: seat recorded for this session, or none outside one)
+      --class <CLASS>              Authority class from the catalog
+      --workspace <WORKSPACE|all>  Workspace identifier, or `all` for every workspace in the room [default: all]
+      --limit <TEXT>               Optional condition in words narrowing this grant
+      --for <LIFETIME>             Lifetime of the grant (`day`; standing grants come from a grants file) [default: day]
+      --source <TEXT>              Where the admiral gave this direction (required)
+  -h, --help                       Print help
+
+Classes `grant` and `credentials` stay with the admiral and are never granted.
+Every joined seat whose effective authority changes receives one mail envelope.
+
+Examples:
+  formation grant add --to chief --class direction --workspace all \
+    --limit "reversible workspace settings" --for day --source "advisor chat 12:00"
+  formation grant add --to orbit-captain --class operator --workspace orbit \
+    --for day --source "chief chat 13:15"

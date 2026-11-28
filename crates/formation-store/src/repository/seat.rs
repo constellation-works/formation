@@ -232,6 +232,16 @@ impl Seats<'_> {
             .map_err(error::sql)
     }
 
+    /// All joined seat names, ordered alphabetically.
+    pub fn all_names(&self) -> Result<Vec<String>, Error> {
+        SeatsRead {
+            conn: self.conn,
+            has_session_column: true,
+            has_hook_state: true,
+        }
+        .names()
+    }
+
     /// Up to `limit` joined seat names, ordered alphabetically.
     pub fn names(&self, limit: usize) -> Result<Vec<String>, Error> {
         let mut statement = self

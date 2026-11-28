@@ -9,6 +9,8 @@ pub(crate) enum RoomAccess<'a> {
     None,
     Join(&'a str),
     Existing,
+    OptionalSeat,
+    Room,
     Hook(&'a str),
 }
 
@@ -46,7 +48,15 @@ pub(crate) fn exec<A: App, R>(
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
+        RoomAccess::Room => match composition::compose_room(env) {
+            Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
         RoomAccess::Existing => match composition::compose_existing(env) {
+            Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
+        RoomAccess::OptionalSeat => match composition::compose_optional_seat(env) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },

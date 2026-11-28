@@ -2,7 +2,9 @@
 
 Run `formation roster check < roster.json` for a count of seats and directed routes, or add `--json` for machine-readable output. It accepts one UTF-8 JSON document up to 256 KiB. Success exits 0. Invalid documents exit 1 with a diagnostic on stderr. Invalid CLI arguments exit 2.
 
-[The example](../examples/roster.json) contains a Claude chief and aide, a Codex captain, and a headless sentry. Version 1 requires `version`, `seats` and `routes`. Each seat has a unique case-sensitive `name`, `role`, `host`, and optional `workspace`. Captains require a workspace and each workspace can have one captain. Names and workspace IDs use ASCII letters, digits, hyphens and underscores. Hosts are `claude-desktop`, `codex-desktop` and `headless`. Roles are chief, aide, captain, lieutenant, sergeant, sentry, specialist and worker.
+[The example](../examples/roster.json) contains a Claude chief and aide, a Codex captain, and a headless sentry. Version 1 requires `version`, `seats` and `routes`. Each seat has a unique case-sensitive `name`, `role`, `host`, and optional `workspace`. Captains require a workspace and each workspace can have one captain. Names and workspace IDs use ASCII letters, digits, hyphens and underscores. Hosts are `claude-desktop`, `codex-desktop` and `headless`. Roles are chief, aide, captain, lieutenant, sergeant, sentry, specialist and worker. Version 2 also accepts advisor and optional `reports_to` on each seat: a parent seat name, or absent for a seat reporting to the admiral. Parents must exist and reporting lines must be acyclic.
+
+Apply a version 2 roster to an existing room with `formation roster apply --room <room> < roster.json` (add `--json` for counts). Applying replaces the previous roster atomically, without changing joined sessions, mail or watches. Version 1 is accepted by check but refused by apply. Checking stays offline and creates no room state.
 
 Each route has a `from` and a `to` seat. Add the reverse pair explicitly when replies are wanted. Both ends must exist and differ. The checker rejects duplicate routes and unknown fields. A roster can describe a single unit or a shift. It contains no session credentials or live bindings.
 
@@ -16,9 +18,11 @@ For CLI-only use, run `make install`. Checking a roster works offline without a 
 
 Build the CLI with `make build` and use `target/debug/formation`, or use the installed binary. A room is selected by `--room <name|path>` (or `FORMATION_ROOM`), accepted before or after the subcommand. A value with a path separator or leading `.` or `~` is a directory path; any other value (1 to 96 ASCII letters, digits, hyphens or underscores) resolves to `<home>/rooms/<name>/`, where `<home>` is `FORMATION_HOME` or `~/.formation`. `mail join` creates a missing room (directory mode 0700, database mode 0600); every other command refuses a missing room with `room_not_found` and creates nothing. `mail join` also creates the seat's folder, `<room directory>/seats/<seat>/` (mode 0700), and prints its absolute path as `seat_dir`. A seat keeps its probe scripts and its held, mute and log files there, so clearing scratch or a checkout does not remove them. Formation never reads or deletes the folder's contents.
 
+A join is all-or-nothing. It checks the folder first, then binds the seat and records the session pointer in one step. Except for `session_route_unrestored`, below, a join that exits nonzero leaves no new seat, no new or changed session pointer and no change to a seat's owner, route or pending mail, so retry it once the cause is gone. Joins from one session run one at a time, whatever their rooms, under a lock on `<home>/sessions/<session id>.lock`, which stays on disk. A join waits up to 15 seconds for it and then refuses, naming the holder. A session pointer that is not a private regular file of at most 4096 bytes refuses the join before the seat is bound. If a failed join cannot put the previous pointer back, it reports `session_route_unrestored` with the pointer's path and both failures; fix that path and join again. A join that is killed before it finishes can leave the pointer naming its room, and joining again repairs it. A folder that is a symlink, belongs to another user or is open to group or other is refused with `seat_dir_unavailable`. For a folder you own with a mode such as 0755, the error gives the exact path, the observed mode, the required mode 0700 and the `chmod` to run before you retry. The refusal never changes the folder or its contents.
+
 In a Claude Code or Codex session, `formation mail join` looks up the session in open Scribe groups using `scribe group list --json`. It joins the matching seat in the room named for the group; `--room` overrides that room. Join the Scribe group first. If Scribe is unavailable or the seat is ambiguous, use `formation mail join <seat> --room <room>` instead. This lookup runs only at join, and the explicit form works without Scribe.
 
-In a Claude Code or Codex session (`CLAUDE_CODE_SESSION_ID`, else `CODEX_THREAD_ID`), `mail join <seat>` binds that session id to the seat and records the room in `<home>/sessions/<session id>`. Later commands in that session find both the room and the seat with no flags. Joining a seat already held by another session takes it over and reports `rebound: true` with `replaced_session`; the replaced session's next call without `--as` is refused with `seat_required`. Outside a session (or to select another seat explicitly), pass `--as <seat>`:
+In a Claude Code or Codex session (`CLAUDE_CODE_SESSION_ID`, else `CODEX_THREAD_ID`), `mail join <seat>` binds that session id to the seat and records the room in `<home>/sessions/<session id>`. Later commands in that session find both the room and the seat with no flags. A seat listed by `mail who` run with `--room` and `--as` may not have this route, and `FORMATION_ROOM` stands in for a missing pointer in a command while the hook ignores it. After a join succeeds, check the route from that session with `env -u FORMATION_ROOM formation mail who`. Joining a seat already held by another session takes it over and reports `rebound: true` with `replaced_session`; the replaced session's next call without `--as` is refused with `seat_required`. Outside a session (or to select another seat explicitly), pass `--as <seat>`:
 
 ```sh
 formation mail join chief --room trial
@@ -110,3 +114,75 @@ formation watch wait \
   --probe "ci=plugin/skills/formation/scripts/ci-read.sh owner/repo agent-main" \
   --timeout 300 --room trial --as sentry
 ```
+
+## Delegated authority grants
+
+Apply a version 2 roster to the room before managing authority grants; every `grant` command in a room with no applied roster refuses with `no_roster`.
+
+Formation ships a built-in catalog of twelve decision classes: `repair` (sergeant, or the workspace captain where there is no sergeant), `ship` and `land` (captain), `staffing` (chief), `design`, `breaking`, `direction`, `release` and `operator` (admiral), `override` (nobody), and `credentials` and `grant` (admiral; never granted).
+
+```sh
+formation grant add --to chief --class direction --workspace all \
+  --limit "a setting inside one workspace that a later change can undo" \
+  --for day --source "advisor chat 2026-11-27 12:00"
+formation grant withhold --to captain --class land --workspace site \
+  --for day --source "advisor chat 2026-11-27 12:30"
+formation grant revoke 1
+formation grant list
+formation grant list --seat chief --json
+formation grant check --seat chief --class direction
+```
+
+`add` and `withhold` accept `--to` (a rank name or a seat in the applied roster), `--class`, `--workspace` (a workspace identifier or `all`, defaulting to `all`), optional `--limit`, `--for day` (default `day`; standing grants come from a grants file), and required `--source`. `add` and `withhold` refuse `grant` and `credentials` with `class_not_grantable` and unknown classes with `unknown_class`.
+
+`grant list` without `--seat` prints active room grants and withholds; `--seat <seat>` prints what that seat settles now and any withheld entries, naming whether each line came from the `catalog`, a `grant` or a `withhold` (add `--json` for machine-readable output). Precedence follows seat over rank, a named workspace over `all`, room over house file over catalog, later over earlier, and a withhold over a grant entered at the same time. `grant check --seat <seat> --class <class> [--workspace <workspace>]` exits 0 with the covering JSON entry when the seat may settle that class in the workspace (defaulting to the seat's workspace, or `all`) and exits 1 with `not_authorized` otherwise.
+
+A grant records the calling seat (from the session binding or `--as`), or none when run outside a session, and marks grants whose holder is the caller's own seat or rank as `self-entered` in `grant list`. Every `add`, `withhold` and `revoke` mails one envelope to each joined seat whose effective authority changed and none to seats whose effective authority did not change. Audit events record only stable identifiers (never limit text or source).
+
+## Delegated authority requests
+
+Apply a version 2 roster before using `formation request`. Every request command returns
+`no_roster` in an existing room without one. Writes act as the session's joined seat or
+the joined seat selected with `--as`, except for admiral actions and carry. Use `--room` to select a room explicitly. Add
+`--json` to any request command for machine-readable output and stable refusal codes.
+
+```sh
+formation request open --class design --record '<task or pull request>' \
+  --ask 'Should we share the cache?' \
+  --option 'a: Share the cache' --option 'b: Keep separate caches' --recommend b --blocking
+formation request advise <request> --recommend a --note 'Both jobs use the same key.'
+formation request settle <request> --option b --note 'Keep the jobs independent.'
+formation request settle <request> --option a --admiral --source 'chief chat, 10:30'
+formation request reopen <request> --admiral
+formation request carry --from yesterday
+formation request pass <request> --recommend b
+formation request list --waiting admiral
+formation request list --settled-by chief --since 2026-01-01T00:00:00Z --json
+formation request show <request>
+```
+
+`open` records a one-line ask, a record pointer, and two to four uniquely labeled options.
+`--recommend` names one of the labels. `--blocking` records that the asker's work is waiting.
+The ID includes the originating room's name. The applied roster supplies the asker's
+workspace (`all` for a seat with no workspace) and parent. The parent holds the request
+and receives ordinary room mail. With `--settle <label>`, the asker instead uses their own
+effective authority to open and settle in one step.
+
+`advise` adds a recommendation and explanation without changing the state or holder.
+`settle` requires a covering entry for the calling seat, class and request workspace.
+`not_authorized` names the seats that hold the class in scope, or its default holder if no
+seat holds it. The record preserves the chosen option, settling seat, grant ID and limit at
+settlement. A catalog entry has a null grant ID in JSON. The asker receives one envelope.
+With `--admiral --source <text>`, `settle` records the admiral's answer without a grant, including the source and the entering seat (or none outside a session). `reopen` overturns a settlement, returns the request to the admiral, and mails the asker and the settling seat. A joined seat must pass `--admiral`; this changes the record only and does not undo external actions. Overturned settlements remain visible in `show` and `list --settled-by`.
+
+`carry --from <room>` copies open requests into the current room with their IDs and history. It skips existing IDs and settled requests. Holders missing from the new roster map to its chief.
+
+`pass` requires the current holder and sends the request to that seat's parent. A pass by a
+seat with no parent places it in the admiral's queue. Use `--recommend <label>` to add advice
+while passing. `--note` is optional with a recommendation. Seat-entered request notifications use normal room mail. If a recipient seat has yet to join, the change is refused and can be retried after it joins. Admiral notifications are stored for the named seats, including seats that have not joined. Requests waiting on the admiral appear in the queue.
+
+`list` shows all requests newest first by default. Use `--waiting <seat>` for that seat's
+open requests or `--waiting admiral` for the admiral's queue. Use `--settled-by <seat>`
+for that seat's decisions. `--since` includes activity at or after an RFC 3339 timestamp.
+With `--settled-by`, it compares the settlement time. `show` includes the original ask,
+options and recommendation, the advice history, and any settlement.

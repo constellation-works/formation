@@ -1,0 +1,13 @@
+Request: <request>
+State: settled
+Asker: app-captain
+Class: land (app)
+Record: reviewed-change
+Opened: <timestamp>
+Updated: <timestamp>
+Blocking: false
+Ask: Land the reviewed change?
+  a: Land
+  b: Wait
+Recommended by asker: a
+Settled by app-captain at <timestamp>: a (grant catalog)

@@ -2,9 +2,13 @@
 
 pub(crate) mod common;
 
+pub(crate) mod grant;
+
 pub(crate) mod hook;
 
 pub(crate) mod mail;
+
+pub(crate) mod request;
 
 pub(crate) mod roster;
 
@@ -22,4 +26,8 @@ pub(crate) enum Command {
     Hook(hook::Hook),
     /// Manage the room's watches and wait for probe results.
     Watch(watch::Watch),
+    /// Manage delegated authority grants and check what a seat settles.
+    Grant(grant::Grant),
+    /// File, route and decide requests under delegated authority.
+    Request(request::Request),
 }

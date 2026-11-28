@@ -145,7 +145,7 @@ fn caller_ref(caller: &Caller) -> Result<SeatRef<'_>, Error> {
     match caller {
         Caller::Explicit(name) => Ok(SeatRef::Name(name)),
         Caller::Session(session) => Ok(SeatRef::Session(session)),
-        Caller::Join { .. } => Err(Error::new(
+        Caller::Join { .. } | Caller::None => Err(Error::new(
             Kind::Internal,
             "missing_context",
             std::io::Error::other("seat context unavailable"),

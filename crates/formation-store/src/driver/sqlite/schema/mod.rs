@@ -2,7 +2,11 @@
 
 mod audit;
 
+mod grant;
+
 mod message;
+
+mod request;
 
 mod seat;
 
@@ -24,6 +28,12 @@ pub(crate) const WATCH_MAIL_SCHEMA_VERSION: u32 = 11;
 
 pub(crate) const HOOK_WAITER_SCHEMA_VERSION: u32 = 13;
 
+pub(crate) const GRANT_SCHEMA_VERSION: u32 = 15;
+
+pub(crate) const REQUEST_SCHEMA_VERSION: u32 = 16;
+
+pub(crate) const REQUEST_HISTORY_SCHEMA_VERSION: u32 = 17;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -38,4 +48,8 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     message::WATCH_MAIL,
     watch::ABSENCE,
     seat::HOOK_WAITER,
+    seat::ROSTER,
+    grant::CREATE,
+    request::CREATE,
+    request::HISTORY,
 ];

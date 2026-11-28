@@ -24,6 +24,16 @@ formation mail join
 
    Pass `"$seat" --room "$group"` if Scribe is unavailable.
 
+   After `formation mail join` succeeds, run this route check in the assigned session. Include the join command and the check in each seat’s startup instructions.
+
+```sh
+env -u FORMATION_ROOM formation mail who
+```
+
+   - The check must list the assigned seat. Clearing `FORMATION_ROOM` makes `mail who` use the session route that the hook reads.
+   - If the join or route check fails, report a startup failure and repair it before the seat takes work. A passing check after a failed join can reflect an earlier route.
+   - For `seat_dir_unavailable` on a legacy seat folder, follow the mode `0700` correction and retry. For `session_route_unrestored`, repair the named session pointer and join again.
+
 5. Use the provider procedure. Fill one seat card (`assets/seat-card.md`) for the aide, each captain, any advisor and each named specialist with the absolute `skill` path, role file, unit, group/room, record ID and crew, workspace selector, repo and base branch, parent, allowed recipients, repair mode, attention ownership, handoff summary and open-item counts.
    - A captain owning its workspace’s attention registers `attention` (when Orbit is configured) and `ci` in the room watch set and starts `formation watch run` in the background; other captains join `formation watch run` as standbys through the shared room.
    - A captain in a resident-owned workspace avoids duplicate attention monitoring and registers no `attention` watch while the resident owns attention.

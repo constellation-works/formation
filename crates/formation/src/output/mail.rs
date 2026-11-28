@@ -2,7 +2,7 @@
 
 use formation_core::app::mail::{Outcome, SentMessage};
 use serde_json::{Value, json};
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 pub(crate) enum HistoryFormat {
@@ -56,8 +56,7 @@ pub(crate) fn sent_history(
     if matches!(format, HistoryFormat::Json) {
         return super::common::json::write_json(&sent_history_payload(messages, total));
     }
-    let stdout = io::stdout();
-    let terminal = stdout.is_terminal();
+    let (stdout, terminal) = super::common::stdout();
     let mut out = stdout.lock();
     let result = write_sent_history(&mut out, messages, terminal);
     match result {

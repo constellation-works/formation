@@ -7,7 +7,8 @@ use std::os::unix::fs::PermissionsExt;
 
 fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     connection.execute_batch(
-        "DROP TABLE hook_waiter;
+        "DROP TABLE room_request;
+         DROP TABLE hook_waiter;
          ALTER TABLE watch_handover DROP COLUMN absent_reads;
          DROP TABLE watch_notice;
          ALTER TABLE messages DROP COLUMN watch_name;
@@ -239,7 +240,8 @@ fn upgrade_to_watch_absence_retains_handovers_with_zero_missed_reads()
 
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
     connection.execute_batch(
-        "DROP TABLE hook_waiter;
+        "DROP TABLE room_request;
+         DROP TABLE hook_waiter;
          ALTER TABLE watch_handover DROP COLUMN absent_reads;
          PRAGMA user_version = 11;",
     )?;
@@ -279,7 +281,8 @@ fn upgrade_to_hook_waiter_retains_mail_and_seat_links() -> Result<(), Box<dyn st
 
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
     connection.execute_batch(
-        "DROP TABLE hook_waiter;
+        "DROP TABLE room_request;
+         DROP TABLE hook_waiter;
          PRAGMA user_version = 12;",
     )?;
     let snapshot = store.read()?;
@@ -316,5 +319,176 @@ fn upgrade_to_hook_waiter_retains_mail_and_seat_links() -> Result<(), Box<dyn st
     assert_eq!(unread.len(), 1);
     assert_eq!(unread[0].receipt, receipt);
     assert_eq!(unread[0].body, "retained");
+    Ok(())
+}
+
+#[test]
+fn upgrade_to_roster_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("session")?;
+    store.write(|tx| {
+        tx.seats().bind("chief", Some(&session))?;
+        tx.messages().insert("chief", "chief", "id", "body", 100)?;
+        Ok(())
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch(
+        "INSERT INTO watch_set (recipient,name,command,cwd,every,state,added_by,added_at)
+         VALUES ('chief','probe','true','/',10,'on','chief',100);
+         DROP TABLE room_request;
+         DROP TABLE roster_seat; PRAGMA user_version = 13;",
+    )?;
+    drop(db);
+    assert!(store.read()?.roster().seats()?.is_empty());
+    let roster = formation_store::decode(
+        br#"{"version":2,"seats":[{"name":"chief","role":"chief","host":"headless"}],"routes":[]}"#,
+    )?;
+    store.write(|tx| tx.roster().replace(&roster))?;
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.roster().seats()?.len(), 1);
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("chief")
+    );
+    assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    assert_eq!(snapshot.watch().list()?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn upgrade_to_grant_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
+    use formation_store::contract::{GrantEffect, GrantLifetime, GrantTargetKind, NewGrant};
+
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let session = SessionId::try_new("grant-session")?;
+    let roster = formation_store::decode(
+        br#"{"version":2,"seats":[{"name":"chief","role":"chief","host":"headless"}],"routes":[]}"#,
+    )?;
+    store.write(|tx| {
+        tx.seats().bind("chief", Some(&session))?;
+        tx.roster().replace(&roster)?;
+        tx.messages().insert("chief", "chief", "id", "body", 100)?;
+        Ok(())
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch(
+        "DROP TABLE room_request;
+         DROP TABLE room_grant; PRAGMA user_version = 14;",
+    )?;
+    drop(db);
+
+    assert!(store.read()?.grants().active()?.is_empty());
+    let inserted = store.write(|tx| {
+        tx.grants().insert(&NewGrant {
+            effect: GrantEffect::Grant,
+            target_kind: GrantTargetKind::Rank,
+            target: "chief",
+            class: "direction",
+            workspace: "all",
+            limit: Some("reversible settings"),
+            lifetime: GrantLifetime::Day,
+            source: "advisor chat 12:00",
+            entered_by: None,
+            entered_at: 200,
+            entered_at_ns: 0,
+        })
+    })?;
+    assert_eq!(inserted.id, 1);
+
+    let snapshot = store.read()?;
+    assert_eq!(snapshot.grants().active()?.len(), 1);
+    assert_eq!(snapshot.roster().seats()?.len(), 1);
+    assert_eq!(
+        snapshot.seats().by_session(&session)?.as_deref(),
+        Some("chief")
+    );
+    assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    Ok(())
+}
+
+#[test]
+fn upgrade_to_request_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
+    use formation_store::contract::{Request, RequestOption, RequestState};
+
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    let roster = formation_store::decode(
+        br#"{"version":2,"seats":[{"name":"chief","role":"chief","host":"headless"}],"routes":[]}"#,
+    )?;
+    store.write(|tx| {
+        tx.seats().bind("chief", None)?;
+        tx.roster().replace(&roster)?;
+        tx.messages().insert("chief", "chief", "id", "body", 100)?;
+        Ok(())
+    })?;
+
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch("DROP TABLE room_request; PRAGMA user_version = 15;")?;
+    let snapshot = store.read()?;
+    assert!(snapshot.requests().list()?.is_empty());
+    assert!(snapshot.requests().get("req-trial-new")?.is_none());
+    assert_eq!(
+        db.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?,
+        15
+    );
+    drop(snapshot);
+    drop(db);
+
+    let now = time::OffsetDateTime::from_unix_timestamp_nanos(120_000_000_001)?;
+    let request = Request {
+        id: "req-trial-new".to_owned(),
+        asker: "chief".to_owned(),
+        class: "design".to_owned(),
+        workspace: "all".to_owned(),
+        record: "change".to_owned(),
+        ask: "Make the change?".to_owned(),
+        options: vec![
+            RequestOption {
+                label: "a".to_owned(),
+                text: "Proceed".to_owned(),
+            },
+            RequestOption {
+                label: "b".to_owned(),
+                text: "Wait".to_owned(),
+            },
+        ],
+        recommendation: "a".to_owned(),
+        blocking: false,
+        opened_at: now,
+        updated_at: now,
+        state: RequestState::Open { holder: None },
+        advice: Vec::new(),
+        overturned: Vec::new(),
+    };
+    store.write(|tx| tx.requests().insert(&request))?;
+
+    let snapshot = store.read()?;
+    let requests = snapshot.requests().list()?;
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].opened_at, now);
+    assert_eq!(requests[0].id, request.id);
+    assert!(matches!(
+        requests[0].state,
+        RequestState::Open { holder: None }
+    ));
+    assert_eq!(snapshot.roster().seats()?.len(), 1);
+    assert_eq!(snapshot.messages().unread("chief")?[0].body, "body");
+    Ok(())
+}
+
+#[test]
+fn request_history_upgrade_reads_version_sixteen_before_and_after_write()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|_| Ok(()))?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    db.execute_batch("ALTER TABLE room_request DROP COLUMN overturned; PRAGMA user_version = 16;")?;
+    drop(db);
+    assert!(store.read()?.requests().list()?.is_empty());
+    store.write(|_| Ok(()))?;
+    assert!(store.read()?.requests().list()?.is_empty());
     Ok(())
 }

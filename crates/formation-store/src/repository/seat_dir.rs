@@ -15,7 +15,16 @@ pub(crate) fn ensure(room: &Path, seat: &str) -> Result<PathBuf, Failure> {
         let source = std::io::Error::from(std::io::ErrorKind::InvalidData);
         return Err(Failure::SeatDirPath(path, source));
     }
-    create(&path).map_err(|source| Failure::SeatDir(path.clone(), source))?;
+    create(&path).map_err(|source| match source {
+        cw_fs::Error::Permissions { path, mode, .. } => Failure::SeatDirMode { path, mode },
+        other @ (cw_fs::Error::Io { .. }
+        | cw_fs::Error::Locked { .. }
+        | cw_fs::Error::Symlink { .. }
+        | cw_fs::Error::ForeignOwner { .. }
+        | cw_fs::Error::NotRegular { .. }
+        | cw_fs::Error::TooLarge { .. }
+        | cw_fs::Error::Reentrant { .. }) => Failure::SeatDir(path.clone(), other),
+    })?;
     Ok(path)
 }
 

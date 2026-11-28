@@ -2,11 +2,17 @@
 
 mod audit;
 
+mod grant;
+
 mod hook_waiter;
 
 mod message;
 
+mod request;
+
 mod seat;
+
+mod roster;
 
 pub(crate) mod seat_dir;
 
@@ -19,9 +25,13 @@ mod watch_reader;
 use crate::driver::sqlite;
 pub use audit::Audit;
 use cw_sqlite::rusqlite::Connection;
+pub use grant::{GrantMut, GrantRead};
 pub use hook_waiter::{HookWaiter, HookWaiterRead};
 pub use message::{Messages, MessagesMut, PriorDelivery};
+pub use request::{RequestMut, RequestRead};
+pub use roster::{RosterRead, RosterSeat, RosterSeats};
 pub use seat::{Seats, SeatsRead};
+pub use session::{SessionPointer, SessionRoute};
 pub use watch::{Watch, WatchRead};
 pub use watch_reader::WatchLease;
 
@@ -31,6 +41,31 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// Applied roster visible at the snapshot.
+    pub fn roster(&self) -> RosterRead<'_> {
+        RosterRead {
+            conn: &self.reader,
+            available: self.reader.version() >= 14,
+        }
+    }
+
+    /// Room grants visible at the snapshot.
+    pub fn grants(&self) -> GrantRead<'_> {
+        GrantRead {
+            conn: &self.reader,
+            available: sqlite::has_grant(self.reader.version()),
+        }
+    }
+
+    /// Room requests visible at the snapshot.
+    pub fn requests(&self) -> RequestRead<'_> {
+        RequestRead {
+            conn: &self.reader,
+            available: sqlite::has_request(self.reader.version()),
+            history: sqlite::has_request_history(self.reader.version()),
+        }
+    }
+
     /// Seats visible at the snapshot.
     pub fn seats(&self) -> SeatsRead<'_> {
         SeatsRead {
@@ -75,6 +110,21 @@ pub struct Tx<'a> {
 }
 
 impl Tx<'_> {
+    /// Applied roster records in this transaction.
+    pub fn roster(&self) -> RosterSeats<'_> {
+        RosterSeats { conn: self.conn }
+    }
+
+    /// Room grant records in this transaction.
+    pub fn grants(&self) -> GrantMut<'_> {
+        GrantMut { conn: self.conn }
+    }
+
+    /// Room request records in this transaction.
+    pub fn requests(&self) -> RequestMut<'_> {
+        RequestMut { conn: self.conn }
+    }
+
     /// Seat records in this transaction.
     pub fn seats(&self) -> Seats<'_> {
         Seats { conn: self.conn }

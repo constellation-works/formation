@@ -10,12 +10,15 @@ repository.workspace = true
 tracing-subscriber.workspace = true
 formation-core.workspace = true
 clap.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+time.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
 [dev-dependencies]
+formation-store.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 cw-testkit.workspace = true

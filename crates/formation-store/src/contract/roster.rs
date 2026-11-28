@@ -29,10 +29,12 @@ pub struct Seat {
     pub host: Host,
     /// Workspace whose work this seat covers.
     pub workspace: Option<String>,
+    /// Parent seat, or None for the admiral.
+    pub reports_to: Option<String>,
 }
 
 /// Duties that a seat can hold.
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Role {
     /// Coordinates the shift.
@@ -49,8 +51,43 @@ pub enum Role {
     Sentry,
     /// Advises on a subject across units.
     Specialist,
+    /// Advises the chief or admiral.
+    Advisor,
     /// Executes assigned work.
     Worker,
+}
+
+impl Role {
+    /// Parse a stable role wire name.
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "chief" => Some(Self::Chief),
+            "aide" => Some(Self::Aide),
+            "captain" => Some(Self::Captain),
+            "lieutenant" => Some(Self::Lieutenant),
+            "sergeant" => Some(Self::Sergeant),
+            "sentry" => Some(Self::Sentry),
+            "specialist" => Some(Self::Specialist),
+            "advisor" => Some(Self::Advisor),
+            "worker" => Some(Self::Worker),
+            _ => None,
+        }
+    }
+
+    /// Stable wire name of this role.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Chief => "chief",
+            Self::Aide => "aide",
+            Self::Captain => "captain",
+            Self::Lieutenant => "lieutenant",
+            Self::Sergeant => "sergeant",
+            Self::Sentry => "sentry",
+            Self::Specialist => "specialist",
+            Self::Advisor => "advisor",
+            Self::Worker => "worker",
+        }
+    }
 }
 
 /// Expected user interface or worker process.

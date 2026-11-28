@@ -3,6 +3,7 @@
 use crate::contract::SessionId;
 use crate::driver::sqlite;
 use crate::error::Failure;
+use crate::repository::SessionRoute;
 use crate::repository::Snapshot;
 use crate::repository::Tx;
 use cw_base::Error;
@@ -43,13 +44,13 @@ impl Store {
         crate::repository::session::read(sessions_dir, session).map_err(Into::into)
     }
 
-    /// Record the room for `session`, creating the sessions directory if absent.
-    pub fn record_session(
-        sessions_dir: &Path,
-        session: &SessionId,
-        room: &str,
-    ) -> Result<(), Error> {
-        crate::repository::session::write(sessions_dir, session, room).map_err(Into::into)
+    /// Take ownership of `session`'s pointer, creating the sessions directory if absent.
+    /// Every pointer write goes through the returned hold.
+    ///
+    /// # Errors
+    /// Busy when another holder keeps the session past the lock deadline.
+    pub fn lock_session(sessions_dir: &Path, session: &SessionId) -> Result<SessionRoute, Error> {
+        SessionRoute::lock(sessions_dir, session).map_err(Into::into)
     }
 
     /// Create the seat's private folder in this room if missing and return its absolute path.

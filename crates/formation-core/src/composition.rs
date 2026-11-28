@@ -23,7 +23,7 @@ const ENV_HOME: &str = "HOME";
 const MAX_IDENTIFIER_LEN: usize = 96;
 
 /// Host inputs for one invocation.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Env {
     home: Option<OsString>,
     user_home: Option<PathBuf>,
@@ -89,6 +89,7 @@ pub(crate) enum Caller {
     },
     Explicit(String),
     Session(SessionId),
+    None,
 }
 
 pub(crate) struct MailContext {
@@ -175,6 +176,41 @@ pub(crate) fn compose_join(env: &Env, seat: &str) -> Result<MailContext, Error> 
             sessions_dir,
             room_record: room.record,
         },
+    })
+}
+
+pub(crate) fn compose_room(env: &Env) -> Result<MailContext, Error> {
+    let room = resolve_room(env, None)?;
+    let store = Store::open(&room.path)?;
+    Ok(MailContext {
+        room: room.record,
+        store,
+        caller: Caller::Explicit(String::new()),
+    })
+}
+
+pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
+    let session = resolve_session(env)?;
+    let room = resolve_room(env, session.as_ref())?;
+    let store = Store::open(&room.path)?;
+
+    let caller = if let Some(seat) = env.seat.as_deref() {
+        validate_identifier(seat, ComposeError::InvalidSeat)?;
+        Caller::Explicit(seat.to_owned())
+    } else if let Some(session_id) = session {
+        if store.read()?.seats().by_session(&session_id)?.is_some() {
+            Caller::Session(session_id)
+        } else {
+            Caller::None
+        }
+    } else {
+        Caller::None
+    };
+
+    Ok(MailContext {
+        room: room.record,
+        store,
+        caller,
     })
 }
 
