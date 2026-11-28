@@ -1,11 +1,29 @@
 //! Message queries and row mapping.
 
-use crate::contract::{DeliveryState, Message, SentMessage, rfc3339};
+use crate::contract::{DeliveryState, LogMessage, Message, SentMessage, rfc3339};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension, Row, params};
 
 const INBOX_PAGE_SIZE: i64 = 32;
+
+/// Constraints on a room history query.
+pub struct LogQuery<'a> {
+    /// Limit to mail involving this caller.
+    pub caller: Option<&'a str>,
+    /// Limit to mail involving this seat.
+    pub seat: Option<&'a str>,
+    /// Limit to mail involving this other seat.
+    pub with: Option<&'a str>,
+    /// Earliest storage time in Unix seconds.
+    pub since: Option<i64>,
+    /// Exclude watch mail.
+    pub no_watch: bool,
+    /// Maximum number of results.
+    pub limit: i64,
+    /// Select one receipt.
+    pub receipt: Option<i64>,
+}
 
 /// Envelopes visible in a committed read.
 pub struct Messages<'a> {
@@ -100,6 +118,76 @@ impl Messages<'_> {
             .collect::<Result<_, _>>()
             .map_err(error::sql)?;
         Ok((total, messages))
+    }
+
+    /// Read matching room history, constrained before applying the limit.
+    pub fn log(&self, query: &LogQuery<'_>) -> Result<Vec<LogMessage>, Error> {
+        let (sent, delivered) = self.timestamp_columns();
+        let watch = if self.has_watch_mail {
+            "watch_name"
+        } else {
+            "NULL"
+        };
+        let added = if self.has_watch_mail {
+            "watch_added_by"
+        } else {
+            "NULL"
+        };
+        let terminal = if self.has_terminal_mail {
+            "terminal"
+        } else {
+            "0"
+        };
+        let sql = format!(
+            "SELECT receipt, id, sender, recipient, body, {sent}, ack,
+            {delivered}, {watch}, {added}, {terminal} FROM messages
+            WHERE (?1 IS NULL OR sender = ?1 OR recipient = ?1)
+              AND (?2 IS NULL OR sender = ?2 OR recipient = ?2)
+              AND (?3 IS NULL OR sender = ?3 OR recipient = ?3)
+              AND (?4 IS NULL OR {sent} >= ?4)
+              AND (?5 = 0 OR {watch} IS NULL)
+              AND (?6 IS NULL OR receipt = ?6)
+            ORDER BY receipt DESC LIMIT ?7"
+        );
+        let mut statement = self.conn.prepare(&sql).map_err(error::sql)?;
+        statement
+            .query_map(
+                params![
+                    query.caller,
+                    query.seat,
+                    query.with,
+                    query.since,
+                    query.no_watch,
+                    query.receipt,
+                    query.limit
+                ],
+                |row| {
+                    let ack: bool = row.get(6)?;
+                    let delivered: Option<i64> = row.get(7)?;
+                    Ok(LogMessage {
+                        receipt: row.get(0)?,
+                        id: row.get(1)?,
+                        sender: row.get(2)?,
+                        recipient: row.get(3)?,
+                        body: row.get(4)?,
+                        sent: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
+                        state: if ack {
+                            DeliveryState::Acked
+                        } else if delivered.is_some() {
+                            DeliveryState::Delivered
+                        } else {
+                            DeliveryState::Stored
+                        },
+                        watch_name: row.get(8)?,
+                        watch_added_by: row.get(9)?,
+                        terminal: row.get(10)?,
+                        delivered: delivered.and_then(rfc3339),
+                    })
+                },
+            )
+            .map_err(error::sql)?
+            .collect::<Result<_, _>>()
+            .map_err(error::sql)
     }
 
     fn timestamp_columns(&self) -> (&'static str, &'static str) {
