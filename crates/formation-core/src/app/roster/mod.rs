@@ -177,14 +177,19 @@ fn roster_error(error: Error) -> cw_base::Error {
 fn show(ctx: &Ctx<'_>) -> Result<View, cw_base::Error> {
     let mail = ctx.mail()?;
     let snapshot = mail.store.read()?;
+    view_snapshot(&snapshot, &mail.room, (ctx.clock)().unix_timestamp())
+}
+
+pub(crate) fn view_snapshot(
+    snapshot: &formation_store::Snapshot,
+    room: &str,
+    now: i64,
+) -> Result<View, cw_base::Error> {
     let roster = snapshot.roster().seats()?;
     let stamp = snapshot.roster().application()?;
     let closure = snapshot.closure()?;
     let status = Status::from_closed(closure.is_some());
-    let mut live = crate::app::mail::who::statuses(
-        snapshot.seats().mailboxes()?,
-        (ctx.clock)().unix_timestamp(),
-    );
+    let mut live = crate::app::mail::who::statuses(snapshot.seats().mailboxes()?, now);
     live.retain(|seat| seat.name != formation_store::contract::ADMIRAL);
     if status == Status::Closed {
         for seat in &mut live {
@@ -217,7 +222,7 @@ fn show(ctx: &Ctx<'_>) -> Result<View, cw_base::Error> {
     };
     let (closed_at, closed_by) = lifecycle::closure_fields(closure);
     Ok(View {
-        room: mail.room.clone(),
+        room: room.to_owned(),
         status,
         closed_at,
         closed_by,

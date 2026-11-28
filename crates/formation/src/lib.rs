@@ -33,6 +33,7 @@ pub fn run(env: formation_core::Env) -> ExitCode {
         .collect();
     let queue = |session: &str| codex_wake::queue(session, &child_env);
     match args.command {
+        Command::Status(args) => command::status::run(env, args),
         Command::Roster(args) => command::roster::run(&env, args),
         Command::Mail(args) => command::mail::run(env, args, &queue),
         Command::Hook(args) => command::hook::run(&env, args),

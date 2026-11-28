@@ -1,0 +1,9 @@
+Show a read-only overview of the room
+
+Usage: formation status [OPTIONS]
+
+Options:
+      --room <NAME|PATH>  Room name or directory path
+      --as <SEAT>         Calling seat (defaults to the session seat or terminal admiral)
+      --json              Print JSON, overriding $FORMATION_FORMAT
+  -h, --help              Print help

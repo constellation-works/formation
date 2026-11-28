@@ -150,7 +150,7 @@ impl<'a> App for RequestApp<'a> {
             Command::List(filter) => {
                 let snapshot = read_snapshot(ctx)?;
                 let filter = rule::ListFilter::parse(filter)?;
-                let records = snapshot.requests().list()?;
+                let records = list_snapshot(&snapshot)?;
                 Ok(Outcome::List(
                     records
                         .into_iter()
@@ -187,4 +187,9 @@ fn read_snapshot(ctx: &Ctx<'_>) -> Result<Snapshot, Error> {
         super::grant::find_roster_seat(&roster, name)?;
     }
     Ok(snapshot)
+}
+
+// The shared request-list read, usable within a larger room snapshot.
+pub(crate) fn list_snapshot(snapshot: &Snapshot) -> Result<Vec<Request>, Error> {
+    snapshot.requests().list()
 }

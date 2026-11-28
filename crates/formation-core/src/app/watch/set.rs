@@ -52,6 +52,7 @@ pub enum Command {
 }
 
 /// The state of the process that reads the set.
+#[derive(serde::Serialize)]
 pub struct Reader {
     /// Lease holder, when it is live.
     pub active: Option<Participant>,
@@ -64,6 +65,7 @@ pub struct Reader {
 }
 
 /// One live reader or standby.
+#[derive(serde::Serialize)]
 pub struct Participant {
     /// Seat that started the process.
     pub seat: String,
@@ -336,7 +338,7 @@ fn list(store: &Store, seat: SeatRef<'_>, now: i64) -> Result<Outcome, Error> {
     let snapshot = store.read()?;
     caller_in_snapshot(&snapshot, seat)?;
     Ok(Outcome::Listed {
-        reader: reader(snapshot.watch().readers(now)?, now),
+        reader: reader_snapshot(&snapshot, now)?,
         watches: snapshot.watch().list()?.into_iter().map(entry).collect(),
     })
 }
@@ -435,4 +437,18 @@ fn unknown_watch(recipient: &str, name: &str) -> Error {
         "unknown_watch",
         format!("no watch `{name}` for {recipient}; run `formation watch list` to see the set"),
     )
+}
+
+// Shared reader and enabled-watch view for a room snapshot.
+pub(crate) fn reader_snapshot(snapshot: &Snapshot, now: i64) -> Result<Reader, Error> {
+    Ok(reader(snapshot.watch().readers(now)?, now))
+}
+
+pub(crate) fn enabled_count(snapshot: &Snapshot) -> Result<usize, Error> {
+    Ok(snapshot
+        .watch()
+        .list()?
+        .iter()
+        .filter(|watch| watch.state == WatchState::On)
+        .count())
 }

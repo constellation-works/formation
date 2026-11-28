@@ -10,6 +10,8 @@ pub mod request;
 
 pub mod roster;
 
+pub mod status;
+
 mod wake;
 
 pub mod watch;

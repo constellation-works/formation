@@ -3,6 +3,7 @@ Coordinate local agent inboxes and check proposed shift rosters
 Usage: formation <COMMAND>
 
 Commands:
+  status   Show a read-only overview of the room
   roster   Inspect a shift roster
   mail     Exchange messages in a private local room
   hook     Hand unread mail to a Claude Code or Codex session

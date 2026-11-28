@@ -14,10 +14,14 @@ pub(crate) mod roster;
 
 pub(crate) mod watch;
 
+pub(crate) mod status;
+
 use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Show a read-only overview of the room.
+    Status(status::Status),
     /// Inspect a shift roster.
     Roster(roster::Roster),
     /// Exchange messages in a private local room.

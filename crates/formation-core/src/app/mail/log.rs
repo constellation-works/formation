@@ -5,7 +5,10 @@ use std::collections::HashMap;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-fn caller(snapshot: &Snapshot, caller: SeatRef<'_>) -> Result<Option<String>, Error> {
+pub(in crate::app) fn caller(
+    snapshot: &Snapshot,
+    caller: SeatRef<'_>,
+) -> Result<Option<String>, Error> {
     match caller {
         SeatRef::Admiral => Ok(None),
         SeatRef::Name(name) if name == ADMIRAL => Ok(None),
@@ -74,7 +77,7 @@ pub(super) fn run(store: &Store, seat: SeatRef<'_>, options: LogOptions) -> Resu
         });
     }
     Ok(Outcome::Log {
-        messages: history.log(&query)?,
+        messages: read_snapshot(&snapshot, &query)?,
         full: options.full,
     })
 }
@@ -117,4 +120,12 @@ pub(super) fn show(store: &Store, seat: SeatRef<'_>, receipt: i64) -> Result<Out
     let selected = thread.partition_point(|message| message.receipt < receipt);
     thread.insert(selected, message);
     Ok(Outcome::Show { selected, thread })
+}
+
+// Read flat history within the caller's snapshot.
+pub(crate) fn read_snapshot(
+    snapshot: &Snapshot,
+    query: &LogQuery<'_>,
+) -> Result<Vec<formation_store::contract::LogMessage>, Error> {
+    snapshot.messages().log(query)
 }
