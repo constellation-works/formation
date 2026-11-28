@@ -13,7 +13,7 @@ Contents:
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as <seat> --author <your model name> --role sergeant`. If refused, say so in your next message to your captain and go on. Do not join again after a refresh.
-2. Join Formation mail once (`formation mail join --json`, or `formation mail join <seat> --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and can receive watch mail or manage room watches. Save your seat card to `<seat_dir>/card.md`.
+2. Join Formation mail once (`formation mail join --json`, or `formation mail join <seat> --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and can receive watch mail or manage room watches. Save your seat card to `<seat_dir>/card.md`. Read the house file named on your card when one is named, and skip this step when the card says `none`.
 3. When your card names a task to own (or whenever you claim a task you own, such as a base-CI fix task), claim it in one update setting `status: "in-progress"`, `plan`, the `no-drain` tag, and `crew` and `orchestrator` from your card. When you run on a model other than the card says, set the registered crew that matches and tell your captain once.
 4. Read active issues (`scribe entry list --tag issue --status active`), and read them again before passing anything up: apply and cite an `accepted` issue, never raise it, and send your sentry a `mute` line for each accepted issue in your workspace (**decisions and issues**).
 

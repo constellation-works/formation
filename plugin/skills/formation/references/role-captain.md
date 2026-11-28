@@ -15,11 +15,11 @@ Contents:
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as <seat> --author <your model name> --role captain`. A refusal goes to `0-chief` once and does not stop you.
-2. Join Formation mail once so the shared watch room, reader and seat folder work: `formation mail join --json` (or `formation mail join <seat> --room <group> --json` if Scribe is unavailable). Save your seat card to `<seat_dir>/card.md`.
+2. Join Formation mail once so the shared watch room, reader and seat folder work: `formation mail join --json` (or `formation mail join <seat> --room <group> --json` if Scribe is unavailable). Save your seat card to `<seat_dir>/card.md`. Read the house file named on your card when one is named, and skip this step when the card says `none`.
 3. Claim the record named on your card in one update with the `orchestration-session` skill, setting `status: "in-progress"`, `plan`, `crew` and `orchestrator` from your card. The chief filed it; you write its plan. When you run on a model other than the card says, set the registered crew that matches and tell `0-chief` once.
 4. When your context starts with a handoff instead of a fresh card, you were refreshed: do not join, claim or staff again; follow **Refresh and close**.
 5. Read active issues (`scribe entry list --tag issue --status active`), and read them again before raising anything to `0-chief` or the admiral: apply and cite an `accepted` issue, never raise it (**decisions and issues**).
-6. Staff your unit per the table below (keyed by the `unit` on your card) and set up the room's shared watches.
+6. Staff your unit per the table below (keyed by the `unit` on your card), copy your card's `house rules` path (or `none`) onto each seat card you fill, and set up the room's shared watches.
 
 | Unit on card | Staffing and watch setup |
 | --- | --- |
