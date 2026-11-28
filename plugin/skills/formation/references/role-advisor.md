@@ -5,7 +5,7 @@ Seat `0-advisor`. Optional seat started on first need by `0-chief` or opened dir
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as 0-advisor --author <your model name> --role advisor`. If refused, tell `0-chief` once (or the admiral if opened directly) and continue. Do not join again after a refresh.
-2. Join Formation mail once (`formation mail join`, or `formation mail join 0-advisor --room <group>` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when needed.
+2. Join Formation mail once (`formation mail join --json`, or `formation mail join 0-advisor --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when needed.
 3. If you started from a seat card, save it to `<seat_dir>/card.md`, then claim the record named on your card in one `orbit.task.update` setting `status: "in-progress"`, `plan`, `crew` and `orchestrator` from the card. When you run on a model other than the card says, set the registered crew that matches and tell your parent once.
 4. If the admiral opened you directly with no card, create and claim your own record in the coordination workspace in two calls:
    - Discover registered crews with `orbit.workspace.list`, then file via `orbit.task.add` with title `[advisor]: formation <group> - <family>`, description, `acceptance_criteria`, complexity, tags `advisor`, `no-drain`, and explicit `crew` and `orchestrator` matching your model.

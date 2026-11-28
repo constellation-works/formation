@@ -19,12 +19,12 @@ scribe group join "$group" --as "$seat" --author "$model" --role "$rank"
    Every captain, plus any seat with a cross-provider edge or registering, receiving or reading watches (including `0-chief`, `0-aide` when relaying across providers, `0-advisor` and shared specialists), joins Formation mail once beside `scribe group join` so each seat gets its seat folder (`seat_dir`) and local mailbox. Same-provider seat messages keep native channels.
 
 ```sh
-formation mail join
+formation mail join --json
 ```
 
-   Pass `"$seat" --room "$group"` if Scribe is unavailable.
+   Pass `"$seat" --room "$group" --json` if Scribe is unavailable. Read `seat_dir` from that JSON to save the seat card; a terminal shows a `Seat folder:` line instead.
 
-   After `formation mail join` succeeds, run this route check in the assigned session. Include the join command and the check in each seat’s startup instructions.
+   After `formation mail join --json` succeeds, run this route check in the assigned session. Include the join command and the check in each seat’s startup instructions.
 
 ```sh
 env -u FORMATION_ROOM formation mail who
