@@ -5,7 +5,7 @@ Seat `1-spec-<subject>`. Standing specialist on the subject named on your card, 
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as 1-spec-<subject> --author <your model name> --role specialist`. If refused, say so in your next message to `0-chief` and go on. Do not join again after a refresh.
-2. Join Formation mail once (`formation mail join`, or `formation mail join 1-spec-<subject> --room <group>` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when an asker uses another provider. Save your seat card to `<seat_dir>/card.md`.
+2. Join Formation mail once (`formation mail join --json`, or `formation mail join 1-spec-<subject> --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when an asker uses another provider. Save your seat card to `<seat_dir>/card.md`.
 3. Load the subject sources listed on your card, then end your turn with one line and wait for asks.
 
 ## Duties

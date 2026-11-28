@@ -5,7 +5,7 @@ Seat `<ws>-1-lt` (a reinforcement is `<ws>-1-lt2`). Started on demand by your ca
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as <seat> --author <your model name> --role lieutenant`. If refused, say so in your next message to your captain and go on. Do not join again after a refresh.
-2. Join Formation mail once (`formation mail join`, or `formation mail join <seat> --room <group>` if Scribe is unavailable) so you have a seat folder (`seat_dir`). Save your seat card to `<seat_dir>/card.md`.
+2. Join Formation mail once (`formation mail join --json`, or `formation mail join <seat> --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`). Save your seat card to `<seat_dir>/card.md`.
 3. Before starting work on the task named on your card (or any task you own), claim it on the workspace owner in one update: add a comment naming the order, and for a task you own set `status: "in-progress"`, `plan`, the `no-drain` tag, and `crew` and `orchestrator` from your card. When you run on a model other than the card says, set the registered crew that matches and tell your captain once.
 
 ## Duties
