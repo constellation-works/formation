@@ -134,6 +134,10 @@ impl Home {
             ],
             "routes": []
         });
+        self.apply_roster_value(room, &roster);
+    }
+
+    fn apply_roster_value(&self, room: &str, roster: &Value) {
         let mut child = self
             .command(None)
             .args(["roster", "apply", "--room", room])
@@ -146,7 +150,7 @@ impl Home {
             .stdin
             .take()
             .unwrap()
-            .write_all(&serde_json::to_vec(&roster).unwrap())
+            .write_all(&serde_json::to_vec(roster).unwrap())
             .unwrap();
         let out = child.wait_with_output().unwrap();
         assert!(out.status.success(), "{out:?}");
@@ -758,9 +762,69 @@ fn a_passed_request_lands_in_the_admirals_mailbox_and_terminal_settlement_clears
 }
 
 #[test]
+fn request_and_grant_terminal_commands_use_the_only_active_room() {
+    let home = Home::new();
+    home.apply_roster("trial");
+
+    let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
+    let id = opened["id"].as_str().unwrap();
+    home.request_ok(CHIEF, &["pass", id]);
+
+    let waiting = home.terminal_cmd(None, &["request", "--json", "list", "--waiting", "admiral"]);
+    assert!(waiting.status.success(), "{}", waiting.stderr);
+    let requests: Value = serde_json::from_str(&waiting.stdout).unwrap();
+    assert_eq!(requests.as_array().unwrap().len(), 1, "{requests}");
+    assert_eq!(requests[0]["id"], id);
+
+    let grant = home.terminal_cmd(
+        None,
+        &[
+            "grant",
+            "add",
+            "--to",
+            "chief",
+            "--class",
+            "direction",
+            "--workspace",
+            "all",
+        ],
+    );
+    assert!(grant.status.success(), "{}", grant.stderr);
+    let grant: Value = serde_json::from_str(&grant.stdout).unwrap();
+    assert_eq!(grant["source"], "admiral");
+}
+
+#[test]
+fn a_non_chief_request_without_a_parent_does_not_mail_the_admiral() {
+    let home = Home::new();
+    let worker = home.piped(
+        Some("worker-session"),
+        &["join", "worker", "--room", "trial"],
+    );
+    assert!(worker.status.success(), "{worker:?}");
+    home.apply_roster_value(
+        "trial",
+        &json!({
+            "version": 2,
+            "seats": [
+                {"name": "chief", "role": "chief", "host": "claude-desktop"},
+                {"name": "worker", "role": "worker", "host": "headless"}
+            ],
+            "routes": []
+        }),
+    );
+
+    let opened = home.request_ok("worker-session", OPEN_REQUEST);
+    assert_eq!(opened["state"], "open");
+
+    let inbox = json_of(&home.terminal(None, &["inbox"]));
+    assert_eq!(inbox["messages"], json!([]));
+}
+
+#[test]
 fn terminal_settlement_refuses_chat_only_admiral_source_flags() {
     let home = Home::new();
-    home.apply_roster();
+    home.apply_roster("trial");
 
     let opened = home.request_ok(CAPTAIN, OPEN_REQUEST);
     let id = opened["id"].as_str().unwrap();

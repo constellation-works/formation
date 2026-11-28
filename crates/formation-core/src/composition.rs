@@ -245,19 +245,22 @@ pub(crate) fn compose_optional_member(env: &Env) -> Result<MailContext, Error> {
 
 fn compose_optional_caller(env: &Env, admiral: bool) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
-    let room = resolve_room(env, session.as_ref())?;
-    let store = Store::open(&room.path)?;
-
     let caller = if let Some(seat) = named_seat(env, session.as_ref())? {
         validate_identifier(seat, ComposeError::InvalidSeat)?;
         Caller::Explicit(seat.to_owned())
-    } else if let Some(session_id) = session {
-        Caller::Session(session_id)
+    } else if let Some(session_id) = session.as_ref() {
+        Caller::Session(session_id.clone())
     } else if admiral && env.terminal {
         Caller::Admiral
     } else {
         Caller::None
     };
+    let room = if matches!(caller, Caller::Admiral) && env.room.is_none() {
+        resolve_admiral_room(env)?
+    } else {
+        resolve_room(env, session.as_ref())?
+    };
+    let store = Store::open(&room.path)?;
 
     Ok(MailContext {
         room: room.record,

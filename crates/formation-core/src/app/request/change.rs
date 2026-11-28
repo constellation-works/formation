@@ -52,7 +52,7 @@ impl Mutation<'_> {
             | Action::Reopen { .. } => unreachable!("handled before seat mutations"),
             Action::Pass { option, note } => {
                 let recipient = self.pass(&mut request, option, note)?;
-                ("passed", Some(recipient))
+                ("passed", recipient)
             }
         };
 
@@ -76,7 +76,11 @@ impl Mutation<'_> {
         let holder = if input.settle.is_some() {
             None
         } else {
-            Some(rule::holder(self.actor, self.roster)?.unwrap_or_else(|| ADMIRAL.to_owned()))
+            let holder = rule::holder(self.actor, self.roster)?;
+            match (holder, self.actor.role.as_str()) {
+                (None, "chief") => Some(ADMIRAL.to_owned()),
+                (holder, _) => holder,
+            }
         };
         let mut request = Request {
             id,
@@ -164,7 +168,7 @@ impl Mutation<'_> {
         request: &mut Request,
         option: Option<String>,
         note: Option<String>,
-    ) -> Result<String, Error> {
+    ) -> Result<Option<String>, Error> {
         let RequestState::Open { holder } = &request.state else {
             return Err(Failure::Settled(request.id.clone()).into());
         };
@@ -182,13 +186,12 @@ impl Mutation<'_> {
         } else if note.is_some() {
             return Err(Failure::NoteRequiresRecommendation.into());
         }
-        let next_holder = self
-            .actor
-            .reports_to
-            .clone()
-            .unwrap_or_else(|| ADMIRAL.to_owned());
+        let next_holder = match (self.actor.reports_to.clone(), self.actor.role.as_str()) {
+            (None, "chief") => Some(ADMIRAL.to_owned()),
+            (holder, _) => holder,
+        };
         request.state = RequestState::Open {
-            holder: Some(next_holder.clone()),
+            holder: next_holder.clone(),
         };
         request.updated_at = self.now;
         Ok(next_holder)

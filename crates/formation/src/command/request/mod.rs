@@ -11,7 +11,7 @@ pub(crate) struct Request {
     /// Room name or directory path (default: $FORMATION_ROOM or session file).
     #[arg(long, global = true, value_name = "NAME|PATH")]
     room: Option<String>,
-    /// Joined seat to act as (default: this session's seat, or admiral at a terminal).
+    /// Joined seat to act as (default: session seat; terminal settle and reopen use admiral).
     #[arg(id = "as_seat", long = "as", global = true, value_name = "SEAT")]
     as_seat: Option<String>,
     /// Print machine-readable JSON.
