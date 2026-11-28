@@ -57,7 +57,8 @@ impl Env {
 
     /// Record whether the call is attached to a terminal, as the CLI's output module probes it.
     ///
-    /// Mail treats a terminal call with no agent session and no `--as` as the admiral's.
+    /// Mail, request and grant treat a terminal call with no agent session and no `--as` as the
+    /// admiral's.
     #[must_use]
     pub fn with_terminal(mut self, attached: bool) -> Self {
         self.terminal = attached;
@@ -234,7 +235,7 @@ pub(crate) fn discover_rooms(env: &Env) -> Result<Vec<DiscoveredRoom>, Error> {
         .collect()
 }
 
-pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
+pub(crate) fn compose_optional_seat(env: &Env, admiral: bool) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
     let room = resolve_room(env, session.as_ref())?;
     let store = Store::open(&room.path)?;
@@ -244,6 +245,8 @@ pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
         Caller::Explicit(seat.to_owned())
     } else if let Some(session_id) = session {
         Caller::Session(session_id)
+    } else if admiral && env.terminal {
+        Caller::Admiral
     } else {
         Caller::None
     };

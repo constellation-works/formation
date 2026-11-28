@@ -45,6 +45,9 @@ pub struct RequestSettlement {
     /// Seat that entered an admiral answer, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entered_by: Option<String>,
+    /// Whether the admiral entered this settlement directly from a terminal.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub terminal: bool,
     /// When the choice was made.
     #[serde(with = "time::serde::rfc3339")]
     pub at: OffsetDateTime,
@@ -53,9 +56,9 @@ pub struct RequestSettlement {
 /// Who can act as the current holder of an open request.
 #[derive(Debug)]
 pub enum RequestState {
-    /// An open request. An absent seat means that it waits on the admiral.
+    /// An open request. `admiral` (or `None` in an earlier build) means it waits on the admiral.
     Open {
-        /// Applied seat currently holding the request.
+        /// Applied seat or `admiral` currently holding the request.
         holder: Option<String>,
     },
     /// A completed decision with its authority preserved.

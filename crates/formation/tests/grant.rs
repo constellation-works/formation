@@ -380,27 +380,29 @@ fn refuses_ungrantable_unknown_class_and_missing_source() {
         "unknown_class"
     );
 
-    let missing_source = run_bin(
-        &root,
-        &[
-            "grant",
-            "add",
-            "--as",
-            "0-chief",
-            "--room",
-            &room,
-            "--to",
-            "chief",
-            "--class",
-            "direction",
-            "--workspace",
-            "all",
-            "--for",
-            "day",
-        ],
-        &[],
+    assert_eq!(
+        err_code(
+            &root,
+            &[
+                "grant",
+                "add",
+                "--as",
+                "0-chief",
+                "--room",
+                &room,
+                "--to",
+                "chief",
+                "--class",
+                "direction",
+                "--workspace",
+                "all",
+                "--for",
+                "day",
+            ],
+            &[],
+        ),
+        "source_required"
     );
-    assert_eq!(missing_source.status.code(), Some(2));
 
     assert_eq!(
         err_code(

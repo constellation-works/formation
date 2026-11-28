@@ -1,16 +1,16 @@
 Withhold an authority class from a rank or seat for the day
 
-Usage: formation grant withhold [OPTIONS] --to <RANK|SEAT> --class <CLASS> --source <TEXT>
+Usage: formation grant withhold [OPTIONS] --to <RANK|SEAT> --class <CLASS>
 
 Options:
       --room <NAME|PATH>           Room name or directory path (default: $FORMATION_ROOM or session file)
       --to <RANK|SEAT>             Rank (e.g. chief, captain) or seat name in the applied roster
-      --as <SEAT>                  Seat name for this command (default: seat recorded for this session, or none outside one)
+      --as <SEAT>                  Seat name for this command (default: seat recorded for this session, or admiral at a terminal)
       --class <CLASS>              Authority class from the catalog
       --workspace <WORKSPACE|all>  Workspace identifier, or `all` for every workspace in the room [default: all]
       --limit <TEXT>               Optional condition in words explaining the withhold
       --for <LIFETIME>             Lifetime of the withhold (`day`; standing rules come from a grants file) [default: day]
-      --source <TEXT>              Where the admiral gave this direction (required)
+      --source <TEXT>              Where the admiral gave this direction (required from a seat; optional from a terminal)
   -h, --help                       Print help
 
 Withholding removes a catalog default or broader grant for the named scope.

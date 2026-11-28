@@ -243,6 +243,28 @@ impl MessagesMut<'_> {
             .map_err(error::sql)
     }
 
+    /// Associate a newly inserted envelope with the request that produced it.
+    pub fn mark_request(&self, receipt: i64, request_id: &str) -> Result<(), Error> {
+        self.conn
+            .execute(
+                "UPDATE messages SET request_id = ?2 WHERE receipt = ?1",
+                params![receipt, request_id],
+            )
+            .map(|_| ())
+            .map_err(error::sql)
+    }
+
+    /// Acknowledge any unread envelopes associated with `request_id` in `seat`'s mailbox.
+    pub fn ack_request(&self, seat: &str, request_id: &str) -> Result<usize, Error> {
+        self.conn
+            .execute(
+                "UPDATE messages SET ack = 1
+                  WHERE recipient = ?1 AND request_id = ?2 AND ack = 0",
+                params![seat, request_id],
+            )
+            .map_err(error::sql)
+    }
+
     /// Next monotonic receipt number within this write transaction.
     pub fn next_receipt(&self) -> Result<i64, Error> {
         self.conn

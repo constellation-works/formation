@@ -13,6 +13,8 @@ pub(crate) enum RoomAccess<'a> {
     /// An existing room whose caller may also be the admiral.
     Member,
     OptionalSeat,
+    /// An existing room whose caller is optional and may be the admiral.
+    OptionalMember,
     Hook(&'a str),
 }
 
@@ -64,7 +66,11 @@ pub(crate) fn exec<A: App, R>(
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },
-        RoomAccess::OptionalSeat => match composition::compose_optional_seat(env) {
+        RoomAccess::OptionalSeat => match composition::compose_optional_seat(env, false) {
+            Ok(ctx) => Some(ctx),
+            Err(error) => return finish(Err(error)),
+        },
+        RoomAccess::OptionalMember => match composition::compose_optional_seat(env, true) {
             Ok(ctx) => Some(ctx),
             Err(error) => return finish(Err(error)),
         },

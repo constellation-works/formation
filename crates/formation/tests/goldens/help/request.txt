@@ -5,7 +5,7 @@ Usage: formation request [OPTIONS] <COMMAND>
 Commands:
   open    Open a request and send it to your parent
   advise  Add a recommendation without changing the request's state or holder
-  settle  Record a decision under your authority and mail the asker
+  settle  Record a decision under your authority, or as the admiral from a terminal, and mail the asker
   reopen  Overturn a settlement and return it to the admiral
   carry   Copy open requests from an earlier room
   pass    Pass a request you hold to your parent, or to the admiral if you have no parent
@@ -15,6 +15,6 @@ Commands:
 
 Options:
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --as <SEAT>         Joined seat to act as (default: this session's seat, or admiral at a terminal)
       --json              Print machine-readable JSON
   -h, --help              Print help

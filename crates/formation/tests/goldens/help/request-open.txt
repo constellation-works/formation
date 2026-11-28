@@ -5,7 +5,7 @@ Usage: formation request open [OPTIONS] --class <CLASS> --record <POINTER> --ask
 Options:
       --class <CLASS>          Authority class from the catalog
       --room <NAME|PATH>       Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>              Joined seat to act as (default: this session's seat)
+      --as <SEAT>              Joined seat to act as (default: this session's seat, or admiral at a terminal)
       --record <POINTER>       Pointer to the task, pull request or other record
       --ask <TEXT>             One-sentence ask
       --json                   Print machine-readable JSON

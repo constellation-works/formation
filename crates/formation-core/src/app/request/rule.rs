@@ -4,7 +4,7 @@ use super::Filter;
 use crate::app::grant::ALL_WORKSPACES;
 use cw_base::{Error, Kind};
 use formation_store::RosterSeat;
-use formation_store::contract::{Request, RequestOption, RequestState, identifier};
+use formation_store::contract::{ADMIRAL, Request, RequestOption, RequestState, identifier};
 use std::collections::BTreeSet;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -114,10 +114,10 @@ impl ListFilter {
                         &entry.seat == seat && self.since.is_none_or(|since| entry.at >= since)
                     })
                 }) || self.waiting.as_ref().is_some_and(|name| {
-                    if name == "admiral" {
-                        holder.is_some()
+                    if name == ADMIRAL {
+                        holder.as_deref().is_some_and(|seat| seat != ADMIRAL)
                     } else {
-                        holder.as_ref() != Some(name)
+                        holder.as_deref() != Some(name.as_str())
                     }
                 }) {
                     return false;

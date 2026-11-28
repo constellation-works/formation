@@ -3,12 +3,12 @@
 use super::rule::{self, Failure};
 use super::{Action, Change, Open};
 use crate::app::grant;
-use crate::app::mail::{SeatRef, send};
+use crate::app::mail::{Outcome as MailOutcome, SeatRef, send};
 use crate::app::wake;
 use crate::composition::Caller;
 use crate::runtime::Ctx;
 use cw_base::Error;
-use formation_store::contract::{Request, RequestAdvice, RequestSettlement, RequestState};
+use formation_store::contract::{ADMIRAL, Request, RequestAdvice, RequestSettlement, RequestState};
 use formation_store::{RosterSeat, Tx};
 use std::path::Path;
 use time::OffsetDateTime;
@@ -27,8 +27,10 @@ impl Mutation<'_> {
             Action::Advise { option, note } => {
                 self.advise(&mut request, option, Some(note))?;
                 let recipient = match &request.state {
-                    RequestState::Open { holder } => holder.clone(),
-                    RequestState::Settled(_) => None,
+                    RequestState::Open { holder } if holder.as_deref() != Some(ADMIRAL) => {
+                        holder.clone()
+                    }
+                    RequestState::Open { .. } | RequestState::Settled(_) => None,
                 };
                 ("received advice", recipient)
             }
@@ -41,6 +43,7 @@ impl Mutation<'_> {
                     return Err(Failure::Settled(request.id).into());
                 }
                 self.settle(&mut request, option, note)?;
+                self.tx.messages().ack_request(ADMIRAL, &request.id)?;
                 ("settled", Some(request.asker.clone()))
             }
             Action::Settle {
@@ -48,8 +51,8 @@ impl Mutation<'_> {
             }
             | Action::Reopen { .. } => unreachable!("handled before seat mutations"),
             Action::Pass { option, note } => {
-                self.pass(&mut request, option, note)?;
-                ("passed", self.actor.reports_to.clone())
+                let recipient = self.pass(&mut request, option, note)?;
+                ("passed", Some(recipient))
             }
         };
 
@@ -73,7 +76,7 @@ impl Mutation<'_> {
         let holder = if input.settle.is_some() {
             None
         } else {
-            rule::holder(self.actor, self.roster)?
+            Some(rule::holder(self.actor, self.roster)?.unwrap_or_else(|| ADMIRAL.to_owned()))
         };
         let mut request = Request {
             id,
@@ -149,6 +152,7 @@ impl Mutation<'_> {
             note: checked_note(note)?,
             source: None,
             entered_by: None,
+            terminal: false,
             at: self.now,
         });
         request.updated_at = self.now;
@@ -160,7 +164,7 @@ impl Mutation<'_> {
         request: &mut Request,
         option: Option<String>,
         note: Option<String>,
-    ) -> Result<(), Error> {
+    ) -> Result<String, Error> {
         let RequestState::Open { holder } = &request.state else {
             return Err(Failure::Settled(request.id.clone()).into());
         };
@@ -168,7 +172,7 @@ impl Mutation<'_> {
             return Err(Failure::NotHolder(
                 self.actor.name.clone(),
                 request.id.clone(),
-                holder.as_deref().unwrap_or("admiral").to_owned(),
+                holder.as_deref().unwrap_or(ADMIRAL).to_owned(),
             )
             .into());
         }
@@ -178,11 +182,16 @@ impl Mutation<'_> {
         } else if note.is_some() {
             return Err(Failure::NoteRequiresRecommendation.into());
         }
+        let next_holder = self
+            .actor
+            .reports_to
+            .clone()
+            .unwrap_or_else(|| ADMIRAL.to_owned());
         request.state = RequestState::Open {
-            holder: self.actor.reports_to.clone(),
+            holder: Some(next_holder.clone()),
         };
         request.updated_at = self.now;
-        Ok(())
+        Ok(next_holder)
     }
 
     fn notify(&self, request: &Request, action: &str, to: Option<&str>) -> Result<(), Error> {
@@ -204,7 +213,7 @@ impl Mutation<'_> {
             "Request {} {action}. Run `formation request show {}` for details.",
             request.id, request.id,
         );
-        send::in_transaction(
+        let (outcome, _) = send::in_transaction(
             self.tx,
             SeatRef::Name(&self.actor.name),
             self.now.unix_timestamp(),
@@ -212,6 +221,11 @@ impl Mutation<'_> {
             id,
             &body,
         )?;
+        if to == ADMIRAL
+            && let MailOutcome::Sent { receipt, .. } = outcome
+        {
+            self.tx.messages().mark_request(receipt, &request.id)?;
+        }
         Ok(())
     }
 }
@@ -223,14 +237,23 @@ pub(super) fn run(
 ) -> Result<Request, Error> {
     let room = ctx.mail()?;
     if matches!(
-        &change,
-        Change::Existing {
-            action: Action::Settle {
-                source: Some(_),
+        (&room.caller, &change),
+        (
+            _,
+            Change::Existing {
+                action: Action::Settle {
+                    source: Some(_),
+                    ..
+                } | Action::Reopen { .. },
                 ..
-            } | Action::Reopen { .. },
-            ..
-        }
+            }
+        ) | (
+            Caller::Admiral,
+            Change::Existing {
+                action: Action::Settle { .. },
+                ..
+            }
+        )
     ) {
         return admiral_change(ctx, change, queue);
     }
@@ -302,8 +325,13 @@ fn admiral_change(
     let room = ctx.mail()?;
     let (request, recipients) = room.store.write(|tx| {
         let roster = grant::require_roster_tx(tx)?;
-        let entered = joined_caller(tx, &room.caller)?;
-        grant::find_roster_seat(&roster, &entered)?;
+        let (entered_by, terminal) = if matches!(room.caller, Caller::Admiral) {
+            (None, true)
+        } else {
+            let entered = joined_caller(tx, &room.caller)?;
+            grant::find_roster_seat(&roster, &entered)?;
+            (Some(entered), false)
+        };
         let Change::Existing { id, action } = change else {
             unreachable!()
         };
@@ -314,41 +342,47 @@ fn admiral_change(
             Action::Settle {
                 option,
                 note,
-                source: Some(source),
+                source,
             } => {
                 if matches!(request.state, RequestState::Settled(_)) {
                     return Err(Failure::Settled(id).into());
                 }
                 rule::require_option(&request.options, &option)?;
+                let source = source
+                    .as_deref()
+                    .map(|value| rule::text("source", value).map(str::to_owned))
+                    .transpose()?;
                 request.state = RequestState::Settled(RequestSettlement {
                     option,
-                    seat: "admiral".to_owned(),
+                    seat: ADMIRAL.to_owned(),
                     grant_id: None,
                     limit: None,
                     note: checked_note(note)?,
-                    source: Some(rule::text("source", &source)?.to_owned()),
-                    entered_by: Some(entered),
+                    source,
+                    entered_by,
+                    terminal,
                     at: now,
                 });
+                tx.messages().ack_request(ADMIRAL, &request.id)?;
                 "settled"
             }
             Action::Reopen { admiral } => {
-                if !admiral {
+                if !terminal && !admiral {
                     return Err(Failure::AdmiralRequired.into());
                 }
                 let RequestState::Settled(settlement) = request.state else {
                     return Err(Failure::NotSettled(id).into());
                 };
-                if settlement.seat != "admiral" {
+                if settlement.seat != ADMIRAL && settlement.seat != request.asker {
                     recipients.push(settlement.seat.clone());
                 }
                 request.overturned.push(settlement);
-                request.state = RequestState::Open { holder: None };
+                request.state = RequestState::Open {
+                    holder: Some(ADMIRAL.to_owned()),
+                };
                 "reopened"
             }
-            Action::Advise { .. } | Action::Settle { source: None, .. } | Action::Pass { .. } => {
-                unreachable!()
-            }
+            Action::Advise { .. } | Action::Pass { .. } => unreachable!(),
         };
         request.updated_at = now;
         tx.requests().update(&request)?;
@@ -357,7 +391,7 @@ fn admiral_change(
             let mut sequence = messages.next_receipt()?;
             let id = loop {
                 let id = format!("request-{sequence}");
-                if messages.prior_delivery("admiral", &id)?.is_none() {
+                if messages.prior_delivery(ADMIRAL, &id)?.is_none() {
                     break id;
                 }
                 sequence = sequence
@@ -368,7 +402,10 @@ fn admiral_change(
                 "Request {} {verb}. Run `formation request show {}` for details.",
                 request.id, request.id
             );
-            messages.insert("admiral", recipient, &id, &body, now.unix_timestamp())?;
+            let receipt = messages.insert(ADMIRAL, recipient, &id, &body, now.unix_timestamp())?;
+            if terminal {
+                messages.mark_terminal(receipt)?;
+            }
         }
         Ok((request, recipients))
     })?;
@@ -407,6 +444,7 @@ pub(super) fn carry(ctx: &Ctx<'_>, from: &str) -> Result<Vec<Request>, Error> {
             if let RequestState::Open {
                 holder: Some(holder),
             } = &mut request.state
+                && holder != ADMIRAL
                 && !roster.iter().any(|seat| seat.name == *holder)
             {
                 *holder = chief.name.clone();

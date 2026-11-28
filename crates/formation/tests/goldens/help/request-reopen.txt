@@ -6,8 +6,8 @@ Arguments:
   <REQUEST>  Request identifier
 
 Options:
-      --admiral           Record the admiral's action from a joined seat
+      --admiral           Record the admiral's action from a joined seat (not needed at a terminal)
       --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
-      --as <SEAT>         Joined seat to act as (default: this session's seat)
+      --as <SEAT>         Joined seat to act as (default: this session's seat, or admiral at a terminal)
       --json              Print machine-readable JSON
   -h, --help              Print help

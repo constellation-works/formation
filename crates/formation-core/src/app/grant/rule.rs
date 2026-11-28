@@ -3,7 +3,7 @@
 use super::catalog::{ClassSpec, DefaultHolder, names_list};
 use cw_base::{Error, Kind};
 use formation_store::contract::{
-    GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, identifier,
+    ADMIRAL, GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, identifier,
 };
 use formation_store::{Role, RosterSeat};
 use std::collections::BTreeSet;
@@ -148,6 +148,17 @@ pub(super) fn validate_lifetime(lifetime: &str) -> Result<GrantLifetime, Error> 
     }
 }
 
+pub(super) fn resolve_source(source: Option<&str>, admiral: bool) -> Result<&str, Error> {
+    match source {
+        Some(value) => validate_source(value),
+        None if admiral => Ok(ADMIRAL),
+        None => Err(refused(
+            "source_required",
+            "`--source` must name where the admiral gave this direction",
+        )),
+    }
+}
+
 pub(super) fn validate_source(source: &str) -> Result<&str, Error> {
     let trimmed = source.trim();
     if trimmed.is_empty() {
@@ -211,6 +222,9 @@ pub(super) fn is_self_entered(grant: &GrantRecord, roster: &[RosterSeat]) -> boo
     let Some(entered_by) = grant.entered_by.as_deref() else {
         return false;
     };
+    if entered_by == ADMIRAL {
+        return false;
+    }
     match grant.target_kind {
         GrantTargetKind::Seat => grant.target == entered_by,
         GrantTargetKind::Rank => roster

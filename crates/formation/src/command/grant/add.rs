@@ -33,9 +33,9 @@ pub(super) struct Add {
     /// Lifetime of the grant (`day`; standing grants come from a grants file).
     #[arg(long = "for", default_value = "day", value_name = "LIFETIME")]
     lifetime: String,
-    /// Where the admiral gave this direction (required).
-    #[arg(long, required = true, value_name = "TEXT")]
-    source: String,
+    /// Where the admiral gave this direction (required from a seat; optional from a terminal).
+    #[arg(long, value_name = "TEXT")]
+    source: Option<String>,
 }
 
 pub(super) fn run(env: &Env, args: Add, queue: &dyn Fn(&str) -> bool) -> ExitCode {

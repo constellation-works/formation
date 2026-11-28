@@ -65,4 +65,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::ADMIRAL,
     message::TERMINAL,
     grant::HOUSE,
+    message::REQUEST,
 ];

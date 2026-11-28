@@ -31,9 +31,9 @@ pub(super) struct Withhold {
     /// Lifetime of the withhold (`day`; standing rules come from a grants file).
     #[arg(long = "for", default_value = "day", value_name = "LIFETIME")]
     lifetime: String,
-    /// Where the admiral gave this direction (required).
-    #[arg(long, required = true, value_name = "TEXT")]
-    source: String,
+    /// Where the admiral gave this direction (required from a seat; optional from a terminal).
+    #[arg(long, value_name = "TEXT")]
+    source: Option<String>,
 }
 
 pub(super) fn run(env: &Env, args: Withhold, queue: &dyn Fn(&str) -> bool) -> ExitCode {
