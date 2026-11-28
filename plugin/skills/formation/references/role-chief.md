@@ -14,8 +14,9 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 5. File each captain's proposed assignment (and an advisor's if starting one) in the coordination workspace via `orbit.task.add` (with title, description, `acceptance_criteria`, complexity, role tags, and explicit `crew` and `orchestrator` set together to that seat's registered crew), ready to write on its seat card.
 6. Open the shift Scribe group with the admiral's actual typed line and join once (`scribe group join <group> --as 0-chief --author <your model name> --role chief`). Join Formation mail once (`formation mail join --json`, or `formation mail join 0-chief --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail. If you received a seat card, save it to `<seat_dir>/card.md`.
 7. Apply the room roster, record the room and staff seats:
-   - Write one version 2 roster file with each seat's name, role, workspace, `reports_to` parent,
-     model, effort and record ID (`null` if it has no record), then apply it before briefing.
+   - Write one version 2 roster file with each seat's `name`, `role`, `host` (`claude-desktop`,
+     `codex-desktop` or `headless`), `workspace`, `reports_to` parent, `model`, `effort` and
+     `record` ID (`null` if it has no record), plus `routes`; then apply it before briefing.
    - Record the room name on your assignment; do not put the roster in a record comment. A later
      seat or unit is an edit to the file followed by another `formation roster apply`.
    - Use `formation roster show` to answer who is staffed and `formation roster list` to see

@@ -12,7 +12,7 @@
    - If no registered crew matches a seat’s model, tell the admiral once, leave the field as filed and note it on the record; never pick a near match.
 
    Use the installed `orchestration-session` and `orchestration-manager` procedures for those records.
-4. Where Scribe is configured, open the shift group with the admiral’s actual typed line. Join once under the seat’s own name, author and rank. Carry its ID in the roster and seat cards. Group membership records member context under Scribe’s rules. Session capture is a separate admiral opt-in. If a quote or join is refused, report once and continue staffing. Retry opening on a valid typed turn. Repair the seat only when its recorded identity is established.
+4. Where Scribe is configured, open the shift group with the admiral’s actual typed line. Join once under the seat’s own name, author and rank. Carry its ID as the roster's room and in the seat cards. Group membership records member context under Scribe’s rules. Session capture is a separate admiral opt-in. If a quote or join is refused, report once and continue staffing. Retry opening on a valid typed turn. Repair the seat only when its recorded identity is established.
 
 ```sh
 scribe group open --kind formation --project "$project" --title "$title" --related "task:$assignment" --quote "$typed_line"
@@ -38,8 +38,9 @@ env -u FORMATION_ROOM formation mail who
    - For `seat_dir_unavailable` on a legacy seat folder, follow the mode `0700` correction and retry. For `session_route_unrestored`, repair the named session pointer and join again.
 
 5. Before briefing any seat, write and apply one version 2 roster for the full lineup:
-   - In `roster.json`, include each seat's name, role, workspace, `reports_to` parent, model,
-     effort and record ID (`null` if it has no record), plus the current routes.
+   - In `roster.json`, include each seat's `name`, `role`, `host` (`claude-desktop`,
+     `codex-desktop` or `headless`), `workspace`, `reports_to` parent, `model`, `effort` and
+     `record` ID (`null` if it has no record), plus `routes` as `from`/`to` seat pairs (`[]` if none).
    - Apply it with `formation roster apply --room "$group" --json < roster.json`. This stores
      the roster in the room; a check alone does not apply it or grant authority.
    - If a seat or unit is added later, edit this file and apply the full roster again.
