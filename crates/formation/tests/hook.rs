@@ -6,6 +6,7 @@ mod support;
 
 use cw_testkit::TempRoot;
 use serde_json::{Value, json};
+use std::io::Write;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 #[cfg(unix)]
@@ -37,7 +38,8 @@ impl Room {
         cmd.env("FORMATION_HOME", self.0.path())
             .env_remove("FORMATION_ROOM")
             .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_THREAD_ID");
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("ANTIGRAVITY_CONVERSATION_ID");
         cmd
     }
 
@@ -243,6 +245,14 @@ fn shipped_hook(room: &Room, event: &str, input: &Value) -> Output {
     child.wait_with_output().unwrap()
 }
 
+fn antigravity_input(session: &str) -> Value {
+    json!({
+        "conversationId": session,
+        "invocationNum": 0,
+        "workspacePaths": ["/project"],
+    })
+}
+
 fn fixture(event: &str, session: &str) -> Value {
     if event == "stop" {
         json!({
@@ -276,6 +286,26 @@ fn rendered(provider: &str, event: &str, out: &Output) -> String {
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(out.stderr.is_empty(), "{out:?}");
     let document: Value = serde_json::from_slice(&out.stdout).unwrap();
+    if provider == "antigravity" && event == "stop" {
+        assert_eq!(document["decision"], "continue");
+        let reason = document["reason"].as_str().unwrap();
+        assert_eq!(document, json!({"decision": "continue", "reason": reason}));
+        return reason.to_owned();
+    }
+    if provider == "antigravity" {
+        let context = document["injectSteps"][0]["systemMessage"]["systemMessage"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            document,
+            json!({
+                "injectSteps": [{
+                    "systemMessage": {"systemMessage": context},
+                }],
+            })
+        );
+        return context.to_owned();
+    }
     if event == "stop" {
         assert_eq!(document["decision"], "block");
         let reason = document["reason"].as_str().unwrap();
@@ -723,12 +753,16 @@ fn stop_hold_expires_silently_without_a_send() {
 
 #[test]
 fn rendering_respects_each_provider_limit_and_marks_only_the_oldest_batch() {
-    for (provider, limit) in [("claude", 9_000), ("codex", 8_000)] {
+    for (provider, limit) in [("claude", 9_000), ("codex", 8_000), ("antigravity", 8_000)] {
         let room = Room::new();
         room.send("first", &"é".repeat(4_000));
         room.send("second", &"x".repeat(4_250));
         room.send("third", &"y".repeat(1_000));
-        let input = fixture("user-prompt", "receiver");
+        let input = if provider == "antigravity" {
+            antigravity_input("receiver")
+        } else {
+            fixture("user-prompt", "receiver")
+        };
         let out = room.hook(provider, "user-prompt", &input);
         let text = rendered(provider, "user-prompt", &out);
         assert!(text.chars().count() <= limit);
@@ -1377,4 +1411,120 @@ fn hook_delivers_to_a_seat_joined_on_retry_after_a_legacy_folder_refusal() {
     assert!(text.contains("Welcome."), "{text}");
     let inbox = room.mail("late-session", &["inbox"]);
     assert_eq!(inbox["messages"][0]["receipt"], sent["receipt"]);
+}
+
+#[test]
+fn antigravity_prompt_injects_mail_and_stop_continues_without_a_wake() {
+    let room = Room::new();
+    let input = antigravity_input("receiver");
+    let empty = room.hook("antigravity", "user-prompt", &input);
+    assert_eq!(empty.status.code(), Some(0), "{empty:?}");
+    assert!(empty.stderr.is_empty(), "{empty:?}");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&empty.stdout).unwrap(),
+        json!({})
+    );
+
+    let sent = room.send("notice", "Check the build.");
+    let prompt = room.hook("antigravity", "user-prompt", &input);
+    let inbox = room.mail("receiver", &["inbox"]);
+    assert_delivery(
+        &rendered("antigravity", "user-prompt", &prompt),
+        &inbox["messages"][0],
+        "Check the build.",
+    );
+    assert_eq!(inbox["messages"][0]["receipt"], sent["receipt"]);
+    let again = room.hook("antigravity", "user-prompt", &input);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&again.stdout).unwrap(),
+        json!({})
+    );
+
+    room.send("later", "Still here.");
+    let stop = room.hook("antigravity", "stop", &input);
+    let inbox = room.mail("receiver", &["inbox"]);
+    let later = inbox["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message["id"] == "later")
+        .unwrap();
+    assert!(
+        rendered("antigravity", "stop", &stop).contains("Still here."),
+        "{stop:?}"
+    );
+    assert!(later["delivered"].is_string());
+    let idle = room.hook("antigravity", "stop", &input);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&idle.stdout).unwrap(),
+        json!({})
+    );
+}
+
+#[test]
+fn antigravity_rejects_a_missing_or_non_string_conversation_id() {
+    let room = Room::new();
+    let check = |input: &[u8]| {
+        let out = room
+            .command()
+            .args(["hook", "--provider", "antigravity", "--event", "stop"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut child = out;
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert_eq!(out.status.code(), Some(1), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(error["code"], "hook_input");
+    };
+    check(b"{}");
+    check(br#"{"session_id":"receiver"}"#);
+    check(br#"{"conversationId":7}"#);
+    check(br#"{"conversationId":null}"#);
+    check(b"not-json");
+    check(b"[]");
+
+    let held = room
+        .spawn_hook(
+            "antigravity",
+            "user-prompt",
+            1,
+            &antigravity_input("receiver"),
+        )
+        .wait_with_output()
+        .unwrap();
+    assert_eq!(held.status.code(), Some(1), "{held:?}");
+    let error: Value = serde_json::from_slice(&held.stderr).unwrap();
+    assert_eq!(error["code"], "hook_usage");
+
+    let empty_id = room.hook("antigravity", "stop", &json!({"conversationId": ""}));
+    assert_eq!(empty_id.status.code(), Some(1), "{empty_id:?}");
+    let error: Value = serde_json::from_slice(&empty_id.stderr).unwrap();
+    assert_eq!(error["code"], "invalid_session_id");
+}
+
+#[cfg(unix)]
+#[test]
+fn antigravity_idle_stop_does_not_queue_a_codex_wake() {
+    let room = Room::new();
+    stub_queue(&room, "exit 0");
+    let input = antigravity_input("receiver");
+    let idle = room.hook("antigravity", "stop", &input);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&idle.stdout).unwrap(),
+        json!({})
+    );
+
+    let mut command = room.send_command("notice", "No wake.");
+    command.env("PATH", room.0.bin());
+    let send = command.output().unwrap();
+    assert!(send.status.success(), "{send:?}");
+    assert_no_wake(&room);
+
+    let prompt = room.hook("antigravity", "user-prompt", &input);
+    assert!(rendered("antigravity", "user-prompt", &prompt).contains("No wake."));
 }

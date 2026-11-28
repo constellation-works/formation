@@ -17,7 +17,8 @@ const MAX_BYTES: u64 = 1024 * 1024;
     "Reads the host's JSON from stdin (maximum 1 MiB). ",
     "A Claude Stop delivery exits 2 with the mail on stderr. Errors exit 1.\n\n",
     "Examples:\n  formation hook --provider claude --event user-prompt\n",
-    "  formation hook --provider codex --event stop"
+    "  formation hook --provider codex --event stop\n",
+    "  formation hook --provider antigravity --event user-prompt"
 ))]
 pub(crate) struct Hook {
     /// Host that supplies the hook input.
@@ -35,6 +36,7 @@ pub(crate) struct Hook {
 enum Provider {
     Claude,
     Codex,
+    Antigravity,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -70,16 +72,14 @@ pub(crate) fn run(env: &Env, args: Hook) -> ExitCode {
             return output::hook_error("hook_input", format!("invalid hook JSON: {error}"));
         }
     };
-    let session = if input.contains_key("agent_id") {
-        Session::Agent
-    } else if let Some(session) = input.get("session_id").and_then(Value::as_str) {
-        Session::Host(session.to_owned())
-    } else {
-        return output::hook_error("hook_input", "hook JSON requires a string session_id");
+    let session = match host_session(args.provider, &input) {
+        Ok(session) => session,
+        Err(code) => return code,
     };
     let provider = match args.provider {
         Provider::Claude => hook::Provider::Claude,
         Provider::Codex => hook::Provider::Codex,
+        Provider::Antigravity => hook::Provider::Antigravity,
     };
     let _signals = (args.hold > 0).then(SignalGuard::install);
     hook::exec(
@@ -92,13 +92,51 @@ pub(crate) fn run(env: &Env, args: Hook) -> ExitCode {
             stopped: &stop_requested,
         },
         |result| match result {
-            Ok(None) => ExitCode::SUCCESS,
+            Ok(None) => match args.provider {
+                Provider::Antigravity => output::hook_json(&output::hook_empty()),
+                Provider::Claude | Provider::Codex => ExitCode::SUCCESS,
+            },
             Ok(Some(text)) => match (args.event, args.provider) {
-                (HookEvent::UserPrompt, _) => output::hook_json(&output::hook_prompt(&text)),
+                (HookEvent::UserPrompt, Provider::Antigravity) => {
+                    output::hook_json(&output::hook_antigravity_prompt(&text))
+                }
+                (HookEvent::UserPrompt, Provider::Claude | Provider::Codex) => {
+                    output::hook_json(&output::hook_prompt(&text))
+                }
                 (HookEvent::Stop, Provider::Claude) => output::hook_rewake(&text),
                 (HookEvent::Stop, Provider::Codex) => output::hook_json(&output::hook_stop(&text)),
+                (HookEvent::Stop, Provider::Antigravity) => {
+                    output::hook_json(&output::hook_antigravity_stop(&text))
+                }
             },
             Err(error) => output::error(&error),
         },
     )
+}
+
+fn host_session(
+    provider: Provider,
+    input: &serde_json::Map<String, Value>,
+) -> Result<Session, ExitCode> {
+    match provider {
+        Provider::Antigravity => match input.get("conversationId") {
+            Some(Value::String(session)) => Ok(Session::Host(session.clone())),
+            _ => Err(output::hook_error(
+                "hook_input",
+                "hook JSON requires a string conversationId",
+            )),
+        },
+        Provider::Claude | Provider::Codex => {
+            if input.contains_key("agent_id") {
+                return Ok(Session::Agent);
+            }
+            if let Some(session) = input.get("session_id").and_then(Value::as_str) {
+                return Ok(Session::Host(session.to_owned()));
+            }
+            Err(output::hook_error(
+                "hook_input",
+                "hook JSON requires a string session_id",
+            ))
+        }
+    }
 }

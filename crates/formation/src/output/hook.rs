@@ -18,6 +18,22 @@ pub(crate) fn stop(text: &str) -> Value {
     json!({"decision": "block", "reason": text})
 }
 
+pub(crate) fn antigravity_prompt(text: &str) -> Value {
+    json!({
+        "injectSteps": [{
+            "systemMessage": {"systemMessage": text},
+        }],
+    })
+}
+
+pub(crate) fn antigravity_stop(text: &str) -> Value {
+    json!({"decision": "continue", "reason": text})
+}
+
+pub(crate) fn empty_object() -> Value {
+    json!({})
+}
+
 pub(crate) fn hook_usage(error: &clap::Error) -> ExitCode {
     let message = error.to_string();
     hook_error(

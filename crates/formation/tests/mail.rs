@@ -6,8 +6,9 @@ mod support;
 
 use cw_testkit::TempRoot;
 use serde_json::Value;
+use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 #[cfg(unix)]
 use std::time::Duration;
 #[cfg(unix)]
@@ -100,6 +101,7 @@ impl Home {
         let mut cmd = formation_with_home(&self.root, &self.home);
         cmd.env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_THREAD_ID")
+            .env_remove("ANTIGRAVITY_CONVERSATION_ID")
             .env_remove("FORMATION_ROOM");
         if let Some(session) = session {
             cmd.env("CODEX_THREAD_ID", session);
@@ -466,7 +468,11 @@ fn named_room_mail_flow_works_with_as_and_no_key_file() {
 
 #[test]
 fn session_env_resolves_room_and_seat_without_flags() {
-    for env_var in ["CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"] {
+    for env_var in [
+        "CLAUDE_CODE_SESSION_ID",
+        "CODEX_THREAD_ID",
+        "ANTIGRAVITY_CONVERSATION_ID",
+    ] {
         let root = TempRoot::new("FORMATION").unwrap();
         let home = root.path().join("formation-home");
 
@@ -497,6 +503,132 @@ fn session_env_resolves_room_and_seat_without_flags() {
         assert_eq!(inbox["messages"][0]["sender"], "chief");
         assert_eq!(inbox["messages"][0]["body"], "ping");
     }
+}
+
+#[test]
+fn antigravity_session_binds_mail_watch_grant_and_request_without_as() {
+    let root = TempRoot::new("FORMATION").unwrap();
+    let home = root.path().join("formation-home");
+    let chief = "agy-chief-1";
+    let captain = "agy-captain-1";
+
+    run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", chief)
+            .args(["mail", "join", "chief", "--room", "trial"]),
+    );
+    run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", captain)
+            .args(["mail", "join", "captain", "--room", "trial"]),
+    );
+
+    let sent = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", chief).args([
+            "mail", "send", "captain", "--id", "note-1", "--body", "ping",
+        ]),
+    );
+    let receipt = sent["receipt"].to_string();
+    let inbox = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", captain).args(["mail", "inbox"]),
+    );
+    assert_eq!(inbox["messages"][0]["body"], "ping");
+    let ack = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", captain)
+            .args(["mail", "ack", &receipt]),
+    );
+    assert_eq!(ack["acknowledged"], sent["receipt"]);
+
+    let who = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", chief).args(["mail", "who"]),
+    );
+    let names: Vec<_> = who["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|seat| seat["name"].as_str())
+        .filter(|name| *name != "admiral")
+        .collect();
+    assert_eq!(names, ["captain", "chief"]);
+
+    let watches = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", captain)
+            .args(["watch", "list", "--json"]),
+    );
+    assert_eq!(watches["watches"].as_array().unwrap().len(), 0);
+
+    apply_roster(&root, &home);
+    let grants = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", chief)
+            .args(["grant", "list", "--json"]),
+    );
+    assert!(grants["grants"].as_array().unwrap().is_empty());
+    let requests = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", chief)
+            .args(["request", "list", "--json"]),
+    );
+    assert!(requests.as_array().unwrap().is_empty());
+
+    let overridden = run_ok(
+        session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", captain)
+            .args(["mail", "inbox", "--as", "chief"]),
+    );
+    assert!(overridden["messages"].as_array().unwrap().is_empty());
+
+    for (winner_var, winner, loser) in [
+        ("CLAUDE_CODE_SESSION_ID", "claude-wins", "agy-loses-claude"),
+        ("CODEX_THREAD_ID", "codex-wins", "agy-loses-codex"),
+    ] {
+        let mut join = session_cmd(&root, &home, winner_var, winner);
+        join.env("ANTIGRAVITY_CONVERSATION_ID", loser)
+            .args(["mail", "join", "chief", "--room", "trial"]);
+        assert_eq!(run_ok(&mut join)["seat"], "chief");
+        assert!(home.join("sessions").join(winner).is_file());
+        assert!(!home.join("sessions").join(loser).exists());
+
+        let winner_inbox =
+            run_ok(session_cmd(&root, &home, winner_var, winner).args(["mail", "inbox"]));
+        assert!(winner_inbox["messages"].as_array().unwrap().is_empty());
+        let mut lost = session_cmd(&root, &home, "ANTIGRAVITY_CONVERSATION_ID", loser);
+        lost.args(["mail", "inbox", "--room", "trial"]);
+        expect_refusal(&lost.output().unwrap(), "seat_required", Some("--as"));
+    }
+}
+
+fn session_cmd(root: &TempRoot, home: &Path, var: &str, id: &str) -> Command {
+    let mut cmd = formation_with_home(root, home);
+    cmd.env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("ANTIGRAVITY_CONVERSATION_ID")
+        .env_remove("FORMATION_ROOM")
+        .env(var, id);
+    cmd
+}
+
+fn apply_roster(root: &TempRoot, home: &Path) {
+    let roster = concat!(
+        r#"{"version":2,"seats":["#,
+        r#"{"name":"chief","role":"chief","host":"claude-desktop"},"#,
+        r#"{"name":"captain","role":"captain","host":"claude-desktop","#,
+        r#""workspace":"app","reports_to":"chief"}],"routes":[]}"#,
+    );
+    let mut child = formation_with_home(root, home)
+        .args(["roster", "apply", "--room", "trial"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(roster.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -991,6 +1123,7 @@ fn startup_route_check_refuses_a_missing_pointer_despite_a_room_override() {
             .env("FORMATION_ROOM", "trial")
             .env("CODEX_THREAD_ID", "sess")
             .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("ANTIGRAVITY_CONVERSATION_ID")
             .args(["-u", "FORMATION_ROOM"])
             .arg(env!("CARGO_BIN_EXE_formation"))
             .args(["mail", "who"])

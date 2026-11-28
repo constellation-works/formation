@@ -71,4 +71,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     grant::HOUSE,
     message::REQUEST,
     message::REPLY,
+    seat::HOOK_PROVIDER,
 ];

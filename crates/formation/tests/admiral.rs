@@ -50,7 +50,8 @@ impl Home {
         cmd.env("FORMATION_HOME", self.0.path())
             .env_remove("FORMATION_ROOM")
             .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_THREAD_ID");
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("ANTIGRAVITY_CONVERSATION_ID");
         if let Some(session) = session {
             cmd.env("CODEX_THREAD_ID", session);
         }

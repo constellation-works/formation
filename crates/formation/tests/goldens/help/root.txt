@@ -5,7 +5,7 @@ Usage: formation <COMMAND>
 Commands:
   roster   Inspect a shift roster
   mail     Exchange messages in a private local room
-  hook     Hand unread mail to a Claude Code or Codex session
+  hook     Hand unread mail to a Claude Code, Codex or Antigravity session
   watch    Manage the room's watches and wait for probe results
   grant    Manage delegated authority grants and check what a seat settles
   request  File, route and decide requests under delegated authority
