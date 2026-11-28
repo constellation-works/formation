@@ -8,7 +8,7 @@ Seat `0-advisor`. Optional seat started on first need by `0-chief` or opened dir
 2. Join Formation mail once (`formation mail join --json`, or `formation mail join 0-advisor --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when needed.
 3. If you started from a seat card, save it to `<seat_dir>/card.md`, read the house file named on your card when one is named (and skip this step when the card says `none`), then claim the record named on your card in one `orbit.task.update` setting `status: "in-progress"`, `plan`, `crew` and `orchestrator` from the card. When you run on a model other than the card says, set the registered crew that matches and tell your parent once.
 4. If the admiral opened you directly with no card, read any Formation house file named by the checkout's instruction file, then create and claim your own record in the coordination workspace in two calls:
-   - Discover registered crews with `orbit.workspace.list`, then file via `orbit.task.add` with title `[advisor]: formation <group> - <family>`, description, `acceptance_criteria`, complexity, tags `advisor`, `no-drain`, and explicit `crew` and `orchestrator` matching your model.
+   - Discover registered crews with `orbit.workspace.list`, then file via `orbit.task.add` with title `[advisor]: formation <group> - <family>`, description, `acceptance_criteria`, complexity, tag `advisor`, and explicit `crew` and `orchestrator` matching your model.
    - Claim the returned task ID in one `orbit.task.update` carrying `status: "in-progress"`, `plan`, `crew` and `orchestrator`. If no registered crew matches, tell the admiral once, leave the field as filed and note it on the record.
 5. Read active issues and open items (`scribe entry list --tag issue --status active`, `scribe entry list --tag open-item --status active`) and any sources or handoff named on your card. End your turn with one line and wait for asks, or answer the admiral's opening question.
 
@@ -38,7 +38,7 @@ Seat `0-advisor`. Optional seat started on first need by `0-chief` or opened dir
 ## Record
 
 - Title: `[advisor]: formation <group> - <family>` in the coordination workspace.
-- Tags: `advisor`, `no-drain`.
+- Tags: `advisor`.
 - Crew: your own registered crew, set together with `orchestrator` at filing (`orbit.task.add`) and verified at claim (`orbit.task.update`).
 - Filed by whoever starts you (with its id and crew on your card); an advisor opened directly with no card files its own via `orbit.task.add` and claims the returned ID in one `orbit.task.update` on its first turn.
 - Keep your plan, active advice threads, drafted proposals and the ids of requests you raised or advised on. If an answer must still be known tomorrow on another task, write it as a comment on that task too and point at it.

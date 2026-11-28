@@ -14,7 +14,7 @@ Contents:
 
 1. Join the day's Scribe group once: `scribe group join <group> --as <seat> --author <your model name> --role sergeant`. If refused, say so in your next message to your captain and go on. Do not join again after a refresh.
 2. Join Formation mail once (`formation mail join --json`, or `formation mail join <seat> --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and can receive watch mail or manage room watches. Save your seat card to `<seat_dir>/card.md`. Read the house file named on your card when one is named, and skip this step when the card says `none`.
-3. When your card names a task to own (or whenever you claim a task you own, such as a base-CI fix task), claim it in one update setting `status: "in-progress"`, `plan`, the `no-drain` tag, and `crew` and `orchestrator` from your card. When you run on a model other than the card says, set the registered crew that matches and tell your captain once.
+3. When your card names a task to own (or whenever you claim a task you own, such as a base-CI fix task), claim it in one update setting `status: "in-progress"`, `plan`, `crew` and `orchestrator` from your card. When you run on a model other than the card says, set the registered crew that matches and tell your captain once.
 4. Read active issues (`scribe entry list --tag issue --status active`), and read them again before passing anything up: apply and cite an `accepted` issue, never raise it, and send your sentry a `mute` line for each accepted issue in your workspace (**decisions and issues**).
 
 ## Duties
@@ -59,7 +59,7 @@ Contents:
 
 - Do not leave base-branch red CI for Orbit's scheduled sweep (in a trio, rerun, file the fix task and ask as usual):
   1. Rerun a flake once; if green, comment the run and stop.
-  2. Claim before fixing: search for an open task on this failure (tag `ci-failure:<key>` or any session's task) and skip if claimed. Take an unclaimed sweep task, or file one via `orbit.task.add` (workflow, job, step, error line, failing command, run URL, `acceptance_criteria`, complexity, explicit `crew` and `orchestrator`). Claim the task ID in one `orbit.task.update`: `status: "in-progress"`, `plan`, `no-drain` tag, `crew` and `orchestrator` from your card.
+  2. Claim before fixing: search for an open task on this failure (tag `ci-failure:<key>` or any session's task) and skip if claimed. Take an unclaimed sweep task, or file one via `orbit.task.add` (workflow, job, step, error line, failing command, run URL, `acceptance_criteria`, complexity, explicit `crew` and `orchestrator`). Claim the task ID in one `orbit.task.update`: `status: "in-progress"`, `plan`, `crew` and `orchestrator` from your card.
   3. Fix yourself only when mechanical (formatting, lint, docs guard, generated index, lockfile, or a golden whose new output the reddening commit intended — name that commit) with no behavioural change. Work in your own worktree under `~/workspace/constellation/worktrees/` (never under `<seat_dir>` or `/tmp`), cut from base head; commit before turn end, open a PR against base without merging or auto-merge, and send the PR to your captain as a **now** message.
   4. Never weaken a check (no skipped/ignored test, loosened assertion, removed guard or added retry). Anything touching an assertion/guard or whose cause is unclear after one pass is the lieutenant's: send a **now** ask with the run, error line and what you ruled out.
 
@@ -83,7 +83,7 @@ Contents:
 
 ## Record
 
-- The Orbit task you are ordered onto or claim (keeping that task's tags, plus `no-drain` when claiming a fix task), with `crew` and `orchestrator` set to your own registered crew in one update.
+- The Orbit task you are ordered onto or claim (keeping that task's tags), with `crew` and `orchestrator` set to your own registered crew in one update.
 - For routine items you triage without claiming, leave a comment on each task you touch.
 
 ## Refresh and close

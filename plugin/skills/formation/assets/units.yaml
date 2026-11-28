@@ -10,7 +10,7 @@ once:                        # staffed once, whatever the units
     role: references/role-chief.md
     record:
       title: "[orchestration]: formation <units> - <family>"
-      tags: [orchestration, formation-day, no-drain]
+      tags: [orchestration, formation-day]
       crew: the chief's
       filed_by: chief
   advisor:                   # optional, started on first need; model is a house choice
@@ -22,7 +22,7 @@ once:                        # staffed once, whatever the units
     role: references/role-advisor.md
     record:
       title: "[advisor]: formation <group> - <family>"
-      tags: [advisor, no-drain]
+      tags: [advisor]
       crew: the advisor's
       filed_by: whoever starts it; an advisor with no card files its own
   aide:
@@ -56,7 +56,7 @@ ranks:
     role: references/role-captain.md
     record:
       title: "[orchestration]: <ws> - <family>"
-      tags: [orchestration, no-drain, "<ws>"]
+      tags: [orchestration, "<ws>"]
       crew: the captain's
       filed_by: chief, before the start
     watch_reader: "formation watch run"   # attention-owning captains register attention/ci and start a reader; others stand by
