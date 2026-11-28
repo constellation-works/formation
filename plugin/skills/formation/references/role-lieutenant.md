@@ -31,8 +31,10 @@ Seat `<ws>-1-lt` (a reinforcement is `<ws>-1-lt2`). Started on demand by your ca
 
 ## You settle
 
-- Authority row: none. You have only your captain's order (**authority**).
-- You do not approve, merge, promote or enable auto-merge.
+- Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. A captain's order assigns work but does not grant authority.
+- When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
+- Without current coverage, report the decision and options to your captain; do not settle it.
+- Do not promote a task or enable auto-merge unless a current entry covers that decision and host permissions allow it.
 
 ## Messages
 

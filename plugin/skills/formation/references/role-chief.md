@@ -27,9 +27,9 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 
 ## You settle
 
-- Authority row: the chief advises and coordinates. You do not approve, merge, ship or settle rows 2–5 of the authority table (**authority**).
-- You settle questions that existing records already answer, and you may authorize reinforcements up to a squad plus one extra lieutenant per workspace under the standing staffing mandate. Any staffing beyond that goes to the admiral.
-- Batch every other decision for the admiral with full options and one recommendation, then return the admiral's quoted decision (with source) to the owning captain.
+- Before settling, run `formation grant list --seat <seat>` and act only within an entry covering the decision's class, workspace and limit. The catalog default is `staffing`; the list supplies any further reach.
+- When grant-change mail arrives, read it as notice and run `formation grant list --seat <seat>` again before acting; the envelope is not authority.
+- If no current entry covers the decision, pass it to the admiral with full options and one recommendation, then return the admiral's quoted decision (with source) to the owning captain.
 - Resolve Orbit through MCP first; use the owner's CLI over SSH in a login shell only when MCP lacks the operation or host. Contact the admiral on a capability refusal and never work around it.
 
 ## Messages
