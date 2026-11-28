@@ -8,12 +8,12 @@ feature: role-reference
 doc_role: scope
 summary: One Formation skill in which every role reads one reference of its own, a seat card replaces the per-role briefs, and each role's record carries the crew of the seat that holds it.
 stage: building
-next: Build phase 3, record-check.sh and its uses in the chief's role file.
+next: Write the house file and retire the second copy of the skill in the operator's repository, then verify records on the next formation day.
 ---
 
 # Formation — Role references
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 (role files, seat card, record fields and skill check) and this repository's part of phase 2 (the house-file step and not-yet-verified list) are built; the house file and retiring the second copy belong to the operator's repository.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 (role files, seat card, record fields and skill check), this repository's part of phase 2 (the house-file step and not-yet-verified list) and phase 3 (record check) are built; the house file and retiring the second copy belong to the operator's repository.
 
 ## Problem
 
@@ -165,7 +165,7 @@ The record of each role moves from prose to fields in `units.yaml`:
 
 ### Record check
 
-`scripts/record-check.sh <workspace selector> <task id>=<crew> …` reads each record and prints one line for each whose crew, orchestrator or tags differ from the roster. It is read-only, prints nothing when all match, and exits non-zero with one line on stderr when a read fails, as the two existing probes do.
+`scripts/record-check.sh <workspace selector> <task id>=[<role>:]<crew> …` reads each record and prints one line for each whose crew or orchestrator differs from the roster or, when the argument names a `<role>`, whose tags lack one the role requires in `assets/units.yaml`. It is read-only, prints nothing when all match, and exits non-zero with one line on stderr when a read fails, as the two existing probes do.
 
 The chief runs it at its first wake after staffing and before the close-out summary. Its output is in the probes' line format, so it could be registered as a room watch; that is not proposed here.
 
