@@ -977,3 +977,236 @@ fn startup_route_check_refuses_a_missing_pointer_despite_a_room_override() {
     ok(&overridden);
     expect_refusal(&check(), "room_required", None);
 }
+
+/// Run a mail verb with `FORMATION_FORMAT` set and stdout piped.
+fn piped_with(room: &Room, seat: &str, format: Option<&str>, args: &[&str]) -> Output {
+    let mut cmd = room.command(seat);
+    if let Some(format) = format {
+        cmd.env("FORMATION_FORMAT", format);
+    }
+    cmd.args(args).output().unwrap()
+}
+
+/// Run a mail verb with stdout on a real terminal.
+#[cfg(unix)]
+fn on_terminal(
+    room: &Room,
+    seat: &str,
+    format: Option<&str>,
+    args: &[&str],
+) -> support::OnTerminal {
+    let mut cmd = room.command(seat);
+    if let Some(format) = format {
+        cmd.env("FORMATION_FORMAT", format);
+    }
+    cmd.args(args);
+    support::on_terminal(cmd)
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+#[cfg(unix)]
+#[test]
+fn a_terminal_gets_human_output_for_every_verb_and_json_overrides_a_human_preference() {
+    let room = Room::new();
+    let join = on_terminal(&room, "chief", None, &["join", "chief"]);
+    assert!(join.status.success(), "{}", join.stderr);
+    let seat_dir = room.0.path().join("seats/chief");
+    assert_eq!(
+        join.stdout,
+        format!("Joined as chief\nSeat folder: {}\n", seat_dir.display())
+    );
+    assert!(join.stderr.is_empty());
+    room.ok("captain", &["join", "captain"]);
+
+    let send = on_terminal(
+        &room,
+        "chief",
+        None,
+        &["send", "captain", "--id", "t-1", "--body", "first\nsecond"],
+    );
+    assert_eq!(
+        send.stdout,
+        "Sent t-1 as receipt 1; recipient is not present\n"
+    );
+
+    let who = on_terminal(&room, "chief", None, &["who"]);
+    let lines: Vec<&str> = who.stdout.lines().collect();
+    assert_eq!(
+        lines[0].split_whitespace().collect::<Vec<_>>(),
+        ["SEAT", "UNDELIVERED", "UNACKNOWLEDGED", "HELD", "SEEN"]
+    );
+    assert_eq!(
+        lines[1].split_whitespace().collect::<Vec<_>>(),
+        ["captain", "1", "1", "no", "-"]
+    );
+    assert_eq!(
+        lines[2].split_whitespace().collect::<Vec<_>>()[..4],
+        ["chief", "0", "0", "yes"]
+    );
+    assert!(serde_json::from_str::<Value>(&who.stdout).is_err());
+
+    let inbox = on_terminal(&room, "captain", None, &["inbox"]);
+    assert!(inbox.stdout.starts_with("Receipt 1 from chief (id t-1)\n"));
+    assert!(inbox.stdout.contains("\n  first\n  second\n"));
+    assert!(inbox.stdout.contains("delivered -\n"));
+
+    let sent = on_terminal(&room, "chief", None, &["sent"]);
+    let header: Vec<&str> = sent
+        .stdout
+        .lines()
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .collect();
+    assert_eq!(header, ["RECEIPT", "ID", "RECIPIENT", "SENT", "STATE"]);
+
+    let ack = on_terminal(&room, "captain", None, &["ack", "1"]);
+    assert_eq!(ack.stdout, "Acknowledged receipt 1\n");
+
+    let empty = on_terminal(&room, "captain", None, &["inbox"]);
+    assert!(empty.stdout.is_empty());
+    assert_eq!(empty.stderr, "No unacknowledged mail.\n");
+
+    for preference in [None, Some("human"), Some("auto"), Some("unrecognized")] {
+        let expected = on_terminal(&room, "chief", preference, &["who"]);
+        assert!(expected.stdout.starts_with("SEAT"), "{preference:?}");
+    }
+    for (preference, args) in [
+        (None, &["who", "--json"][..]),
+        (Some("human"), &["who", "--json"]),
+        (Some("human"), &["--json", "who"]),
+        (Some("json"), &["who"]),
+        (Some("JSON"), &["who"]),
+    ] {
+        let json = on_terminal(&room, "chief", preference, args);
+        let value: Value = serde_json::from_str(&json.stdout).unwrap();
+        assert_eq!(
+            value["seats"].as_array().unwrap().len(),
+            2,
+            "{preference:?}"
+        );
+    }
+    let json_sent = on_terminal(&room, "chief", Some("human"), &["sent", "--json"]);
+    let value: Value = serde_json::from_str(&json_sent.stdout).unwrap();
+    assert_eq!(value["total"], 1);
+    assert_eq!(value["truncated"], false);
+}
+
+#[test]
+fn piped_output_keeps_the_json_envelopes_and_every_verb_accepts_json() {
+    let room = Room::new();
+    let joined = run_ok(room.command("chief").args(["join", "chief"]));
+    let joined_flag = run_ok(room.command("chief").args(["join", "chief", "--json"]));
+    assert_eq!(joined, joined_flag);
+    assert_eq!(joined["seat"], "chief");
+    assert_eq!(joined["rebound"], false);
+    assert!(
+        joined["seat_dir"]
+            .as_str()
+            .unwrap()
+            .ends_with("seats/chief")
+    );
+    room.ok("captain", &["join", "captain"]);
+
+    let send = ["send", "captain", "--id", "p-1", "--body", "hello"];
+    let sent = run_ok(room.command("chief").args(send));
+    let again = run_ok(room.command("chief").args(send).arg("--json"));
+    assert_eq!(sent, again);
+    assert_eq!(sent["receipt"], 1);
+    assert_eq!(sent["held"], false);
+
+    for (verb, key) in [(&["who"][..], "seats"), (&["inbox"][..], "messages")] {
+        let seat = if verb == ["who"] { "chief" } else { "captain" };
+        let plain = run_ok(room.command(seat).args(verb));
+        let flagged = run_ok(room.command(seat).args(verb).arg("--json"));
+        let setting = run_ok(
+            room.command(seat)
+                .env("FORMATION_FORMAT", "json")
+                .args(verb),
+        );
+        let unknown = run_ok(
+            room.command(seat)
+                .env("FORMATION_FORMAT", "pretty")
+                .args(verb),
+        );
+        assert_eq!(plain, flagged);
+        assert_eq!(plain, setting);
+        assert_eq!(plain, unknown);
+        assert!(plain[key].is_array());
+    }
+    let inbox = run_ok(room.command("captain").arg("inbox"));
+    assert_eq!(inbox["messages"][0]["body"], "hello");
+    assert_eq!(inbox["messages"][0]["receipt"], 1);
+
+    let human = piped_with(&room, "captain", Some("human"), &["inbox"]);
+    assert!(text(&human.stdout).starts_with("Receipt 1 from chief (id p-1)\n"));
+
+    let tsv = room.run("chief", &["sent"]);
+    assert!(text(&tsv.stdout).starts_with("1\tp-1\tcaptain\t"));
+    let envelope: Value =
+        serde_json::from_slice(&room.run("chief", &["sent", "--json"]).stdout).unwrap();
+    assert_eq!(envelope["messages"][0]["id"], "p-1");
+    assert_eq!(envelope["total"], 1);
+    assert_eq!(envelope["truncated"], false);
+
+    let ack = run_ok(room.command("captain").args(["ack", "1"]));
+    let ack_flag = run_ok(room.command("captain").args(["ack", "1", "--json"]));
+    assert_eq!(ack, ack_flag);
+    assert_eq!(ack["acknowledged"], 1);
+}
+
+#[test]
+fn failures_are_one_plain_line_for_a_person_and_one_json_object_for_a_machine() {
+    let home = Home::new();
+    let unset = |format: Option<&str>, extra: &[&str]| {
+        let mut cmd = home.command(None, &["who"]);
+        cmd.args(extra);
+        if let Some(format) = format {
+            cmd.env("FORMATION_FORMAT", format);
+        }
+        cmd.output().unwrap()
+    };
+    let message = "room required: pass --room or set FORMATION_ROOM";
+    for (format, extra) in [
+        (None, &[][..]),
+        (None, &["--json"]),
+        (Some("json"), &[]),
+        (Some("human"), &["--json"]),
+    ] {
+        let out = unset(format, extra);
+        assert_eq!(refusal_message(&out, "room_required"), message);
+        let line = text(&out.stderr);
+        let body: Value = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(body.as_object().unwrap().len(), 2);
+    }
+    let out = unset(Some("human"), &[]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty());
+    assert_eq!(text(&out.stderr), format!("error: {message}\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn failures_on_a_terminal_are_plain_unless_json_is_asked_for() {
+    let room = Room::new();
+    room.ok("chief", &["join", "chief"]);
+    let args = ["send", "nobody", "--id", "x-1", "--body", "hi"];
+    let human = on_terminal(&room, "chief", None, &args);
+    assert_eq!(human.status.code(), Some(1));
+    assert!(human.stdout.is_empty());
+    assert!(human.stderr.starts_with("error: "), "{}", human.stderr);
+    assert_eq!(human.stderr.lines().count(), 1);
+    assert!(human.stderr.contains("not joined"), "{}", human.stderr);
+
+    let mut flagged = args.to_vec();
+    flagged.push("--json");
+    let machine = on_terminal(&room, "chief", Some("human"), &flagged);
+    assert_eq!(machine.status.code(), Some(1));
+    assert!(machine.stdout.is_empty());
+    let body: Value = serde_json::from_str(machine.stderr.trim()).unwrap();
+    assert_eq!(body["code"], "unknown_recipient");
+    assert_eq!(machine.stderr.lines().count(), 1);
+}

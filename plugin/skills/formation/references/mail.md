@@ -14,8 +14,9 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 | Inspect unacknowledged mail and leave it pending | `formation mail inbox` |
 | Acknowledge handled mail (writes the receipt state) | `formation mail ack "$receipt"` |
 
+- Mail commands print readable text on a terminal and JSON when piped. A command run through a tool or script is piped, so it already prints JSON; add `--json` (or set `FORMATION_FORMAT=json`) to a call whose output you parse, such as the `receipt` from a send, the `held` and counts from `who`, or the `seat_dir` from `join`. A refusal is one JSON line on stderr with `code` and `error` in that form, and `error: <message>` otherwise.
 - For a send, use the admiral’s request or standing permission covering this recipient and content. If either is unclear, ask before sending.
-- Choose a fresh ID for a new message. On a retry, reuse the same ID, recipient and body. For example, `{"id":"ci-1","receipt":7}` confirms storage. If the CLI refuses an `unknown_recipient`, report the refusal and the joined seats it lists. If it reports an ID conflict, reconcile the earlier send before sending again.
+- Choose a fresh ID for a new message. On a retry, reuse the same ID, recipient and body. For example, `formation mail send --json` returns `{"id":"ci-1","receipt":7,"held":false}`, which confirms storage. If the CLI refuses an `unknown_recipient`, report the refusal and the joined seats it lists. If it reports an ID conflict, reconcile the earlier send before sending again.
 - Use `held` as a recent-presence signal. A receipt confirms that mail is stored. Check `formation mail who` for the seat’s current `held` status and its two counts.
 - `mail who` counts two things per seat. `undelivered` is mail no hook has delivered and the seat has not acknowledged. `unacknowledged` is every envelope the seat has not acknowledged, delivered or not.
 - Read `undelivered` to tell whether a hooked seat is being reached: 0 means every envelope reached its turn, and a count that stays above 0 means the hook is not delivering.

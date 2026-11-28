@@ -28,3 +28,9 @@ fn error_payload(error: &formation_core::Error) -> Value {
         "error": error.to_string(),
     })
 }
+
+/// Print `error: <message>` for a person reading the terminal.
+pub(crate) fn plain_error(error: &formation_core::Error) -> ExitCode {
+    let _ = writeln!(io::stderr().lock(), "error: {error}");
+    ExitCode::FAILURE
+}

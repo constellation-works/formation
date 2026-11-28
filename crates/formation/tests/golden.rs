@@ -14,6 +14,8 @@ use support::SpawnedChild;
 
 const EXAMPLE: &[u8] = include_bytes!("../../../examples/roster.json");
 
+const HUMAN: [(&str, &str); 1] = [("FORMATION_FORMAT", "human")];
+
 fn run(args: &[&str], input: &[u8]) -> Output {
     let root = TempRoot::new("FORMATION").unwrap();
     let mut child = root
@@ -111,6 +113,21 @@ fn in_room(root: &TempRoot, cwd: &std::path::Path, args: &[&str]) -> String {
     String::from_utf8(result.stdout).unwrap()
 }
 
+/// Like `in_room`, with environment variables set and the command's whole result returned.
+fn in_room_env(
+    root: &TempRoot,
+    cwd: &std::path::Path,
+    env: &[(&str, &str)],
+    args: &[&str],
+) -> Output {
+    let mut cmd = root.command(env!("CARGO_BIN_EXE_formation"));
+    cmd.args(args).current_dir(cwd);
+    for (name, value) in env {
+        cmd.env(name, value);
+    }
+    cmd.output().unwrap()
+}
+
 #[test]
 fn mail_who_output() {
     let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
@@ -136,6 +153,86 @@ fn mail_who_output() {
     goldens
         .check("output/mail-who.json", &redact_timestamps(&who))
         .unwrap();
+    let human = in_room_env(
+        &root,
+        &cwd,
+        &HUMAN,
+        &["mail", "who", "--room", &room, "--as", "chief"],
+    );
+    assert!(human.status.success());
+    assert!(human.stderr.is_empty());
+    goldens
+        .check(
+            "output/mail-who.txt",
+            &redact_timestamps(std::str::from_utf8(&human.stdout).unwrap()),
+        )
+        .unwrap();
+}
+
+#[test]
+fn mail_inbox_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let room = root.path().to_str().unwrap().to_owned();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for seat in ["captain", "chief"] {
+        in_room(&root, &cwd, &["mail", "join", seat, "--room", &room]);
+    }
+    for (id, body) in [("in-1", "CI finished"), ("in-2", "first line\nsecond line")] {
+        in_room(
+            &root,
+            &cwd,
+            &[
+                "mail", "send", "captain", "--room", &room, "--as", "chief", "--id", id, "--body",
+                body,
+            ],
+        );
+    }
+    let inbox = ["mail", "inbox", "--room", &room, "--as", "captain"];
+    let json = in_room(&root, &cwd, &inbox);
+    goldens
+        .check("output/mail-inbox.json", &redact_timestamps(&json))
+        .unwrap();
+    let human = in_room_env(&root, &cwd, &HUMAN, &inbox);
+    assert!(human.status.success());
+    assert!(human.stderr.is_empty());
+    goldens
+        .check(
+            "output/mail-inbox.txt",
+            &redact_timestamps(std::str::from_utf8(&human.stdout).unwrap()),
+        )
+        .unwrap();
+}
+
+#[test]
+fn mail_room_required_output() {
+    let goldens = Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"));
+    let root = TempRoot::new("FORMATION").unwrap();
+    let cwd = std::fs::canonicalize(root.home()).unwrap();
+    for (name, env, args) in [
+        (
+            "output/mail-room-required.json",
+            &[][..],
+            &["mail", "who"][..],
+        ),
+        (
+            "output/mail-room-required.txt",
+            &HUMAN[..],
+            &["mail", "who"][..],
+        ),
+        (
+            "output/mail-room-required.json",
+            &HUMAN[..],
+            &["mail", "who", "--json"][..],
+        ),
+    ] {
+        let result = in_room_env(&root, &cwd, env, args);
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stdout.is_empty());
+        goldens
+            .check(name, std::str::from_utf8(&result.stderr).unwrap())
+            .unwrap();
+    }
 }
 
 #[test]

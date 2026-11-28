@@ -1,0 +1,8 @@
+Receipt 1 from chief (id in-1)
+Sent <timestamp>, delivered -
+  CI finished
+
+Receipt 2 from chief (id in-2)
+Sent <timestamp>, delivered -
+  first line
+  second line

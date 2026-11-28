@@ -1,6 +1,6 @@
 //! `formation mail join` argument mapping and Scribe seat discovery.
 
-use crate::output;
+use crate::output::{self, Mode};
 use clap::Args;
 use formation_core::Env;
 use formation_core::app::mail;
@@ -16,7 +16,7 @@ pub(super) struct Join {
     name: Option<String>,
 }
 
-pub(super) fn run(mut env: Env, explicit_room: bool, args: Join) -> ExitCode {
+pub(super) fn run(mut env: Env, explicit_room: bool, args: Join, mode: Mode) -> ExitCode {
     let name = match args.name {
         Some(name) => name,
         None => match env.scribe_join(explicit_room, run_scribe) {
@@ -24,12 +24,11 @@ pub(super) fn run(mut env: Env, explicit_room: bool, args: Join) -> ExitCode {
                 env = resolved;
                 name
             }
-            Err(error) => return output::error(&error),
+            Err(error) => return output::mail_failure(&error, mode),
         },
     };
-    mail::exec(&env, Command::Join(name), |result| match result {
-        Ok(out) => output::mail_write(&output::mail_payload(out)),
-        Err(error) => output::error(&error),
+    mail::exec(&env, Command::Join(name), |result| {
+        output::mail_result(result, mode)
     })
 }
 

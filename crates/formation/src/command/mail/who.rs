@@ -1,6 +1,6 @@
 //! `formation mail who` argument mapping.
 
-use crate::output;
+use crate::output::{self, Mode};
 use clap::Args;
 use formation_core::Env;
 use formation_core::app::mail;
@@ -11,9 +11,8 @@ use std::process::ExitCode;
 #[derive(Args)]
 pub(super) struct Who;
 
-pub(super) fn run(env: &Env) -> ExitCode {
-    mail::exec(env, Command::Who, |result| match result {
-        Ok(out) => output::mail_write(&output::mail_payload(out)),
-        Err(error) => output::error(&error),
+pub(super) fn run(env: &Env, mode: Mode) -> ExitCode {
+    mail::exec(env, Command::Who, |result| {
+        output::mail_result(result, mode)
     })
 }

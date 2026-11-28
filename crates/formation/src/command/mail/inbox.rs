@@ -1,6 +1,6 @@
 //! `formation mail inbox` argument mapping.
 
-use crate::output;
+use crate::output::{self, Mode};
 use clap::Args;
 use formation_core::Env;
 use formation_core::app::mail;
@@ -16,13 +16,10 @@ pub(super) struct Inbox {
     wait: u64,
 }
 
-pub(super) fn run(env: &Env, args: Inbox) -> ExitCode {
+pub(super) fn run(env: &Env, args: Inbox, mode: Mode) -> ExitCode {
     mail::exec(
         env,
         Command::Inbox(Duration::from_secs(args.wait)),
-        |result| match result {
-            Ok(out) => output::mail_write(&output::mail_payload(out)),
-            Err(error) => output::error(&error),
-        },
+        |result| output::mail_result(result, mode),
     )
 }

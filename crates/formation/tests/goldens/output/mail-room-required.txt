@@ -1,0 +1,1 @@
+error: room required: pass --room or set FORMATION_ROOM
