@@ -55,6 +55,23 @@ impl Room {
         cmd
     }
 
+    fn store(&self, room: &str) -> formation_store::Store {
+        formation_store::Store::open(&self.0.path().join("rooms").join(room)).unwrap()
+    }
+
+    fn clear_roster(&self, room: &str) {
+        // Seed an empty applied roster while retaining existing request rows.
+        let roster = formation_store::decode(br#"{"version":2,"seats":[],"routes":[]}"#).unwrap();
+        self.store(room)
+            .write(|tx| tx.roster().replace(&roster))
+            .unwrap();
+    }
+
+    fn request_debug(&self, room: &str, id: &str) -> String {
+        let snapshot = self.store(room).read().unwrap();
+        format!("{:#?}", snapshot.requests().get(id).unwrap().unwrap())
+    }
+
     fn join(&self, seat: &str) {
         let out = self
             .command()
@@ -492,6 +509,125 @@ fn every_request_command_requires_an_applied_roster() {
         room.refuse(Some(CAPTAIN), args, "no_roster");
     }
     room.refuse(None, &["list"], "no_roster");
+}
+
+#[test]
+fn admiral_settlement_and_reopen_require_a_roster_and_leave_requests_unchanged() {
+    let room = Room::new(&[CHIEF, CAPTAIN]);
+    room.apply_roster();
+
+    let reopened = room.json(Some(CAPTAIN), OPEN);
+    let reopened_id = reopened["id"].as_str().unwrap();
+    room.json(
+        Some(CHIEF),
+        &[
+            "settle",
+            reopened_id,
+            "--option",
+            "a",
+            "--admiral",
+            "--source",
+            "operator chat",
+        ],
+    );
+
+    let unsettled = room.json(Some(CAPTAIN), OPEN);
+    let unsettled_id = unsettled["id"].as_str().unwrap();
+    let reopened_before = room.request_debug("trial", reopened_id);
+    let unsettled_before = room.request_debug("trial", unsettled_id);
+
+    room.clear_roster("trial");
+    room.refuse(
+        Some(CHIEF),
+        &["reopen", reopened_id, "--admiral"],
+        "no_roster",
+    );
+    room.refuse(
+        Some(CHIEF),
+        &[
+            "settle",
+            unsettled_id,
+            "--option",
+            "b",
+            "--admiral",
+            "--source",
+            "operator chat",
+        ],
+        "no_roster",
+    );
+
+    assert_eq!(room.request_debug("trial", reopened_id), reopened_before);
+    assert_eq!(room.request_debug("trial", unsettled_id), unsettled_before);
+}
+
+#[test]
+fn carry_requires_a_destination_roster_and_leaves_both_rooms_unchanged() {
+    let room = Room::new(&[CHIEF, CAPTAIN]);
+    room.apply_roster();
+    let source = room.json(Some(CAPTAIN), OPEN);
+    let source_id = source["id"].as_str().unwrap();
+    let source_before = room.request_debug("trial", source_id);
+
+    let mut join = room.command();
+    join.env(
+        "CLAUDE_CODE_SESSION_ID",
+        format!("session-{CAPTAIN}-tomorrow"),
+    )
+    .args(["mail", "join", CAPTAIN, "--room", "tomorrow"]);
+    success(join.output().unwrap());
+
+    let destination = room.store("tomorrow");
+    let destination_before = destination.read().unwrap().requests().list().unwrap();
+    assert!(destination_before.is_empty());
+
+    let mut carry = room.command();
+    carry
+        .env(
+            "CLAUDE_CODE_SESSION_ID",
+            format!("session-{CAPTAIN}-tomorrow"),
+        )
+        .args([
+            "request", "carry", "--room", "tomorrow", "--from", "trial", "--json",
+        ]);
+    let out = carry.output().unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty());
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(error["code"], "no_roster", "{error}");
+
+    assert!(
+        destination
+            .read()
+            .unwrap()
+            .requests()
+            .list()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(room.request_debug("trial", source_id), source_before);
+}
+
+#[test]
+fn unauthorized_settlement_names_the_default_admiral_holder() {
+    let room = Room::new(&[CHIEF, CAPTAIN]);
+    room.apply_roster();
+    let opened = room.json(Some(CAPTAIN), OPEN);
+    let id = opened["id"].as_str().unwrap();
+    let before = room.json(None, &["show", id]);
+
+    let refusal = room.refuse(
+        Some(CAPTAIN),
+        &["settle", id, "--option", "a"],
+        "not_authorized",
+    );
+    assert!(
+        refusal["error"]
+            .as_str()
+            .unwrap()
+            .contains("default holder: admiral"),
+        "{refusal}"
+    );
+    assert_eq!(room.json(None, &["show", id]), before);
 }
 
 #[test]
