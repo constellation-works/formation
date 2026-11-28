@@ -6,7 +6,7 @@ use formation_core::Env;
 use formation_core::app::mail::{self, Command};
 use std::process::ExitCode;
 
-/// Show one envelope in full.
+/// Show an envelope and its thread in full.
 #[derive(Args)]
 pub(super) struct Show {
     /// Durable receipt number.

@@ -1096,18 +1096,15 @@ fn mail_log_and_show_output() {
     for seat in ["alpha", "beta", "gamma"] {
         in_room(&root, &cwd, &["mail", "join", seat, "--room", room]);
     }
-    for (sender, recipient, id, body) in [
-        ("alpha", "beta", "one", "first\nsecond"),
-        ("beta", "gamma", "two", "other"),
+    for (sender, recipient, id, body, reply) in [
+        ("alpha", "beta", "one", "first\nsecond", &[][..]),
+        ("beta", "gamma", "two", "other", &["--re", "1"][..]),
     ] {
-        in_room(
-            &root,
-            &cwd,
-            &[
-                "mail", "send", recipient, "--as", sender, "--room", room, "--id", id, "--body",
-                body,
-            ],
-        );
+        let mut args = vec![
+            "mail", "send", recipient, "--as", sender, "--room", room, "--id", id, "--body", body,
+        ];
+        args.extend_from_slice(reply);
+        in_room(&root, &cwd, &args);
     }
     for (name, args, env) in [
         (
@@ -1121,14 +1118,41 @@ fn mail_log_and_show_output() {
             &[][..],
         ),
         (
+            "output/mail-log-threads.txt",
+            vec![
+                "mail",
+                "log",
+                "--as",
+                "admiral",
+                "--room",
+                room,
+                "--threads",
+            ],
+            &HUMAN[..],
+        ),
+        (
+            "output/mail-log-threads.json",
+            vec![
+                "mail",
+                "log",
+                "--as",
+                "admiral",
+                "--room",
+                room,
+                "--threads",
+                "--json",
+            ],
+            &[][..],
+        ),
+        (
             "output/mail-show.txt",
-            vec!["mail", "show", "1", "--as", "alpha", "--room", room],
+            vec!["mail", "show", "1", "--as", "beta", "--room", room],
             &HUMAN[..],
         ),
         (
             "output/mail-show.json",
             vec![
-                "mail", "show", "1", "--as", "alpha", "--room", room, "--json",
+                "mail", "show", "2", "--as", "beta", "--room", room, "--json",
             ],
             &[][..],
         ),

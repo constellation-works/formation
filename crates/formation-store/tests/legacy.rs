@@ -21,7 +21,10 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
 
 /// Undo the request-mail step, so the file matches release 22's schema.
 fn drop_request_mail(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
-    connection.execute_batch("ALTER TABLE messages DROP COLUMN request_id;")
+    connection.execute_batch(
+        "ALTER TABLE messages DROP COLUMN reply_to;
+         ALTER TABLE messages DROP COLUMN request_id;",
+    )
 }
 
 /// Undo the house grants step, so the file matches release 21's schema.

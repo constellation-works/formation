@@ -42,6 +42,10 @@ pub(crate) const TERMINAL_MAIL_SCHEMA_VERSION: u32 = 21;
 
 pub(crate) const GRANT_HOUSE_SCHEMA_VERSION: u32 = 22;
 
+pub(crate) const REQUEST_MAIL_SCHEMA_VERSION: u32 = 23;
+
+pub(crate) const REPLY_MAIL_SCHEMA_VERSION: u32 = 24;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -66,4 +70,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     message::TERMINAL,
     grant::HOUSE,
     message::REQUEST,
+    message::REPLY,
 ];

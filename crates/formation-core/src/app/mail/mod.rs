@@ -14,6 +14,8 @@ pub(super) mod send;
 
 mod sent;
 
+mod thread;
+
 pub(crate) mod who;
 
 use crate::Env;
@@ -50,6 +52,8 @@ pub enum Command<'a> {
         id: String,
         /// Contents.
         body: String,
+        /// Receipt this envelope answers.
+        reply_to: Option<i64>,
         /// Queue a fixed wake for an idle Codex session.
         queue: &'a dyn Fn(&str) -> bool,
     },
@@ -59,7 +63,7 @@ pub enum Command<'a> {
     Sent(i64),
     /// Read room history.
     Log(LogOptions),
-    /// Read one envelope.
+    /// Read one envelope and its thread.
     Show(i64),
     /// Acknowledge a receipt.
     Ack(i64),
@@ -79,6 +83,16 @@ pub struct LogOptions {
     pub no_watch: bool,
     /// Show full bodies.
     pub full: bool,
+    /// Group linked envelopes.
+    pub threads: bool,
+}
+
+/// A thread's visible envelopes and participants.
+pub struct Thread {
+    /// Distinct sending and receiving seats, in name order.
+    pub seats: Vec<String>,
+    /// Matching thread envelopes in receipt order.
+    pub messages: Vec<LogMessage>,
 }
 
 /// Mail outcomes, independent of CLI presentation.
@@ -119,8 +133,22 @@ pub enum Outcome {
         /// Whether to render complete bodies.
         full: bool,
     },
-    /// One envelope.
-    Show(LogMessage),
+    /// Linked groups in the room history.
+    Threads {
+        /// Matching groups, newest first.
+        threads: Vec<Thread>,
+        /// Number of groups before the limit.
+        total: usize,
+        /// Whether to render complete bodies.
+        full: bool,
+    },
+    /// One envelope and its visible thread.
+    Show {
+        /// Position of the requested envelope within its thread.
+        selected: usize,
+        /// Visible envelopes, in receipt order.
+        thread: Vec<LogMessage>,
+    },
     /// Handled receipt.
     Ack(i64),
 }
@@ -175,9 +203,9 @@ impl<'a> App for Mail<'a> {
             | Command::Send { .. }
             | Command::Inbox(_)
             | Command::Sent(_)
-            | Command::Log(_)
-            | Command::Show(_)
             | Command::Ack(_) => RoomAccess::Member,
+            // Resolve membership inside the history snapshot, without opening a second reader.
+            Command::Log(_) | Command::Show(_) => RoomAccess::OptionalMember,
         }
     }
 
@@ -238,7 +266,13 @@ impl<'a> App for Mail<'a> {
             Caller::Admiral => SeatRef::Admiral,
             Caller::Explicit(name) => SeatRef::Name(name),
             Caller::Session(session) => SeatRef::Session(session),
-            Caller::Join { .. } | Caller::None => {
+            Caller::None => {
+                return Err(refused(
+                    "seat_required",
+                    "seat required: pass --as <seat> or join this room from your session",
+                ));
+            }
+            Caller::Join { .. } => {
                 return Err(Error::new(
                     Kind::Internal,
                     "missing_context",
@@ -258,9 +292,16 @@ impl<'a> App for Mail<'a> {
                 to,
                 id,
                 body,
+                reply_to,
                 queue,
             } => {
-                let (outcome, inserted) = send::commit(&mail.store, seat, now, &to, id, &body)?;
+                let draft = send::Draft {
+                    to: &to,
+                    id,
+                    body: &body,
+                    reply_to,
+                };
+                let (outcome, inserted) = send::commit(&mail.store, seat, now, draft)?;
                 if inserted {
                     super::wake::after_commit(ctx, &to, queue);
                 }
@@ -282,7 +323,8 @@ impl<'a> App for Mail<'a> {
             | Outcome::Inbox(_)
             | Outcome::SentHistory { .. }
             | Outcome::Log { .. }
-            | Outcome::Show(_) => None,
+            | Outcome::Threads { .. }
+            | Outcome::Show { .. } => None,
         }
     }
 }

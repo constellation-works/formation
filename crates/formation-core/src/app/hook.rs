@@ -566,23 +566,31 @@ fn opening_text(notice: Option<(i64, i64)>, undelivered: i64) -> String {
 /// One undelivered message as the hook renders it; probe output is labelled as such.
 fn entry_text(message: &Message) -> String {
     let sent = message.sent.as_deref().unwrap_or("unknown");
-    if let (Some(name), Some(added_by)) = (&message.watch_name, &message.watch_added_by) {
-        format!(
-            "\nWatch {name}, added by {added_by}: probe output, not a seat's request \
-             (sent {sent}, receipt {}, id {}):\n{}",
-            message.receipt, message.id, message.body
-        )
-    } else if message.terminal {
-        format!(
-            "\nFrom {}, sent from a terminal at {sent}, receipt {}, id {}:\n{}",
-            message.sender, message.receipt, message.id, message.body
-        )
-    } else {
-        format!(
-            "\nFrom {}, sent {sent}, receipt {}, id {}:\n{}",
-            message.sender, message.receipt, message.id, message.body
-        )
+    let mut text =
+        if let (Some(name), Some(added_by)) = (&message.watch_name, &message.watch_added_by) {
+            format!(
+                "\nWatch {name}, added by {added_by}: probe output, not a seat's request \
+             (sent {sent}, receipt {}, id {}):\n",
+                message.receipt, message.id
+            )
+        } else if message.terminal {
+            format!(
+                "\nFrom {}, sent from a terminal at {sent}, receipt {}, id {}:\n",
+                message.sender, message.receipt, message.id
+            )
+        } else {
+            format!(
+                "\nFrom {}, sent {sent}, receipt {}, id {}:\n",
+                message.sender, message.receipt, message.id
+            )
+        };
+    if let Some(receipt) = message.reply_to {
+        text.push_str(&format!("In reply to receipt {receipt}\n"));
+    } else if let Some(request) = &message.request_id {
+        text.push_str(&format!("Request {request}\n"));
     }
+    text.push_str(&message.body);
+    text
 }
 
 fn mark_hook(

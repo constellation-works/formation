@@ -3,3 +3,9 @@ From alpha to beta
 Sent <timestamp>, delivered -, state stored
 first
 second
+
+Receipt 2 (id two)
+From beta to gamma
+Sent <timestamp>, delivered -, state stored
+In reply to receipt 1
+other

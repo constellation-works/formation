@@ -205,7 +205,7 @@ fn open_reports_the_parent_and_delivers_through_the_hook() {
     let context = hook["hookSpecificOutput"]["additionalContext"]
         .as_str()
         .unwrap();
-    assert!(context.contains(id), "{context}");
+    assert!(context.contains(&format!("\nRequest {id}\n")), "{context}");
 
     let mut args = OPEN.to_vec();
     args[2] = "credentials";

@@ -19,6 +19,9 @@ pub(super) struct Send {
     /// Message text (up to 8192 bytes).
     #[arg(long)]
     body: String,
+    /// Reply to a receipt from your mail log.
+    #[arg(long = "re", value_name = "RECEIPT")]
+    reply_to: Option<i64>,
 }
 
 pub(super) fn run(env: &Env, args: Send, queue: &dyn Fn(&str) -> bool, mode: Mode) -> ExitCode {
@@ -27,6 +30,7 @@ pub(super) fn run(env: &Env, args: Send, queue: &dyn Fn(&str) -> bool, mode: Mod
         to: args.to,
         id: args.id,
         body: args.body,
+        reply_to: args.reply_to,
         queue,
     };
     mail::exec(env, cmd, |result| output::mail_result(result, mode))

@@ -36,6 +36,10 @@ pub(super) const TERMINAL: cw_sqlite::Step = cw_sqlite::Step::sql(
          CHECK(terminal IN (0, 1));",
 );
 
-/// Request identifier carried by an envelope that routes a request to the admiral.
+/// Request identifier carried by a request notification.
 pub(super) const REQUEST: cw_sqlite::Step =
     cw_sqlite::Step::sql("ALTER TABLE messages ADD COLUMN request_id TEXT;");
+
+/// Receipt answered by an envelope.
+pub(super) const REPLY: cw_sqlite::Step =
+    cw_sqlite::Step::sql("ALTER TABLE messages ADD COLUMN reply_to INTEGER;");

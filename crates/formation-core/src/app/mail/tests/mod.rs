@@ -9,6 +9,15 @@ fn absence_holds_new_mail_and_preserves_replays() -> Result<(), Box<dyn std::err
     join::run(&store, None, "captain".into(), None)?;
     let chief = SeatRef::Name("chief");
     let captain = SeatRef::Name("captain");
+    let send = |now, id: &str, body| {
+        let draft = send::Draft {
+            to: "captain",
+            id: id.into(),
+            body,
+            reply_to: None,
+        };
+        send::commit(&store, chief, now, draft)
+    };
 
     let (
         Outcome::Sent {
@@ -17,17 +26,17 @@ fn absence_holds_new_mail_and_preserves_replays() -> Result<(), Box<dyn std::err
             ..
         },
         true,
-    ) = send::commit(&store, chief, 100, "captain", "first".into(), "hello")?
+    ) = send(100, "first", "hello")?
     else {
         panic!("send outcome")
     };
     who::run(&store, captain, 100)?;
-    let near = send::commit(&store, chief, 150, "captain", "second".into(), "more")?;
+    let near = send(150, "second", "more")?;
     assert!(matches!(near, (Outcome::Sent { held: true, .. }, true)));
-    let late = send::commit(&store, chief, 190, "captain", "third".into(), "again")?;
+    let late = send(190, "third", "again")?;
     assert!(matches!(late, (Outcome::Sent { held: false, .. }, true)));
 
-    let replay = send::commit(&store, chief, 190, "captain", "first".into(), "hello")?;
+    let replay = send(190, "first", "hello")?;
     assert!(matches!(replay, (Outcome::Sent { receipt: id, .. }, false) if id == receipt));
 
     ack::run(&store, captain, 190, receipt)?;
