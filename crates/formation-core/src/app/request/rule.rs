@@ -2,6 +2,7 @@
 
 use super::Filter;
 use cw_base::{Error, Kind};
+use formation_store::RosterSeat;
 use formation_store::contract::{Request, RequestOption, RequestState, identifier};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -13,6 +14,9 @@ const MIN_OPTIONS: usize = 2;
 const MAX_OPTIONS: usize = 4;
 
 const MAX_LABEL_BYTES: usize = 16;
+
+/// Roles whose requests the chief holds first.
+const CHIEF_ROUTED: [&str; 3] = ["captain", "advisor", "aide"];
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum Failure {
@@ -42,6 +46,10 @@ pub(super) enum Failure {
     NotSettled(String),
     #[error("the current roster has no chief")]
     NoChief,
+    #[error("the current roster has more than one chief ({0}); name one as `reports_to` for `{1}`")]
+    AmbiguousChief(String, String),
+    #[error("`{0}` reports to `{1}`, which is not a chief seat; a request must go to the chief")]
+    ParentNotChief(String, String),
     #[error("could not reserve an envelope identifier for the request")]
     MailIdentifierExhausted,
 }
@@ -52,6 +60,8 @@ impl From<Failure> for Error {
             Failure::AdmiralRequired => "admiral_required",
             Failure::NotSettled(_) => "request_not_settled",
             Failure::NoChief => "chief_required",
+            Failure::AmbiguousChief(..) => "chief_ambiguous",
+            Failure::ParentNotChief(..) => "request_parent_not_chief",
             Failure::SeatRequired => "seat_required",
             Failure::UnjoinedSeat(_) => "unknown_seat",
             Failure::UnknownRequest(_) => "unknown_request",
@@ -136,6 +146,37 @@ impl ListFilter {
         self.since.is_none_or(|since| {
             request.updated_at >= since || request.advice.iter().any(|advice| advice.at >= since)
         })
+    }
+}
+
+/// Pick who holds a request the asker opens.
+///
+/// A captain, advisor or aide goes to the chief: its explicit parent when that seat is a
+/// chief, otherwise the sole chief in the roster. Other seats keep their parent.
+pub(super) fn holder(asker: &RosterSeat, roster: &[RosterSeat]) -> Result<Option<String>, Error> {
+    if !CHIEF_ROUTED.contains(&asker.role.as_str()) {
+        return Ok(asker.reports_to.clone());
+    }
+    let is_chief = |name: &str| {
+        roster
+            .iter()
+            .any(|seat| seat.name == name && seat.role == "chief")
+    };
+    if let Some(parent) = &asker.reports_to {
+        if is_chief(parent) {
+            return Ok(Some(parent.clone()));
+        }
+        return Err(Failure::ParentNotChief(asker.name.clone(), parent.clone()).into());
+    }
+    let mut chiefs = roster.iter().filter(|seat| seat.role == "chief");
+    match (chiefs.next(), chiefs.next()) {
+        (None, _) => Err(Failure::NoChief.into()),
+        (Some(chief), None) => Ok(Some(chief.name.clone())),
+        (Some(first), Some(second)) => Err(Failure::AmbiguousChief(
+            format!("{}, {}", first.name, second.name),
+            asker.name.clone(),
+        )
+        .into()),
     }
 }
 
