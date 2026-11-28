@@ -69,3 +69,8 @@ Expected: Do not ask in its chat. Run `formation grant list --seat orbit-0-capt`
 
 Request: Two requests reach the chief that it cannot settle. `formation request show <request> --json` reports `blocking: true` for one and `blocking: false` for the other. What should the chief do with each?
 Expected: Pass both to the admiral with one recommendation each (`formation request pass`). Announce only the blocking one, once, as one line with its id, the asker and the one-sentence ask, through the notification in its host's provider procedure ("Announce a blocking request"), and name the id as announced in its turn end. Carry no option text in the line. Where that procedure says the host has no notification, send nothing and let the request wait for the list. Announce the non-blocking one never; it waits for `formation request list --waiting admiral`.
+
+## 15. House file precedence and seat-card skip
+
+Request: A chief runs in a checkout whose instruction file names a Formation house file, then fills seat cards (`house rules: /path/to/house.md`) for one shift and (`house rules: none`) for another shift's sergeant.
+Expected: The chief reads the named house file after `SKILL.md`, applies choices in order (admiral's current words, house file, skill defaults), treats the house file as a record of choices granting no new authority, and writes its path on every seat card. Each seat reads the named house file during its First turn when present, and skips that step when its card says `none`.

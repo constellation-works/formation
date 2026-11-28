@@ -2,7 +2,7 @@
 title: "Vision: a self-regulating formation"
 owner: claude
 created_date: 2026-11-16
-updated_date: 2026-11-25
+updated_date: 2026-11-28
 status: Accepted
 feature: formation
 doc_role: vision
@@ -206,3 +206,19 @@ Each step is useful alone, and none needs the next.
   handler?
 - Is an incident a new Orbit record, or a task type with these fields?
 - What is the exit condition for an incident that is a question and not a fault?
+
+## Not yet verified
+
+Operational assumptions carried forward from skill trials that remain unverified against recorded runs in this repository (the earlier skill section marks detached native-message delivery and a solo captain's own attention reads as verified, so this list omits them):
+
+- **Unverified — remaining CLI executor actions across owner, follower, and desktop routes:** Owner-route task approval, ship, run reads, requeue, and attention were observed, and routine enablement is documented as something an agent session cannot do; which remaining CLI executor actions honor operator capability on the owner and through a follower or desktop route (especially landing, drain control, remaining recovery actions, and routine control) is unverified.
+- **Unverified — sergeant native source repair and refresh:** Native source repair and refresh performed by a sergeant for a red or conflicting pull request (distinct from an earlier orchestrator source-repair run) is unverified.
+- **Unverified — sentry attention-wait grant and waking kinds:** An unprivileged attention probe holds no operator capability and a captain's federated attempt was refused; whether a sentry can mint and use an attention-wait grant, and exactly which attention kinds wake it, is unverified.
+- **Unverified — sergeant heartbeat hold and intervening mail:** Wait durations above 55 minutes have not been trialled; whether a sergeant's periodic heartbeat maintains the hold over a full night and whether intervening mail wakes it is unverified.
+- **Unverified — chief periodic merged-PR review and routing across a full shift:** Whether the chief's periodic merged-pull-request review and routing work through a full shift is unverified in recorded shift runs.
+- **Unverified — attached polling waking a parent at every child turn end:** Provider-specific evidence differs and remains incomplete: on Codex Desktop (build 26.1120.41243), an idle parent showed no new turn three minutes after a child completed, and none 41 seconds after a child completed following an explicit collaboration message; the formation overview states that an idle parent is woken once none of its children is still working, but whether an attached poller wakes its parent at every child turn end is unverified in a recorded run.
+- **Unverified — hourly digest for older review-waiting items and duo sentry mail turn cost:** Empty sentry turns during a five-hour run were not counted; whether hourly digest rules for older review-waiting items leave a usable captain wake, and whether direct duo sentry mail has tolerable turn cost, is unverified.
+- **Unverified — read-only lieutenant worktrees and component-local staffing:** Project-root restrictions for some starts are known; whether a read-only lieutenant can use an isolated worktree, and whether component-local staffing loads the expected project instructions, starts subordinates there, and addresses lifecycle controls across projects, is unverified.
+- **Unverified — self-clear restoration and chief fallback timer across compaction:** Self-clear itself was demonstrated while the first handoff recovery attempt failed; whether self-clear restores the handoff and Scribe seat, and whether the chief's fallback timer survives compaction, is unverified.
+- **Unverified — Scribe group close after opener clear:** Whether Scribe group close works from the original opener after it clears, and how the older model-backed close, shell issues, or substitute approval flow apply to the current Scribe command, is unverified.
+- **Unverified — typed-turn exclusion and group-open related-task syntax:** Whether peer messages and scheduled prompts stay excluded from the operator's typed-turn record, and whether Scribe group-open related-task syntax works on a live store (no verified live use is recorded in this repository), is unverified.

@@ -5,7 +5,7 @@ Seat `0-aide`. Started by `0-chief` for the admiral. Personal assistant for the 
 ## First turn
 
 1. Load the `scribe` skill and join the day's group once: `scribe group join <group> --as 0-aide --author <your model name> --role aide`. Do not join again after a refresh.
-2. Join Formation mail once (`formation mail join --json`, or `formation mail join 0-aide --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when relaying across providers. Save your seat card to `<seat_dir>/card.md`.
+2. Join Formation mail once (`formation mail join --json`, or `formation mail join 0-aide --room <group> --json` if Scribe is unavailable) so you have a seat folder (`seat_dir`) and cross-provider mail when relaying across providers. Save your seat card to `<seat_dir>/card.md`. Read the house file named on your card when one is named, and skip this step when the card says `none`.
 3. As your first message and before anything else, brief the admiral with:
    - **Last formation:** `scribe group list --json` for the newest group of kind `formation` other than today's, read with `scribe group show <id> --json`. Give its summary in a few lines and end with its id. If still open, say it was not closed out. With none, skip this.
    - **Previous session:** newest cataloged session of this project (`scribe session list --project <project> --json`, newest `updated`, skipping your own), read with `scribe session show <id> --json`. Say when it was, what it was about and what it got done, then each item from `next` on its own line. End with `session:<id>`.
