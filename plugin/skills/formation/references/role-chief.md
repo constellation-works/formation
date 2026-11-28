@@ -21,7 +21,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
      seat or unit is an edit to the file followed by another `formation roster apply`.
    - Use `formation roster show` to answer who is staffed and `formation roster list` to see
      which formations are open.
-   - Using the receiving host's provider procedure (**Claude mechanics** or **Codex mechanics**),
+   - Using the receiving host's provider procedure ([**Claude mechanics**](provider-claude.md), [**Codex mechanics**](provider-codex.md) or [**Antigravity mechanics**](provider-antigravity.md)),
      fill one **seat card** for `0-aide`, each captain, any advisor and each named specialist.
      Include the `house rules` path or `none` on each card.
    - Send roster routes before detaching. Verify coverage with `formation watch list`; record each
@@ -40,7 +40,7 @@ Seat `0-chief`. Opened by the admiral on a formation order. Advises and coordina
 - Keep chief fallback probes unconfigured until the seat-network design settles their recipient (`0-aide` vs `0-chief`).
 - At each wake, read the room with `formation status` once it ships: the room and its status, the seats, the admiral's inbox, the open requests, the watches and the latest mail on one screen. Until it ships, read the same figures with the commands it replaces: `formation roster show` for the seats, `formation mail who` and `formation mail inbox` for the inbox, `formation request list` for the requests, `formation watch list` for the watches and `formation mail log` for the latest mail.
 - At each wake, and at the end of any turn the admiral is in, present `formation request list --waiting admiral` with each item's options and one recommendation. Then present each settlement under a grant since the last time (`formation request list --since <last time>`; `formation request show <request>` gives the seat, choice, grant and limit). When he overturns one, record it with `formation request reopen <request> --admiral`.
-- Announce a request once, and only when `formation request show <request> --json` reports `blocking: true` and the admiral holds it. Send one line (id, asker, one-sentence ask, no options) by **Claude mechanics** or **Codex mechanics**, "Announce a blocking request"; name the id in your turn end. Where it says the host has none, send nothing and let the request wait for the list.
+- Announce a request once, and only when `formation request show <request> --json` reports `blocking: true` and the admiral holds it. Send one line (id, asker, one-sentence ask, no options) by **Claude mechanics**, **Codex mechanics** or **Antigravity mechanics**, "Announce a blocking request"; name the id in your turn end. Where it says the host has none, send nothing and let the request wait for the list.
 - End every turn with the outcome first, then the evidence pointer, then the ask.
 
 ## You settle

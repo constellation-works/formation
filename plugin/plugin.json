@@ -1,0 +1,8 @@
+{
+  "name": "formation",
+  "version": "0.1.0",
+  "description":"Exchange local inbox messages and check rosters for Claude, Codex and Antigravity sessions.",
+  "author": {
+    "name": "Constellation Works"
+  }
+}

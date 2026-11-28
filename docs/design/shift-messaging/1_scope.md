@@ -2,12 +2,12 @@
 title: Formation — Shift messaging
 owner: codex
 created_date: 2026-11-24
-updated_date: 2026-11-27
+updated_date: 2026-11-28
 last_validated: 2026-11-27
 status: Draft
 feature: shift-messaging
 doc_role: scope
-summary: Durable seat mail between Claude and Codex sessions, delivered by host hooks and fed by one shared watch reader.
+summary: Durable seat mail between Claude, Codex and Antigravity sessions, delivered by host hooks and fed by one shared watch reader.
 stage: building
 next: Daniel refreshes and trusts the updated Codex plugin hooks; then one more formation day times every captain-to-chief send and counts a sentry's empty turns.
 ---
@@ -32,7 +32,7 @@ Daniel, 2026-11-25, in the chief's chat: "I think we can keep this every simple,
 
 A Claude chief and a Codex captain on one machine exchange an ask and its answer without Daniel carrying it, without a task record carrying it, and without either session polling in a model. A CI failure reaches a captain the same way.
 
-Out of scope: more than one machine, enforcing who may message whom, and any provider other than Claude and Codex.
+Out of scope: more than one machine, enforcing who may message whom, and any provider other than Claude, Codex and Antigravity ([Antigravity](#antigravity)).
 
 ## Shape
 
@@ -40,12 +40,12 @@ Out of scope: more than one machine, enforcing who may message whom, and any pro
 | --- | --- |
 | Mailbox | One for each seat that needs it, in one room per formation. Mail waits for a reader who is away |
 | Address | The seat's name in the open scribe group. The room is named by the group's id |
-| Delivery | Two hooks hand unread mail to the bound session. Claude waits in the background. Formation queues a wake for an idle Codex seat |
+| Delivery | Two hooks hand unread mail to the bound session. Claude waits in the background. Formation queues a wake for an idle Codex seat. An idle Antigravity seat has no qualified wake ([Antigravity](#antigravity)) |
 | Watch | One command that blocks on any number of probes (CI, pull requests, attention) and mails what is new to a seat |
 
 ### Built today
 
-An offline roster checker, a leased watch reader, and a local SQLite inbox with session-bound seats, presence, idempotent sends, a bounded inbox wait and explicit acknowledgment. The plugin hooks deliver mail and `mail sent` reports its state. A room admits cooperating seats under one OS account. [Inbox usage](../../usage.md#local-inbox), [hook usage](../../usage.md#hooks)
+An offline roster checker, a leased watch reader, and a local SQLite inbox with session-bound seats, presence, idempotent sends, a bounded inbox wait and explicit acknowledgment. The plugin hooks deliver mail and `mail sent` reports its state. A room admits cooperating seats under one OS account. The Antigravity binding and hooks are built too ([Antigravity](#antigravity)). [Inbox usage](../../usage.md#local-inbox), [hook usage](../../usage.md#hooks)
 
 ### Mailbox
 
@@ -69,13 +69,13 @@ One room per formation lives at `~/.formation/rooms/<room>/`. `mail join` opens 
 
 ### Delivery
 
-The plugin ships two hooks for each provider. Each is one line that calls `formation hook`, so the logic stays in the binary and the hook file seldom changes.
+The plugin ships two hooks for each provider. Antigravity's live in the plugin's root `hooks.json`, as its native plugin format requires. Each is one line that calls `formation hook`, so the logic stays in the binary and the hook file seldom changes.
 
 | Hook | What it does |
 | --- | --- |
 | On the user's message | Adds the seat's unread mail to the turn |
 | On stop, mail waiting | Continues the turn with the mail as its next input |
-| On stop, no mail | Claude waits in the background. Codex lets the turn end and can be woken by the sender |
+| On stop, no mail | Claude waits in the background. Codex lets the turn end and can be woken by the sender. Antigravity lets the turn end and has no wake |
 
 The hook marks what it hands over as delivered, which is the receipt the sender can read. The envelope is then in the session's transcript. A seat with no hook, such as a headless worker, still uses `mail inbox` and `mail ack`.
 
@@ -145,6 +145,27 @@ Idempotent sends, the body limit and the audit of join and send stay as built.
 
 The relay, route grants and receipt ladder from the first scope remain in the document history. Queue wake applies to the current local Codex binding under the [delivery rules](#delivery).
 
+### Antigravity
+
+An Antigravity conversation takes seat mail through the same two-hook shape, but no qualified path wakes an idle one. Its binding and hooks are built, and their hermetic tests pass. No live Antigravity conversation has run them. The seat's reference, [Antigravity mechanics](../../../plugin/skills/formation/references/provider-antigravity.md), carries the same split.
+
+| Capability | Status | Evidence |
+| --- | --- | --- |
+| Session binding from `ANTIGRAVITY_CONVERSATION_ID`, with an explicit `mail join <seat> --room`, and takeover | Verified in the binary's tests | `antigravity_session_binds_mail_watch_grant_and_request_without_as`, run on this worktree |
+| Unnamed join from a Scribe group in an Antigravity conversation | Not tested for Antigravity | The Scribe lookup test uses a Claude session id |
+| `PreInvocation` hands unread mail to the turn as `injectSteps`; `Stop` continues the turn with mail as `reason`, and prints `{}` without it | Verified in the binary's tests | `antigravity_prompt_injects_mail_and_stop_continues_without_a_wake`, `antigravity_rejects_a_missing_or_non_string_conversation_id`, `antigravity_idle_stop_does_not_queue_a_codex_wake` |
+| Plugin loads with root `plugin.json` and `hooks.json`, one hook group and one skill | Verified by `agy plugin validate --strict` | No errors. The one note says the plugin has no logo |
+| Claude plugin still validates; Codex manifest and hooks unchanged | Claude verified by `claude plugin validate plugin` (exit 0 before and after). Codex not validated | No Codex validator is available here. Its files are byte-identical to the base commit, but whether Codex's loader ignores the new root `plugin.json` is not verified |
+| Live hook delivery in an Antigravity conversation | Not trialled | Trial 10 below |
+| A continued turn after a Stop with mail, without a loop | Not verified | Antigravity's Stop input carries `continuationActive`, which Formation does not read |
+| Subagent hooks, under the subagent's own or the parent's conversation ID | Not verified | The Antigravity hook has no `agent_id` check, unlike Claude and Codex |
+| `invoke_subagent` and `send_message` inside one tree | Named in the Antigravity CLI's docs; not exercised by Formation | Conversations skill |
+| Idle wake of an Antigravity conversation | Not available | `ConversationService` has only create, get, list, update and delete. Formation queues a wake for Codex alone |
+| Blocking-request notification through an Antigravity host | Not available | No verified path |
+| Antigravity as a roster `host` | Not available | The roster decoder admits `claude-desktop`, `codex-desktop` and `headless` only |
+
+An Antigravity seat has no hold, so mail to it waits for the seat's next model call. A sender that needs it sooner asks the seat's captain or the admiral to type in the conversation. No qualified path wakes it.
+
 ## Verification
 
 Each trial is run on the exact desktop build and recorded here before the capability is claimed.
@@ -161,6 +182,7 @@ Trials 6 to 9 belong to [A Claude seat after its hold](#a-claude-seat-after-its-
 7. **Claude, one waiter.** Five turns end during one wait. Pass: one waiter process is left, and a send still wakes the chat.
 8. **Claude, app restart.** The app is quit and reopened during a hold. Recorded: whether the waiter is gone, and when the chat next receives mail.
 9. **Claude, wake by socket.** After the hold has ended, a detached shell posts one fixed line to the chat's messaging socket. Pass: one new turn in the same chat, and the prompt hook hands over the waiting mail. Recorded: what a hook sees of the socket and its token, how the line is labelled in the chat, and the result while the chat is busy and in each permission mode.
+10. **Antigravity, hook delivery.** Install the plugin from the checkout with `agy plugin install` in a disposable conversation, join it to a scratch room, and send from a second seat. Pass: the conversation's next model call receives the envelope in its `injectSteps` system message, and the envelope is marked delivered. Also record how a Stop with mail behaves on the next turn, since Formation does not read `continuationActive`. The idle wake is not a pass criterion, because no qualified wake exists for Antigravity.
 
 Trial 5 exercised the provider queue and prompt hook. The built-executable integration tests exercise Formation's ordinary send, watch reader and turn-end ordering with a fake queue. The Linux validation host has no disposable Desktop chat for a live test of the integrated send.
 
@@ -224,6 +246,7 @@ Read from the providers' documentation on 2026-11-25 through a summarising fetch
   - Scheduled tasks fire only while the session is running and idle, at intervals of a minute or more, with no catch-up. [Scheduled tasks](https://code.claude.com/docs/en/scheduled-tasks)
   - Channels are a research preview started with `claude --channels` in a terminal, and an organisation's owner enables them. Remote Control sends a person's messages into a local session and documents no interface for a process. [Remote Control](https://code.claude.com/docs/en/remote-control)
 - **Open requests:** a [desktop external-wake API](https://github.com/openai/codex/issues/61773) and [idle chats waking on agent messages](https://github.com/openai/codex/issues/63220). Neither has a maintainer reply.
+- **Antigravity, read on 2026-11-28.** From the Antigravity CLI's bundled `plugins` and `hooks` docs: a native plugin keeps `plugin.json` and `hooks.json` at its root, and `PreInvocation` and `Stop` take flat handler arrays. Hooks run synchronously and print a JSON object, and the `Stop` input carries `continuationActive`. From its `ConversationService` documentation and binary: create, get, list, update and delete, with no message or queue method. `agy plugin validate --strict` on the plugin directory reports no errors.
 
 ### Codex queue wake trial, 2026-11-26
 

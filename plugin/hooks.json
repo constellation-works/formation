@@ -1,0 +1,18 @@
+{
+  "formation": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "command -v formation >/dev/null 2>&1 || { printf '{}'; exit 0; }; exec formation hook --provider antigravity --event user-prompt",
+        "timeout": 60
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "command -v formation >/dev/null 2>&1 || { printf '{}'; exit 0; }; exec formation hook --provider antigravity --event stop",
+        "timeout": 60
+      }
+    ]
+  }
+}
