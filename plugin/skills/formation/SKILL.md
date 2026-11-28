@@ -45,4 +45,5 @@ Apply choices in this order: the admiral’s current words, then the house file,
 - Read [optional Claude MCP configuration](assets/orbit-mcp.json) only when configuring a permitted headless Claude session (default role `agent`).
 - Run [the attention reader](scripts/attention-read.sh) as the `attention` watch probe for `formation watch add` (never read it as instructions; pass a host-qualified selector).
 - Run [the CI reader](scripts/ci-read.sh) as the `ci` watch probe for `formation watch add` (use `--base-only` while repair mode is off; set `formation_skill` to the absolute directory containing this `SKILL.md`).
+- Run [the record check](scripts/record-check.sh) to compare shift records with the roster at first wake and before close-out (never read it as instructions; pass a host-qualified selector and `<task id>=[<role>:]<crew>` pairs).
 - Read [evaluation cases](evals/cases.md) when changing routing, staffing, permissions or lifecycle behavior.

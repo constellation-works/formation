@@ -8,12 +8,12 @@ feature: role-reference
 doc_role: scope
 summary: One Formation skill in which every role reads one reference of its own, a seat card replaces the per-role briefs, and each role's record carries the crew of the seat that holds it.
 stage: building
-next: Build phase 3, record-check.sh and its uses in the chief's role file.
+next: Write the house file and retire the second copy of the skill in the operator's repository, then verify records on the next formation day.
 ---
 
 # Formation — Role references
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 (role files, seat card, record fields and skill check) and this repository's part of phase 2 (the house-file step and not-yet-verified list) are built; the house file and retiring the second copy belong to the operator's repository.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phase 1 (role files, seat card, record fields and skill check), this repository's part of phase 2 (the house-file step and not-yet-verified list) and phase 3 (record check) are built; the house file and retiring the second copy belong to the operator's repository.
 
 ## Problem
 
