@@ -73,6 +73,7 @@ impl Snapshot {
         GrantRead {
             conn: &self.reader,
             available: sqlite::has_grant(self.reader.version()),
+            house: sqlite::has_grant_house(self.reader.version()),
         }
     }
 

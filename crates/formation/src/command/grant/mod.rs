@@ -6,6 +6,8 @@ mod check;
 
 mod list;
 
+mod load;
+
 mod revoke;
 
 mod withhold;
@@ -31,6 +33,7 @@ enum Action {
     Add(add::Add),
     Withhold(withhold::Withhold),
     Revoke(revoke::Revoke),
+    Load(load::Load),
     List(list::List),
     Check(check::Check),
 }
@@ -41,6 +44,7 @@ pub(crate) fn run(env: Env, args: Grant, queue: &dyn Fn(&str) -> bool) -> ExitCo
         Action::Add(args) => add::run(&env, args, queue),
         Action::Withhold(args) => withhold::run(&env, args, queue),
         Action::Revoke(args) => revoke::run(&env, args, queue),
+        Action::Load(_) => load::run(&env, queue),
         Action::List(args) => list::run(&env, args),
         Action::Check(args) => check::run(&env, args),
     }

@@ -3,3 +3,5 @@
 pub(crate) mod codex_wake;
 
 pub(crate) mod probe;
+
+pub(crate) mod stdin;

@@ -8,12 +8,12 @@ feature: delegated-authority
 doc_role: scope
 summary: Authority becomes a record the admiral changes with one command, every ask above a captain's row is a request that goes to the chief first, and the admiral reads one list of what no seat may settle.
 stage: building
-next: Build phase 3, the standing grants file and grant load.
+next: In the operator's repository, move the thirteen dated directions into the grants file and name it in the house file, then verify on the next formation day.
 ---
 
 # Formation — Delegated authority
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phases 0, 1, 2 and 4 are built: the authority and request commands, the public skill's request rule, and the notice rule in the chief and provider references. Phase 3, standing grants, is next and the only phase left before `shipped`.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phases 0, 1, 2 and 4 are built: the authority and request commands, the public skill's request rule, and the notice rule in the chief and provider references. Phase 3 is built in this repository: the grants file, `formation grant load` and the start and close-out steps. What is left before `shipped` is the operator's part, writing the file and naming it in the house file.
 
 The notice rule is written as not available on both Claude and Codex: no run has exercised a host notification from a chief's session, so each provider reference sends the chief to its next turn's list.
 
@@ -94,6 +94,29 @@ formation grant check --seat <seat> --class <class> [--workspace <workspace>]
 - **Who enters a grant.** The admiral from a terminal, or the seat in whose chat he said it. A grant entered by the seat that gains from it is marked `self-entered` in every list.
 - **A change is mailed.** `add`, `withhold` and `revoke` send one envelope to each joined seat whose reach changed, so no seat learns of it from a relay.
 - **Standing grants are a file.** The [house file](../role-reference/1_scope.md#house-rules) names a grants file in the operator's own repository, in the grant's own fields. The chief loads it at start with `formation grant load`. A day grant becomes standing only by a change to that file, which the admiral approves as a diff. At close the chief lists the day's grants once and asks which to keep.
+
+The grants file is a JSON document of version 1, read from standard input by `formation grant load --room <room>`:
+
+```json
+{
+  "version": 1,
+  "classes": [
+    {"name": "wording", "covers": "A wording fix to shared documents", "holder": "chief"}
+  ],
+  "grants": [
+    {"effect": "grant", "to": "chief", "class": "wording", "workspace": "all",
+     "limit": "changes no version", "source": "<chat and time the admiral said it>"},
+    {"effect": "withhold", "to": "captain", "class": "land", "workspace": "site",
+     "source": "<…>"}
+  ]
+}
+```
+
+- **A class** has a `name`, `covers`, an optional `holder` (`admiral` by default, `nobody` or a rank) and an optional `note`. It is granted, checked, listed and requested like a catalog class in that room, and it can never take the name of a catalog class.
+- **An entry** has the grant's own fields: `effect`, `to`, `class`, `workspace` (default `all`), `limit` and a required `source`. Its lifetime is `standing`.
+- **Refused whole, changing nothing:** a grant or withhold naming `grant` or `credentials` (`class_not_grantable`), a class that removes (`class_not_removable`) or reuses a catalog name (`class_exists`), an unknown class or holder, a version other than 1 (`unknown_grants_version`) and a malformed document (`invalid_grants_file`).
+- **A load replaces.** It revokes the room's earlier house entries, stores the file's and mails each joined seat whose reach changed. The same file again changes nothing. Day grants are untouched, and `grant revoke` refuses a house entry (`grant_standing`).
+- **Listing.** A house entry shows `standing` and the house file as its origin, and the seat list marks it `house grant` or `house withhold`. It is never `self-entered`, because the admiral approved the file as a diff.
 
 ### Effective authority
 

@@ -46,6 +46,10 @@ pub(crate) fn has_grant(version: u32) -> bool {
     version >= schema::GRANT_SCHEMA_VERSION
 }
 
+pub(crate) fn has_grant_house(version: u32) -> bool {
+    version >= schema::GRANT_HOUSE_SCHEMA_VERSION
+}
+
 pub(crate) fn has_request(version: u32) -> bool {
     version >= schema::REQUEST_SCHEMA_VERSION
 }

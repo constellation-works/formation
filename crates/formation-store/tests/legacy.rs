@@ -19,8 +19,17 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     )
 }
 
+/// Undo the house grants step, so the file matches release 21's schema.
+fn drop_house(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    connection.execute_batch(
+        "DROP TABLE room_house_catalog;
+         ALTER TABLE room_grant DROP COLUMN origin;",
+    )
+}
+
 /// Undo the admiral steps, so the file matches release 19's schema.
 fn drop_admiral(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    drop_house(connection)?;
     connection.execute_batch(
         "ALTER TABLE messages DROP COLUMN terminal;
          DELETE FROM seats WHERE name = 'admiral';",
@@ -386,7 +395,9 @@ fn upgrade_to_roster_preserves_room_records() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn upgrade_to_grant_preserves_room_records() -> Result<(), Box<dyn std::error::Error>> {
-    use formation_store::contract::{GrantEffect, GrantLifetime, GrantTargetKind, NewGrant};
+    use formation_store::contract::{
+        GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind, NewGrant,
+    };
 
     let root = cw_testkit::TempRoot::new("FORMATION")?;
     let store = Store::create(root.path())?;
@@ -418,6 +429,7 @@ fn upgrade_to_grant_preserves_room_records() -> Result<(), Box<dyn std::error::E
             workspace: "all",
             limit: Some("reversible settings"),
             lifetime: GrantLifetime::Day,
+            origin: GrantOrigin::Room,
             source: "advisor chat 12:00",
             entered_by: None,
             entered_at: 200,
@@ -588,6 +600,53 @@ fn a_release_nineteen_room_gains_the_admiral_seat_on_its_next_write()
     assert!(admiral.contains(&("admiral".to_owned(), 0)), "{admiral:?}");
     let kept = snapshot.messages().unread("chief")?;
     assert_eq!((kept[0].body.as_str(), kept[0].terminal), ("kept", false));
+    Ok(())
+}
+
+#[test]
+fn a_release_twenty_one_room_keeps_its_grants_as_the_rooms_own()
+-> Result<(), Box<dyn std::error::Error>> {
+    use formation_store::contract::{
+        GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind, NewGrant,
+    };
+
+    let root = cw_testkit::TempRoot::new("FORMATION")?;
+    let store = Store::create(root.path())?;
+    store.write(|tx| {
+        tx.grants().insert(&NewGrant {
+            effect: GrantEffect::Grant,
+            target_kind: GrantTargetKind::Rank,
+            target: "chief",
+            class: "direction",
+            workspace: "all",
+            limit: None,
+            lifetime: GrantLifetime::Day,
+            origin: GrantOrigin::Room,
+            source: "advisor chat 12:00",
+            entered_by: None,
+            entered_at: 200,
+            entered_at_ns: 0,
+        })?;
+        Ok(())
+    })?;
+    let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_house(&db)?;
+    db.execute_batch("PRAGMA user_version = 21;")?;
+    drop(db);
+
+    let snapshot = store.read()?;
+    let grants = snapshot.grants().active()?;
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].origin, GrantOrigin::Room);
+    assert!(snapshot.grants().house_classes()?.is_empty());
+    drop(snapshot);
+
+    store.write(|tx| {
+        tx.grants().replace_house_classes(&[])?;
+        Ok(())
+    })?;
+    let grants = store.read()?.grants().active()?;
+    assert_eq!(grants[0].origin, GrantOrigin::Room);
     Ok(())
 }
 

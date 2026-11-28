@@ -40,6 +40,8 @@ pub(crate) const ROOM_CLOSE_SCHEMA_VERSION: u32 = 19;
 
 pub(crate) const TERMINAL_MAIL_SCHEMA_VERSION: u32 = 21;
 
+pub(crate) const GRANT_HOUSE_SCHEMA_VERSION: u32 = 22;
+
 pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     seat::CREATE,
     message::CREATE,
@@ -62,4 +64,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     room::CLOSE,
     seat::ADMIRAL,
     message::TERMINAL,
+    grant::HOUSE,
 ];

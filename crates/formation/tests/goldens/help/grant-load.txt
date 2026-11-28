@@ -1,0 +1,19 @@
+Load the house grants file from standard input as the room's standing entries
+
+Usage: formation grant load [OPTIONS]
+
+Options:
+      --room <NAME|PATH>  Room name or directory path (default: $FORMATION_ROOM or session file)
+      --as <SEAT>         Seat name for this command (default: seat recorded for this session, or none outside one)
+  -h, --help              Print help
+
+Reads a version 1 JSON grants file from standard input: standing grants and withholds in the
+grant's own fields, and the classes a house adds to the catalog. Loading replaces the room's
+earlier house entries and leaves its day grants as they were; loading the same file again
+changes nothing. A file cannot grant `grant` or `credentials`, remove a class or change a
+catalog class.
+
+Every joined seat whose effective authority changes receives one mail envelope.
+
+Example:
+  formation grant load --room g-12 < grants.json

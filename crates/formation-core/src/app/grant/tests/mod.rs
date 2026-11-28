@@ -4,7 +4,8 @@
     reason = "unit tests panic on unexpected setup errors"
 )]
 
-use super::catalog::CATALOG;
+use super::catalog::{self, CATALOG, DefaultHolder};
+use super::house;
 use super::rule::{effective_for_seat, evaluate_one, is_self_entered};
 use formation_store::RosterSeat;
 use formation_store::contract::{
@@ -402,6 +403,7 @@ fn audit_metadata_holds_identifiers_only() {
             entered_by: None,
             entered_at: None,
             self_entered: false,
+            origin: GrantOrigin::Room,
         },
         notified: Vec::new(),
     };
@@ -409,4 +411,125 @@ fn audit_metadata_holds_identifiers_only() {
     assert_eq!(target, "42");
     assert!(!target.contains("secret"));
     assert!(!target.contains("private"));
+}
+
+fn roster() -> Vec<RosterSeat> {
+    vec![
+        seat("0-chief", "chief", None, None),
+        seat("site-capt", "captain", Some("site"), Some("0-chief")),
+    ]
+}
+
+fn validated(document: &str) -> Result<house::HouseFile, &'static str> {
+    house::decode(document.as_bytes())
+        .and_then(|decoded| decoded.validate(&roster()))
+        .map_err(|error| error.code())
+}
+
+#[test]
+fn a_house_file_names_version_one_and_nothing_else() {
+    for document in [
+        r#"{"version":2}"#,
+        r#"{"version":"1"}"#,
+        "{}",
+        r#"{"version":null}"#,
+    ] {
+        assert_eq!(validated(document).err(), Some("unknown_grants_version"));
+    }
+    for document in [
+        "",
+        "[]",
+        r#"{"version":1,"extra":1}"#,
+        r#"{"version":1,"grants":[{}]}"#,
+    ] {
+        assert_eq!(validated(document).err(), Some("invalid_grants_file"));
+    }
+    assert!(validated(r#"{"version":1}"#).is_ok());
+}
+
+#[test]
+fn a_house_file_adds_classes_and_never_removes_or_changes_one() {
+    let grant = |class: &str| {
+        format!(
+            r#"{{"version":1,"grants":[{{"effect":"grant","to":"chief","class":"{class}","source":"chat"}}]}}"#
+        )
+    };
+    assert_eq!(
+        validated(&grant("grant")).err(),
+        Some("class_not_grantable")
+    );
+    assert_eq!(
+        validated(&grant("credentials")).err(),
+        Some("class_not_grantable")
+    );
+    assert_eq!(validated(&grant("wording")).err(), Some("unknown_class"));
+    assert_eq!(
+        validated(r#"{"version":1,"remove_classes":["land"]}"#).err(),
+        Some("class_not_removable")
+    );
+    assert_eq!(
+        validated(r#"{"version":1,"classes":[{"name":"land","covers":"x"}]}"#).err(),
+        Some("class_exists")
+    );
+    assert_eq!(
+        validated(r#"{"version":1,"classes":[{"name":"w","covers":"x","holder":"boss"}]}"#).err(),
+        Some("invalid_class")
+    );
+
+    let file = validated(
+        r#"{"version":1,
+            "classes":[{"name":"wording","covers":" a fix ","holder":"chief"}],
+            "grants":[
+              {"effect":"grant","to":"captain","class":"wording",
+               "workspace":"site","source":"chat"},
+              {"effect":"grant","to":"captain","class":"wording",
+               "workspace":"site","source":"chat"},
+              {"effect":"withhold","to":"site-capt","class":"land","source":"chat"}]}"#,
+    )
+    .unwrap();
+    assert_eq!(file.classes.len(), 1);
+    assert_eq!(file.classes[0].covers, "a fix");
+    assert_eq!(file.entries.len(), 2);
+    assert_eq!(file.entries[1].workspace, "all");
+}
+
+#[test]
+fn house_classes_join_the_catalog_as_grantable_classes_with_their_own_holder() {
+    let file = validated(
+        r#"{"version":1,"classes":[{"name":"wording","covers":"a fix","holder":"chief"}]}"#,
+    )
+    .unwrap();
+    let classes = catalog::with_house(&file.classes);
+    assert_eq!(classes.len(), CATALOG.len() + 1);
+    let added = classes.last().unwrap();
+    assert_eq!(added.name, "wording");
+    assert!(added.grantable);
+    assert_eq!(
+        added.default_holder.label(),
+        DefaultHolder::from_wire("chief").unwrap().label()
+    );
+
+    let roster = roster();
+    let chief = effective_for_seat(&roster[0], &roster, &[], &classes);
+    assert!(chief.settles.iter().any(|entry| entry.class == "wording"));
+    let without = effective_for_seat(&roster[0], &roster, &[], CATALOG);
+    assert!(without.settles.iter().all(|entry| entry.class != "wording"));
+}
+
+#[test]
+fn a_house_entry_is_never_self_entered() {
+    let roster = roster();
+    let entry = make_grant(
+        1,
+        GrantEffect::Grant,
+        GrantTargetKind::Rank,
+        "chief",
+        "direction",
+        "all",
+        GrantOrigin::HouseFile,
+        Some("0-chief"),
+        10,
+        0,
+    );
+    assert!(!is_self_entered(&entry, &roster));
 }

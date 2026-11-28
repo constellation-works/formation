@@ -6,7 +6,9 @@
 
 use cw_testkit::TempRoot;
 use formation_store::Store;
-use formation_store::contract::{GrantEffect, GrantLifetime, GrantTargetKind, NewGrant};
+use formation_store::contract::{
+    GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind, NewGrant,
+};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::process::{Output, Stdio};
@@ -693,6 +695,7 @@ fn precedence_and_same_timestamp_tie_in_list_and_check() {
                 workspace: "all",
                 limit: None,
                 lifetime: GrantLifetime::Day,
+                origin: GrantOrigin::Room,
                 source: "tie withhold",
                 entered_by: None,
                 entered_at: 9_999_999_999,
@@ -706,6 +709,7 @@ fn precedence_and_same_timestamp_tie_in_list_and_check() {
                 workspace: "all",
                 limit: None,
                 lifetime: GrantLifetime::Day,
+                origin: GrantOrigin::Room,
                 source: "tie grant",
                 entered_by: None,
                 entered_at: 9_999_999_999,

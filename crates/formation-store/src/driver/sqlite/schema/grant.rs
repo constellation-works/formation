@@ -20,3 +20,15 @@ pub(super) const CREATE: cw_sqlite::Step = cw_sqlite::Step::sql(
         revoked_by TEXT
     ) STRICT;",
 );
+
+/// Origin of each grant and the classes a house grants file adds to the catalog.
+pub(super) const HOUSE: cw_sqlite::Step = cw_sqlite::Step::sql(
+    "ALTER TABLE room_grant ADD COLUMN origin TEXT NOT NULL DEFAULT 'room'
+         CHECK(origin IN ('room', 'house_file'));
+     CREATE TABLE room_house_catalog(
+        name TEXT PRIMARY KEY,
+        covers TEXT NOT NULL,
+        holder TEXT NOT NULL,
+        note TEXT
+    ) STRICT;",
+);

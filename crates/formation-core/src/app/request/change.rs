@@ -97,7 +97,11 @@ impl Mutation<'_> {
             self.settle(&mut request, option, None)?;
             ("opened and settled", Some(request.asker.clone()))
         } else {
-            grant::validate_class(&request.class, &self.tx.grants().active()?)?;
+            grant::validate_class(
+                &request.class,
+                &self.tx.grants().active()?,
+                &self.tx.grants().house_classes()?,
+            )?;
             ("opened", holder)
         };
 
@@ -134,6 +138,7 @@ impl Mutation<'_> {
             &request.workspace,
             self.roster,
             &self.tx.grants().active()?,
+            &self.tx.grants().house_classes()?,
         )?;
         rule::require_option(&request.options, &option)?;
         request.state = RequestState::Settled(RequestSettlement {

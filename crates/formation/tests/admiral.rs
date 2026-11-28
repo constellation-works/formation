@@ -401,7 +401,9 @@ fn a_room_from_the_current_release_lists_the_admiral_once_opened() {
     let home = Home::new();
     // Undo the admiral steps, so the file is what release 19 wrote.
     home.sql(
-        "ALTER TABLE messages DROP COLUMN terminal;
+        "DROP TABLE room_house_catalog;
+         ALTER TABLE room_grant DROP COLUMN origin;
+         ALTER TABLE messages DROP COLUMN terminal;
          DELETE FROM seats WHERE name = 'admiral';
          PRAGMA user_version = 19;",
     );
