@@ -13,7 +13,9 @@ next: Build phase 3, the standing grants file and grant load.
 
 # Formation — Delegated authority
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phases 0, 1 and 2 are built: the authority and request commands, and the public skill's request rule. Phase 3, standing grants, is next.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). Phases 0, 1, 2 and 4 are built: the authority and request commands, the public skill's request rule, and the notice rule in the chief and provider references. Phase 3, standing grants, is next and the only phase left before `shipped`.
+
+The notice rule is written as not available on both Claude and Codex: no run has exercised a host notification from a chief's session, so each provider reference sends the chief to its next turn's list.
 
 ## Problem
 
