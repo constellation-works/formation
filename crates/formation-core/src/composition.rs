@@ -126,6 +126,8 @@ pub(crate) struct DiscoveredRoom {
 enum ComposeError {
     #[error("room required: pass --room or set FORMATION_ROOM")]
     RoomRequired,
+    #[error("room required: {0}")]
+    ActiveRoomRequired(String),
     #[error("seat required: pass --as <seat> or join this room from your session")]
     SeatRequired,
     #[error("no scribe seat found; join the scribe group first or pass the seat")]
@@ -160,7 +162,9 @@ impl From<ComposeError> for Error {
             ComposeError::NoScribeSeat => (Kind::Refused, "no_scribe_seat"),
             ComposeError::AmbiguousScribeSeat(_) => (Kind::Refused, "ambiguous_scribe_seat"),
             ComposeError::ScribeUnavailable(_) => (Kind::Refused, "scribe_unavailable"),
-            ComposeError::RoomRequired => (Kind::Refused, "room_required"),
+            ComposeError::RoomRequired | ComposeError::ActiveRoomRequired(_) => {
+                (Kind::Refused, "room_required")
+            }
             ComposeError::SeatRequired => (Kind::Refused, "seat_required"),
             ComposeError::InvalidRoom | ComposeError::UnsupportedTilde => {
                 (Kind::Refused, "invalid_room")
@@ -257,7 +261,17 @@ pub(crate) fn compose_optional_seat(env: &Env) -> Result<MailContext, Error> {
 /// admiral's. That is a signal, not proof of the person: see the admiral-seat scope.
 pub(crate) fn compose_existing(env: &Env, admiral: bool) -> Result<MailContext, Error> {
     let session = resolve_session(env)?;
-    let room = resolve_room(env, session.as_ref())?;
+    let is_admiral = admiral
+        && env.terminal
+        && session.is_none()
+        && env.seat.as_deref().is_none_or(|seat| seat == ADMIRAL);
+    let room = if env.room.is_some() || session.is_some() {
+        resolve_room(env, session.as_ref())?
+    } else if is_admiral {
+        resolve_admiral_room(env)?
+    } else {
+        return Err(ComposeError::RoomRequired.into());
+    };
     let store = Store::open(&room.path)?;
 
     let caller = if let Some(seat) = named_seat(env, session.as_ref())? {
@@ -280,6 +294,50 @@ pub(crate) fn compose_existing(env: &Env, admiral: bool) -> Result<MailContext, 
         store,
         caller,
     })
+}
+
+fn resolve_admiral_room(env: &Env) -> Result<ResolvedRoom, Error> {
+    let mut active = Vec::new();
+    let mut unreadable = Vec::new();
+    for candidate in discover_rooms(env)? {
+        let name = candidate.name;
+        match candidate
+            .store
+            .and_then(|store| store.read_strict())
+            .and_then(|snapshot| snapshot.closure())
+        {
+            Ok(None) => active.push(name),
+            Ok(Some(_)) => {}
+            Err(_) => unreadable.push(name),
+        }
+    }
+    active.sort_unstable();
+    unreadable.sort_unstable();
+
+    if active.len() == 1 && unreadable.is_empty() {
+        return parse_room_spec(env, &active[0]);
+    }
+
+    let message = match (active.is_empty(), active.len(), unreadable.is_empty()) {
+        (true, _, true) => "no room is active".to_owned(),
+        (true, _, false) => format!(
+            "cannot determine active rooms; unreadable rooms: {}",
+            unreadable.join(", ")
+        ),
+        (false, 1, false) => format!(
+            "cannot confirm there is exactly one active room; active room: {}; unreadable rooms: {}",
+            active[0],
+            unreadable.join(", ")
+        ),
+        (false, _, _) => {
+            let mut message = format!("multiple rooms are active: {}", active.join(", "));
+            if !unreadable.is_empty() {
+                message.push_str(&format!("; unreadable rooms: {}", unreadable.join(", ")));
+            }
+            message
+        }
+    };
+    Err(ComposeError::ActiveRoomRequired(message).into())
 }
 
 pub(crate) fn compose_hook(env: &Env, session: &str) -> Result<Option<MailContext>, Error> {
@@ -478,3 +536,6 @@ fn lookup_scribe_seat(
         .into()),
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -26,7 +26,16 @@ A seat with a cross-provider edge runs `formation mail join` once, beside its `s
 
 ## The admiral's seat
 
-A mail call from a terminal with no agent session and no `--as` is the operator, the admiral. Every room has the `admiral` seat already; it has no presence, so `mail who` lists it with its counts and `held` null.
+A mail call from a terminal with no agent session and no `--as` is the operator, the admiral.
+If neither `--room` nor `FORMATION_ROOM` is set, Formation uses the one active room in the home.
+A closed room is ignored. With no active room, or more than one, the command refuses with
+`room_required`; the refusal names the active rooms.
+
+`--room` and `FORMATION_ROOM` take precedence over this default. A session keeps the room from its
+join, and `--as <seat>` still requires a room.
+The active-room scan reads rooms without creating files.
+
+Every room has the `admiral` seat already; it has no presence, so `mail who` lists it with its counts and `held` null.
 
 - Never pass `--as admiral` and never join `admiral`: inside an agent session both are refused with `reserved_seat`, and a roster that names the seat fails `roster check`.
 - Only the seat holding the chief's rank in the applied roster runs `formation mail send admiral`. Any other seat is refused with `admiral_via_chief`: open a request for the chief instead. A room with no applied roster refuses the send with `no_roster`.
