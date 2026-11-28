@@ -74,3 +74,8 @@ Expected: Pass both to the admiral with one recommendation each (`formation requ
 
 Request: A chief runs in a checkout whose instruction file names a Formation house file, then fills seat cards (`house rules: /path/to/house.md`) for one shift and (`house rules: none`) for another shift's sergeant.
 Expected: The chief reads the named house file after `SKILL.md`, applies choices in order (admiral's current words, house file, skill defaults), treats the house file as a record of choices granting no new authority, and writes its path on every seat card. Each seat reads the named house file during its First turn when present, and skips that step when its card says `none`.
+
+## 16. Loading the house grants file and keeping the day's grants
+
+Request: A chief has applied the roster and the house file names a grants file. At close, `formation grant list --json` shows two entries with `origin: room` and three with `origin: house_file`.
+Expected: At start, after the roster is applied and before carrying requests or filling seat cards, the chief runs `formation grant load --room "$group" < <grants file>` and reports a refusal by its code. At close it lists the day's grants once, asks the admiral which of the two `room` entries to keep, and proposes each kept one as a change to the grants file for him to approve as a diff. It does not ask about the three `house_file` entries and adds no standing grant by command.

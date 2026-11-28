@@ -6,6 +6,7 @@ Commands:
   add       Grant an authority class to a rank or seat for the day
   withhold  Withhold an authority class from a rank or seat for the day
   revoke    Revoke an active grant or withhold by identifier
+  load      Load the house grants file from standard input as the room's standing entries
   list      List active room grants, or what one seat settles now
   check     Check whether a seat may settle an authority class in a workspace
   help      Print this message or the help of the given subcommand(s)

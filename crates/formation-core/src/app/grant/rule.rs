@@ -81,14 +81,14 @@ pub(super) fn refused(code: &'static str, message: impl Into<String>) -> Error {
 
 pub(super) fn validate_class_for_mutation<'a>(
     class: &str,
-    catalog: &'a [ClassSpec],
-) -> Result<&'a ClassSpec, Error> {
+    catalog: &'a [ClassSpec<'a>],
+) -> Result<&'a ClassSpec<'a>, Error> {
     let Some(spec) = catalog.iter().find(|entry| entry.name == class) else {
         return Err(refused(
             "unknown_class",
             format!(
                 "unknown authority class `{class}`; valid classes: {}",
-                names_list()
+                names_list(catalog)
             ),
         ));
     };
@@ -103,9 +103,9 @@ pub(super) fn validate_class_for_mutation<'a>(
 
 pub(super) fn validate_class_for_check<'a>(
     class: &str,
-    catalog: &'a [ClassSpec],
+    catalog: &'a [ClassSpec<'a>],
     grants: &[GrantRecord],
-) -> Result<Option<&'a ClassSpec>, Error> {
+) -> Result<Option<&'a ClassSpec<'a>>, Error> {
     if let Some(spec) = catalog.iter().find(|entry| entry.name == class) {
         return Ok(Some(spec));
     }
@@ -116,7 +116,7 @@ pub(super) fn validate_class_for_check<'a>(
         "unknown_class",
         format!(
             "unknown authority class `{class}`; valid classes: {}",
-            names_list()
+            names_list(catalog)
         ),
     ))
 }
@@ -205,7 +205,7 @@ pub(super) fn resolve_holder(
 }
 
 pub(super) fn is_self_entered(grant: &GrantRecord, roster: &[RosterSeat]) -> bool {
-    if grant.effect != GrantEffect::Grant {
+    if grant.effect != GrantEffect::Grant || grant.origin == GrantOrigin::HouseFile {
         return false;
     }
     let Some(entered_by) = grant.entered_by.as_deref() else {
@@ -224,7 +224,7 @@ pub(super) fn effective_for_seat(
     seat: &RosterSeat,
     roster: &[RosterSeat],
     grants: &[GrantRecord],
-    catalog: &[ClassSpec],
+    catalog: &[ClassSpec<'_>],
 ) -> EffectiveSeat {
     let base_workspace = seat.workspace.as_deref().unwrap_or(ALL_WORKSPACES);
     let mut class_names: Vec<&str> = catalog.iter().map(|spec| spec.name).collect();
@@ -287,7 +287,7 @@ pub(super) fn evaluate_one(
     query_workspace: &str,
     roster: &[RosterSeat],
     grants: &[GrantRecord],
-    catalog: &[ClassSpec],
+    catalog: &[ClassSpec<'_>],
 ) -> Option<EffectiveEntry> {
     let mut best: Option<(Precedence, EffectiveEntry)> = None;
 
@@ -348,7 +348,7 @@ pub(super) fn check_refusal<'a>(
     seat: &RosterSeat,
     class: &str,
     query_workspace: &str,
-    spec: Option<&ClassSpec>,
+    spec: Option<&ClassSpec<'_>>,
     winner: Option<&EffectiveEntry>,
     holders: impl Iterator<Item = &'a RosterSeat>,
 ) -> Error {
@@ -396,8 +396,27 @@ pub(super) fn format_change_mail(
     if let Some(limit) = &grant.limit {
         lines.push(format!("Limit: {limit}"));
     }
-    if after.settles.is_empty() {
-        lines.push("You now settle: none.".to_owned());
+    lines.extend(settle_lines(seat, after));
+    lines.join("\n")
+}
+
+pub(super) fn format_load_mail(
+    seat: &str,
+    entries: usize,
+    classes: usize,
+    after: &EffectiveSeat,
+) -> String {
+    let mut lines = vec![format!(
+        "Authority changed (house grants file loaded): {entries} standing entries, \
+         {classes} added classes"
+    )];
+    lines.extend(settle_lines(seat, after));
+    lines.join("\n")
+}
+
+fn settle_lines(seat: &str, after: &EffectiveSeat) -> [String; 2] {
+    let settles = if after.settles.is_empty() {
+        "You now settle: none.".to_owned()
     } else {
         let summary = after
             .settles
@@ -405,12 +424,12 @@ pub(super) fn format_change_mail(
             .map(|entry| format!("{} ({})", entry.class, entry.workspace))
             .collect::<Vec<_>>()
             .join(", ");
-        lines.push(format!("You now settle: {summary}."));
-    }
-    lines.push(format!(
-        "Run `formation grant list --seat {seat}` for details."
-    ));
-    lines.join("\n")
+        format!("You now settle: {summary}.")
+    };
+    [
+        settles,
+        format!("Run `formation grant list --seat {seat}` for details."),
+    ]
 }
 
 fn holds_catalog_default(

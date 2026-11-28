@@ -1,6 +1,7 @@
-CLASS   WORKSPACE  FROM     FLAGS  LIMIT
-repair  site       catalog  -      -
-ship    site       catalog  -      -
+CLASS     WORKSPACE  FROM           FLAGS  LIMIT
+repair    site       catalog        -      -
+ship      site       catalog        -      -
+operator  site       house grant 3  -      answering a tracker decision that a later change can undo
 
 Withheld:
 CLASS  WORKSPACE  FROM        FLAGS  LIMIT

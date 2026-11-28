@@ -68,6 +68,7 @@ fn help_and_roster_output() {
             vec!["grant", "withhold", "--help"],
         ),
         ("help/grant-revoke.txt", vec!["grant", "revoke", "--help"]),
+        ("help/grant-load.txt", vec!["grant", "load", "--help"]),
         ("help/grant-list.txt", vec!["grant", "list", "--help"]),
         ("help/grant-check.txt", vec!["grant", "check", "--help"]),
         ("help/request.txt", vec!["request", "--help"]),
@@ -621,6 +622,40 @@ fn grant_list_output() {
             "advisor chat 12:30",
         ],
     );
+
+    let house = serde_json::json!({
+        "version": 1,
+        "grants": [{
+            "effect": "grant",
+            "to": "captain",
+            "class": "operator",
+            "workspace": "site",
+            "limit": "answering a tracker decision that a later change can undo",
+            "source": "house grants file"
+        }]
+    });
+    let mut load = root
+        .command(env!("CARGO_BIN_EXE_formation"))
+        .args(["grant", "load", "--room", &room, "--as", "0-chief"])
+        .current_dir(&cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    load.stdin
+        .take()
+        .unwrap()
+        .write_all(&serde_json::to_vec(&house).unwrap())
+        .unwrap();
+    let loaded = load.wait_with_output().unwrap();
+    assert!(loaded.status.success());
+    goldens
+        .check(
+            "output/grant-load.json",
+            &String::from_utf8(loaded.stdout).unwrap(),
+        )
+        .unwrap();
 
     goldens
         .check(

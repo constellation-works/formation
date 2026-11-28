@@ -1,3 +1,4 @@
-ID  EFFECT    TO       CLASS      WORKSPACE  FOR  ENTERED BY  FLAGS         LIMIT
- 1  grant     chief    direction  all        day  0-chief     self-entered  reversible workspace settings
- 2  withhold  captain  land       site       day  0-chief     -             -
+ID  EFFECT    TO       CLASS      WORKSPACE  FOR       FROM        ENTERED BY  FLAGS         LIMIT
+ 1  grant     chief    direction  all        day       room        0-chief     self-entered  reversible workspace settings
+ 2  withhold  captain  land       site       day       room        0-chief     -             -
+ 3  grant     captain  operator   site       standing  house file  0-chief     -             answering a tracker decision that a later change can undo

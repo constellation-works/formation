@@ -14,7 +14,8 @@ pub mod roster;
 
 pub use audit::{AuditEvent, AuditStatus};
 pub use grant::{
-    GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, NewGrant, RevokeStatus,
+    GrantEffect, GrantLifetime, GrantOrigin, GrantRecord, GrantTargetKind, HouseClass, NewGrant,
+    RevokeStatus,
 };
 pub use message::{DeliveryState, Mailbox, Message, SentMessage, rfc3339};
 pub use request::{Request, RequestAdvice, RequestOption, RequestSettlement, RequestState};

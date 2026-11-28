@@ -102,6 +102,15 @@ pub enum GrantOrigin {
 }
 
 impl GrantOrigin {
+    /// Parse a stored wire token for a stored layer (`room` or `house_file`).
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "room" => Some(Self::Room),
+            "house_file" => Some(Self::HouseFile),
+            _ => None,
+        }
+    }
+
     /// Stable wire token for this layer.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -163,6 +172,8 @@ pub struct NewGrant<'a> {
     pub limit: Option<&'a str>,
     /// Lifetime (`day` or `standing`).
     pub lifetime: GrantLifetime,
+    /// Layer the record belongs to: the room, or the house grants file.
+    pub origin: GrantOrigin,
     /// Operator direction source text.
     pub source: &'a str,
     /// Seat that entered the record, or `None` outside a session.
@@ -182,4 +193,17 @@ pub enum RevokeStatus {
     AlreadyRevoked,
     /// No grant with that identifier exists in the room.
     NotFound,
+}
+
+/// A class a house grants file adds to the catalog.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HouseClass {
+    /// Stable class identifier.
+    pub name: String,
+    /// Description of the decisions the class covers.
+    pub covers: String,
+    /// Default holder wire token: `admiral`, `nobody` or a rank.
+    pub holder: String,
+    /// Optional guidance note for grant candidates.
+    pub note: Option<String>,
 }

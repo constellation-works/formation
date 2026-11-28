@@ -1,17 +1,18 @@
 //! Grant command output: wire shapes and human tables.
 
-use formation_core::app::grant::{EffectiveEntry, EffectiveSeat, GrantView, Outcome};
+use formation_core::app::grant::{EffectiveEntry, EffectiveSeat, GrantOrigin, GrantView, Outcome};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-const ROOM_HEADER: [&str; 9] = [
+const ROOM_HEADER: [&str; 10] = [
     "ID",
     "EFFECT",
     "TO",
     "CLASS",
     "WORKSPACE",
     "FOR",
+    "FROM",
     "ENTERED BY",
     "FLAGS",
     "LIMIT",
@@ -82,6 +83,15 @@ fn payload(out: &Outcome) -> Value {
             "revoked_at": revoked_at,
             "notified": notified,
         }),
+        Outcome::Loaded(loaded) => json!({
+            "loaded": true,
+            "version": loaded.version,
+            "classes": loaded.classes,
+            "grants": loaded.grants,
+            "replaced": loaded.replaced,
+            "unchanged": loaded.unchanged,
+            "notified": loaded.notified,
+        }),
         Outcome::RoomList(grants) => room_list_payload(grants),
         Outcome::SeatList(effective) => seat_list_payload(effective),
         Outcome::Checked { seat, role, entry } => json!({
@@ -116,6 +126,7 @@ fn grant_payload(grant: &GrantView) -> Value {
         "limit": grant.limit,
         "for": grant.lifetime.as_str(),
         "source": grant.source,
+        "origin": grant.origin.as_str(),
         "entered_by": grant.entered_by,
         "entered_at": grant.entered_at,
         "self_entered": grant.self_entered,
@@ -145,7 +156,7 @@ fn effective_payload(entry: &EffectiveEntry) -> Value {
 }
 
 fn write_room_table(out: &mut impl Write, grants: &[GrantView]) -> io::Result<()> {
-    let rows: Vec<[String; 9]> = grants
+    let rows: Vec<[String; 10]> = grants
         .iter()
         .map(|grant| {
             [
@@ -155,6 +166,7 @@ fn write_room_table(out: &mut impl Write, grants: &[GrantView]) -> io::Result<()
                 grant.class.clone(),
                 grant.workspace.clone(),
                 grant.lifetime.as_str().to_owned(),
+                origin_cell(grant.origin).to_owned(),
                 grant.entered_by.clone().unwrap_or_else(|| "-".to_owned()),
                 flags_cell(grant.self_entered).to_owned(),
                 grant.limit.clone().unwrap_or_else(|| "-".to_owned()),
@@ -184,9 +196,13 @@ fn effective_rows(entries: &[EffectiveEntry]) -> Vec<[String; 5]> {
     entries
         .iter()
         .map(|entry| {
+            let kind = match entry.origin {
+                GrantOrigin::HouseFile => format!("house {}", entry.from_kind()),
+                GrantOrigin::Catalog | GrantOrigin::Room => entry.from_kind().to_owned(),
+            };
             let from = match entry.grant_id {
-                Some(id) => format!("{} {id}", entry.from_kind()),
-                None => entry.from_kind().to_owned(),
+                Some(id) => format!("{kind} {id}"),
+                None => kind,
             };
             [
                 entry.class.clone(),
@@ -197,6 +213,13 @@ fn effective_rows(entries: &[EffectiveEntry]) -> Vec<[String; 5]> {
             ]
         })
         .collect()
+}
+
+fn origin_cell(origin: GrantOrigin) -> &'static str {
+    match origin {
+        GrantOrigin::HouseFile => "house file",
+        GrantOrigin::Catalog | GrantOrigin::Room => "room",
+    }
 }
 
 fn flags_cell(self_entered: bool) -> &'static str {

@@ -21,6 +21,13 @@ The built-in catalog contains these classes:
 | `credentials` | Credentials and sign-ins | Admiral; never granted |
 | `grant` | Giving or taking back authority | Admiral; never granted |
 
+A grants file that the house file names adds standing entries and classes of the house's own:
+
+- Load it at start with `formation grant load`. Its entries list with `origin: house_file` and `for: standing`.
+- A house class is granted, checked and listed like a catalog class. Its covers and default holder come from the file.
+- A file cannot remove or change a catalog class, grant `grant` or `credentials`, or name an unknown version; the load is refused whole.
+- `formation grant add` makes day grants only, and `grant revoke` refuses a house entry: change the file and load it again.
+
 The chief's catalog default is `staffing`. It settles that class and anything else its current seat list covers. The advisor, aide, lieutenant, sergeant, sentry and specialist likewise settle only decisions covered by their current lists. A captain checks its list instead of relying on a fixed rank row; defaults are included there.
 
 The effective list applies the most specific matching entry: a seat entry before a rank entry, a workspace entry before `all`, then room before house file before catalog. When entries otherwise match, the later one wins; entries entered at the same time resolve to a withhold over a grant.

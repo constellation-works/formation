@@ -2,6 +2,10 @@
 
 pub mod catalog;
 
+mod house;
+
+mod load;
+
 mod rule;
 
 #[cfg(test)]
@@ -16,8 +20,11 @@ use crate::runtime::RoomAccess;
 pub use catalog::{CATALOG, ClassSpec, DefaultHolder};
 use cw_base::{Error, Kind};
 pub use formation_store::contract::{GrantEffect, GrantLifetime, GrantOrigin, GrantTargetKind};
-use formation_store::contract::{GrantRecord, NewGrant, RevokeStatus, rfc3339};
+use formation_store::contract::{
+    GrantOrigin as Origin, GrantRecord, HouseClass, NewGrant, RevokeStatus, rfc3339,
+};
 use formation_store::{RosterSeat, Snapshot, Store, Tx};
+pub use load::Loaded;
 pub use rule::{ALL_WORKSPACES, EffectiveEntry, EffectiveSeat};
 use std::collections::HashSet;
 
@@ -64,6 +71,13 @@ pub enum Command<'a> {
         /// Queue a fixed wake for an idle Codex session.
         queue: &'a dyn Fn(&str) -> bool,
     },
+    /// Load the house grants file from its bytes, replacing the earlier house entries.
+    Load {
+        /// The grants file, a JSON document.
+        bytes: Vec<u8>,
+        /// Queue a fixed wake for an idle Codex session.
+        queue: &'a dyn Fn(&str) -> bool,
+    },
     /// List active room grants, or one seat's effective authority.
     List {
         /// Optional seat whose effective authority should be listed.
@@ -107,6 +121,8 @@ pub struct GrantView {
     pub entered_at: Option<String>,
     /// Whether the holder is the caller's own seat or rank.
     pub self_entered: bool,
+    /// Where the entry lives: the room for a day entry, the house file for a standing one.
+    pub origin: Origin,
 }
 
 /// Grant outcomes, independent of CLI presentation.
@@ -129,6 +145,8 @@ pub enum Outcome {
         /// Joined seats mailed because their effective list changed.
         notified: Vec<String>,
     },
+    /// The house grants file was loaded.
+    Loaded(Loaded),
     /// Active grants and withholds in the room.
     RoomList(Vec<GrantView>),
     /// Effective authority for one seat.
@@ -154,6 +172,25 @@ struct MutationInput<'a> {
     source: &'a str,
 }
 
+/// The seats a change can reach and the classes in force after it.
+struct Audience<'a> {
+    roster: &'a [RosterSeat],
+    joined: &'a HashSet<String>,
+    classes: &'a [ClassSpec<'a>],
+}
+
+/// What changed, for the mail each affected seat receives.
+enum Change<'a> {
+    /// One room grant or withhold was added or revoked.
+    Grant {
+        grant: &'a GrantRecord,
+        action: &'a str,
+        self_entered: bool,
+    },
+    /// The house grants file was loaded.
+    Load { entries: usize, classes: usize },
+}
+
 struct GrantApp<'a>(std::marker::PhantomData<&'a ()>);
 
 impl<'a> App for GrantApp<'a> {
@@ -170,6 +207,7 @@ impl<'a> App for GrantApp<'a> {
             Command::Add { .. } => Some("grant add"),
             Command::Withhold { .. } => Some("grant withhold"),
             Command::Revoke { .. } => Some("grant revoke"),
+            Command::Load { .. } => Some("grant load"),
             Command::List { .. } | Command::Check { .. } => None,
         }
     }
@@ -241,6 +279,11 @@ impl<'a> App for GrantApp<'a> {
                 wake_notified(ctx, &notified, queue);
                 Ok(outcome)
             }
+            Command::Load { bytes, queue } => {
+                let (outcome, notified) = load::load(store, &mail.caller, now_sec, now_ns, &bytes)?;
+                wake_notified(ctx, &notified, queue);
+                Ok(outcome)
+            }
             Command::List { seat } => list_grants(store, &mail.caller, seat.as_deref()),
             Command::Check {
                 seat,
@@ -254,7 +297,10 @@ impl<'a> App for GrantApp<'a> {
         match out {
             Outcome::Recorded { grant, .. } => Some(grant.id.to_string()),
             Outcome::Revoked { id, .. } => Some(id.to_string()),
-            Outcome::RoomList(_) | Outcome::SeatList(_) | Outcome::Checked { .. } => None,
+            Outcome::Loaded(_)
+            | Outcome::RoomList(_)
+            | Outcome::SeatList(_)
+            | Outcome::Checked { .. } => None,
         }
     }
 }
@@ -275,7 +321,9 @@ fn record_grant(
         let roster = require_roster_tx(tx)?;
         let entered_by = require_joined_caller_tx(tx, caller, &roster)?;
 
-        rule::validate_class_for_mutation(input.class, CATALOG)?;
+        let house = tx.grants().house_classes()?;
+        let classes = catalog::with_house(&house);
+        rule::validate_class_for_mutation(input.class, &classes)?;
         let workspace = rule::validate_workspace(input.workspace)?;
         let lifetime = rule::validate_lifetime(input.lifetime)?;
         let source = rule::validate_source(input.source)?;
@@ -284,7 +332,7 @@ fn record_grant(
 
         let joined: HashSet<String> = tx.seats().all_names()?.into_iter().collect();
         let before_grants = tx.grants().active()?;
-        let before_map = snapshot_effective(&roster, &joined, &before_grants);
+        let before_map = snapshot_effective(&roster, &joined, &before_grants, &classes);
 
         let inserted = tx.grants().insert(&NewGrant {
             effect: input.effect,
@@ -294,6 +342,7 @@ fn record_grant(
             workspace,
             limit,
             lifetime,
+            origin: Origin::Room,
             source,
             entered_by: Some(entered_by.as_str()),
             entered_at: now_sec,
@@ -308,13 +357,18 @@ fn record_grant(
         };
         let notified = notify_changed(
             tx,
-            &roster,
-            &joined,
+            &Audience {
+                roster: &roster,
+                joined: &joined,
+                classes: &classes,
+            },
             &before_map,
             &after_grants,
-            &inserted,
-            action,
-            self_entered,
+            &Change::Grant {
+                grant: &inserted,
+                action,
+                self_entered,
+            },
             Some(entered_by.as_str()),
             now_sec,
         )?;
@@ -339,9 +393,22 @@ fn revoke_grant(
         let roster = require_roster_tx(tx)?;
         let revoked_by = require_joined_caller_tx(tx, caller, &roster)?;
 
+        let house = tx.grants().house_classes()?;
+        let classes = catalog::with_house(&house);
         let joined: HashSet<String> = tx.seats().all_names()?.into_iter().collect();
         let before_grants = tx.grants().active()?;
-        let before_map = snapshot_effective(&roster, &joined, &before_grants);
+        if before_grants
+            .iter()
+            .any(|grant| grant.id == id && grant.origin == Origin::HouseFile)
+        {
+            return Err(rule::refused(
+                "grant_standing",
+                format!(
+                    "grant `{id}` is a house-file entry; change the grants file and load it again"
+                ),
+            ));
+        }
+        let before_map = snapshot_effective(&roster, &joined, &before_grants, &classes);
 
         let revoked = match tx.grants().revoke(id, Some(revoked_by.as_str()), now_sec)? {
             RevokeStatus::Revoked(record) => *record,
@@ -363,13 +430,18 @@ fn revoke_grant(
         let self_entered = rule::is_self_entered(&revoked, &roster);
         let notified = notify_changed(
             tx,
-            &roster,
-            &joined,
+            &Audience {
+                roster: &roster,
+                joined: &joined,
+                classes: &classes,
+            },
             &before_map,
             &after_grants,
-            &revoked,
-            "revoked",
-            self_entered,
+            &Change::Grant {
+                grant: &revoked,
+                action: "revoked",
+                self_entered,
+            },
             Some(revoked_by.as_str()),
             now_sec,
         )?;
@@ -394,7 +466,9 @@ fn list_grants(store: &Store, caller: &Caller, seat: Option<&str>) -> Result<Out
 
     if let Some(seat_name) = seat {
         let roster_seat = find_roster_seat(&roster, seat_name)?;
-        let effective = rule::effective_for_seat(roster_seat, &roster, &grants, CATALOG);
+        let house = snapshot.grants().house_classes()?;
+        let classes = catalog::with_house(&house);
+        let effective = rule::effective_for_seat(roster_seat, &roster, &grants, &classes);
         Ok(Outcome::SeatList(effective))
     } else {
         let views = grants
@@ -425,7 +499,8 @@ fn check_grant(
         Some(value) => rule::validate_workspace(value)?,
         None => roster_seat.workspace.as_deref().unwrap_or(ALL_WORKSPACES),
     };
-    let entry = check_authority(roster_seat, class, workspace, &roster, &grants)?;
+    let house = snapshot.grants().house_classes()?;
+    let entry = check_authority(roster_seat, class, workspace, &roster, &grants, &house)?;
     Ok(Outcome::Checked {
         seat: roster_seat.name.clone(),
         role: roster_seat.role.clone(),
@@ -439,14 +514,16 @@ pub(super) fn check_authority(
     workspace: &str,
     roster: &[RosterSeat],
     grants: &[GrantRecord],
+    house: &[HouseClass],
 ) -> Result<EffectiveEntry, Error> {
-    let spec = rule::validate_class_for_check(class, CATALOG, grants)?;
-    let winner = rule::evaluate_one(seat, class, workspace, roster, grants, CATALOG);
+    let classes = catalog::with_house(house);
+    let spec = rule::validate_class_for_check(class, &classes, grants)?;
+    let winner = rule::evaluate_one(seat, class, workspace, roster, grants, &classes);
     match winner {
         Some(entry) if entry.effect == GrantEffect::Grant => Ok(entry),
         other => {
             let holders = roster.iter().filter(|candidate| {
-                rule::evaluate_one(candidate, class, workspace, roster, grants, CATALOG)
+                rule::evaluate_one(candidate, class, workspace, roster, grants, &classes)
                     .is_some_and(|entry| entry.effect == GrantEffect::Grant)
             });
             Err(rule::check_refusal(
@@ -461,8 +538,13 @@ pub(super) fn check_authority(
     }
 }
 
-pub(super) fn validate_class(class: &str, grants: &[GrantRecord]) -> Result<(), Error> {
-    rule::validate_class_for_check(class, CATALOG, grants).map(|_| ())
+pub(super) fn validate_class(
+    class: &str,
+    grants: &[GrantRecord],
+    house: &[HouseClass],
+) -> Result<(), Error> {
+    let classes = catalog::with_house(house);
+    rule::validate_class_for_check(class, &classes, grants).map(|_| ())
 }
 
 pub(super) fn require_roster_tx(tx: &Tx<'_>) -> Result<Vec<RosterSeat>, Error> {
@@ -573,6 +655,7 @@ fn snapshot_effective(
     roster: &[RosterSeat],
     joined: &HashSet<String>,
     grants: &[GrantRecord],
+    classes: &[ClassSpec<'_>],
 ) -> Vec<(String, EffectiveSeat)> {
     roster
         .iter()
@@ -580,25 +663,18 @@ fn snapshot_effective(
         .map(|seat| {
             (
                 seat.name.clone(),
-                rule::effective_for_seat(seat, roster, grants, CATALOG),
+                rule::effective_for_seat(seat, roster, grants, classes),
             )
         })
         .collect()
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "transactional notification needs before/after snapshots and grant context"
-)]
 fn notify_changed(
     tx: &Tx<'_>,
-    roster: &[RosterSeat],
-    joined: &HashSet<String>,
+    audience: &Audience<'_>,
     before: &[(String, EffectiveSeat)],
     after_grants: &[GrantRecord],
-    grant: &GrantRecord,
-    action: &str,
-    self_entered: bool,
+    change: &Change<'_>,
     actor_seat: Option<&str>,
     now_sec: i64,
 ) -> Result<Vec<String>, Error> {
@@ -607,23 +683,36 @@ fn notify_changed(
     let mut notified = Vec::new();
 
     for (seat_name, before_effective) in before {
-        if !joined.contains(seat_name) {
+        if !audience.joined.contains(seat_name) {
             continue;
         }
-        let Some(roster_seat) = roster.iter().find(|seat| seat.name == *seat_name) else {
+        let Some(roster_seat) = audience.roster.iter().find(|seat| seat.name == *seat_name) else {
             continue;
         };
-        let after_effective = rule::effective_for_seat(roster_seat, roster, after_grants, CATALOG);
+        let after_effective =
+            rule::effective_for_seat(roster_seat, audience.roster, after_grants, audience.classes);
         if *before_effective == after_effective {
             continue;
         }
 
-        let body =
-            rule::format_change_mail(seat_name, action, grant, self_entered, &after_effective);
-        let mut message_id = format!("grant-{}-{action}-{next_seq}", grant.id);
+        let (body, label) = match change {
+            Change::Grant {
+                grant,
+                action,
+                self_entered,
+            } => (
+                rule::format_change_mail(seat_name, action, grant, *self_entered, &after_effective),
+                format!("grant-{}-{action}", grant.id),
+            ),
+            Change::Load { entries, classes } => (
+                rule::format_load_mail(seat_name, *entries, *classes, &after_effective),
+                "grants-load".to_owned(),
+            ),
+        };
+        let mut message_id = format!("{label}-{next_seq}");
         while tx.messages().prior_delivery(sender, &message_id)?.is_some() {
             next_seq += 1;
-            message_id = format!("grant-{}-{action}-{next_seq}", grant.id);
+            message_id = format!("{label}-{next_seq}");
         }
         next_seq += 1;
 
@@ -655,5 +744,6 @@ fn grant_view(record: GrantRecord, self_entered: bool) -> GrantView {
         entered_by: record.entered_by,
         entered_at: rfc3339(record.entered_at),
         self_entered,
+        origin: record.origin,
     }
 }
