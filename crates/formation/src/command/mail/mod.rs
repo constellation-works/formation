@@ -12,6 +12,7 @@ mod sent;
 
 mod who;
 
+use crate::output;
 use clap::{Args, Subcommand};
 use formation_core::Env;
 use std::process::ExitCode;
@@ -24,6 +25,9 @@ pub(crate) struct Mail {
     /// Seat name for this command (default: seat recorded for this session).
     #[arg(long = "as", global = true, value_name = "SEAT")]
     seat: Option<String>,
+    /// Print JSON, overriding $FORMATION_FORMAT (auto, human or json).
+    #[arg(long, global = true)]
+    json: bool,
     #[command(subcommand)]
     action: Action,
 }
@@ -40,13 +44,14 @@ enum Action {
 
 pub(crate) fn run(env: Env, args: Mail, queue: &dyn Fn(&str) -> bool) -> ExitCode {
     let explicit_room = args.room.is_some();
+    let mode = output::resolve_mode(args.json);
     let env = env.with_mail_options(args.room, args.seat);
     match args.action {
-        Action::Join(args) => join::run(env, explicit_room, args),
-        Action::Who(_) => who::run(&env),
-        Action::Send(args) => send::run(&env, args, queue),
-        Action::Inbox(args) => inbox::run(&env, args),
-        Action::Sent(args) => sent::run(&env, args),
-        Action::Ack(args) => ack::run(&env, args),
+        Action::Join(args) => join::run(env, explicit_room, args, mode),
+        Action::Who(_) => who::run(&env, mode),
+        Action::Send(args) => send::run(&env, args, queue, mode),
+        Action::Inbox(args) => inbox::run(&env, args, mode),
+        Action::Sent(args) => sent::run(&env, args, mode),
+        Action::Ack(args) => ack::run(&env, args, mode),
     }
 }

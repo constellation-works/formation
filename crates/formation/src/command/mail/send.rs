@@ -1,7 +1,7 @@
 //! `formation mail send` argument mapping.
 
 use crate::command::common::probe::SignalGuard;
-use crate::output;
+use crate::output::{self, Mode};
 use clap::Args;
 use formation_core::Env;
 use formation_core::app::mail;
@@ -21,7 +21,7 @@ pub(super) struct Send {
     body: String,
 }
 
-pub(super) fn run(env: &Env, args: Send, queue: &dyn Fn(&str) -> bool) -> ExitCode {
+pub(super) fn run(env: &Env, args: Send, queue: &dyn Fn(&str) -> bool, mode: Mode) -> ExitCode {
     let _signals = SignalGuard::install();
     let cmd = Command::Send {
         to: args.to,
@@ -29,8 +29,5 @@ pub(super) fn run(env: &Env, args: Send, queue: &dyn Fn(&str) -> bool) -> ExitCo
         body: args.body,
         queue,
     };
-    mail::exec(env, cmd, |result| match result {
-        Ok(out) => output::mail_write(&output::mail_payload(out)),
-        Err(error) => output::error(&error),
-    })
+    mail::exec(env, cmd, |result| output::mail_result(result, mode))
 }

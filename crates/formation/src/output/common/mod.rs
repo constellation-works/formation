@@ -6,9 +6,15 @@ pub(crate) mod json;
 
 pub(crate) mod logging;
 
+pub(crate) mod mode;
+
+#[cfg(test)]
+mod tests;
+
 pub(crate) use error::error;
 pub(crate) use error::failure;
 pub(crate) use logging::init_logging;
+pub(crate) use mode::Mode;
 
 use std::io::{self, IsTerminal, Stdout};
 

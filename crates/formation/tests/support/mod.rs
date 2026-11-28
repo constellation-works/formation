@@ -1,7 +1,7 @@
 //! Own and reap processes started by CLI test fixtures.
 #![allow(clippy::unwrap_used, reason = "fixture failures should panic")]
 
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::time::{Duration, Instant};
 
 pub struct SpawnedChild(Option<Child>);
@@ -93,5 +93,60 @@ impl Drop for SpawnedChild {
                 let _ = child.wait();
             }
         }
+    }
+}
+
+/// A command's result when its stdout was a real terminal.
+#[cfg(unix)]
+#[allow(dead_code, reason = "test crates that never use a terminal skip this")]
+pub struct OnTerminal {
+    pub status: ExitStatus,
+    /// What the command wrote to the terminal, with line endings as `\n`.
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Run `cmd` with stdout on a pseudo-terminal, so `is_terminal` is true, and stderr piped.
+#[cfg(unix)]
+#[allow(dead_code, reason = "test crates that never use a terminal skip this")]
+pub fn on_terminal(mut cmd: Command) -> OnTerminal {
+    use std::io::Read;
+    use std::os::fd::{FromRawFd, OwnedFd};
+    let (mut master, mut slave) = (-1, -1);
+    // SAFETY: both out-pointers are valid and the optional arguments may be null.
+    let opened = unsafe {
+        libc::openpty(
+            &raw mut master,
+            &raw mut slave,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    assert_eq!(opened, 0, "{}", std::io::Error::last_os_error());
+    // SAFETY: `openpty` returned two open descriptors that nothing else owns.
+    let (master, slave) = unsafe { (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave)) };
+    let child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(slave))
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // The command still holds the child's end of the terminal. Dropping it lets the read below end.
+    drop(cmd);
+    let mut terminal = std::fs::File::from(master);
+    let mut bytes = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    loop {
+        match terminal.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(count) => bytes.extend_from_slice(&chunk[..count]),
+        }
+    }
+    let output = child.wait_with_output().unwrap();
+    OnTerminal {
+        status: output.status,
+        stdout: String::from_utf8(bytes).unwrap().replace("\r\n", "\n"),
+        stderr: String::from_utf8(output.stderr).unwrap(),
     }
 }

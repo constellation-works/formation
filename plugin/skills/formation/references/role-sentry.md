@@ -13,8 +13,8 @@ Contents:
 ## First turn
 
 1. Join the day's Scribe group once: `scribe group join <group> --as <seat> --author <your model name> --role sentry`. If refused, say so in your next message to your reader and go on. Do not join again after a refresh.
-2. Join Formation mail once so `formation watch` has a room, seat and seat folder: `formation mail join` (or `formation mail join <seat> --room <group>` when Scribe is unavailable). Pass `--room <group> --as <seat>` on `formation watch` when running outside a bound session.
-3. Save your seat card to `<seat_dir>/card.md` (`seat_dir` from `formation mail join`). Keep `<seat_dir>/mute` (`<kind> | <id or host> | <until>`, one per line).
+2. Join Formation mail once so `formation watch` has a room, seat and seat folder: `formation mail join --json` (or `formation mail join <seat> --room <group> --json` when Scribe is unavailable). Pass `--room <group> --as <seat>` on `formation watch` when running outside a bound session.
+3. Save your seat card to `<seat_dir>/card.md` (`seat_dir` in the JSON that `formation mail join --json` prints; a terminal shows a `Seat folder:` line without `--json`). Keep `<seat_dir>/mute` (`<kind> | <id or host> | <until>`, one per line).
 4. Check the room's watch set with `formation watch list`. When your captain owns attention and has not yet registered the unit's watches, add them for your reader (add `attention` only when your card has a workspace selector and no resident owns attention; without Orbit, add `ci` alone) and start `formation watch run` in the background if `reader` is `none`:
    ```sh
    formation watch add attention --to <reader> -- "$formation_skill/scripts/attention-read.sh" <ws_selector>

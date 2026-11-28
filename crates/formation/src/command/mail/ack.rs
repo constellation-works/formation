@@ -1,6 +1,6 @@
 //! `formation mail ack` argument mapping.
 
-use crate::output;
+use crate::output::{self, Mode};
 use clap::Args;
 use formation_core::Env;
 use formation_core::app::mail;
@@ -14,9 +14,8 @@ pub(super) struct Ack {
     receipt: i64,
 }
 
-pub(super) fn run(env: &Env, args: Ack) -> ExitCode {
-    mail::exec(env, Command::Ack(args.receipt), |result| match result {
-        Ok(out) => output::mail_write(&output::mail_payload(out)),
-        Err(error) => output::error(&error),
+pub(super) fn run(env: &Env, args: Ack, mode: Mode) -> ExitCode {
+    mail::exec(env, Command::Ack(args.receipt), |result| {
+        output::mail_result(result, mode)
     })
 }

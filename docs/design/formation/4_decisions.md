@@ -140,3 +140,17 @@ Daniel, 2026-11-26 (UTC), in the chief's chat: "sounds good." He agreed to move 
 ### Consequences
 
 Cost: the probes must cover the fallback's checks and expose failed reads. Their receiving seat is [open](references/network.md#open-questions).
+
+## Keep JSON as the piped form of mail output
+
+### Context
+
+STD-01@4 §R9 says the piped form SHOULD be one tab-separated line per record. Mail's `join`, `who`, `send`, `inbox` and `ack` have printed one JSON document when piped since they shipped, and seats, briefs and hook launchers parse it (receipt IDs, `held`, message bodies and `seat_dir`). Mail also had no readable form for a terminal.
+
+### Decision
+
+The operator, in the task that added mail output modes, asked for human and JSON modes with the existing piped JSON kept as the compatibility form. Those five verbs keep one JSON document as their piped form and add a readable form on a terminal. `mail sent` keeps its tab-separated piped form. The mode resolves once: `--json`, then `FORMATION_FORMAT` (`auto`, `human`, `json`; unknown values mean `auto`), then terminal detection. This deviates from STD-01@4 §R9 only in the piped default of those five verbs.
+
+### Consequences
+
+Cost: a pipeline that wants fields from `who` or `inbox` reads JSON rather than `cut -f`. Revisit with a breaking-change notice under STD-01@4 §R35 if the piped default ever moves to tab-separated rows.

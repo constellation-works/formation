@@ -1,0 +1,3 @@
+SEAT     UNDELIVERED  UNACKNOWLEDGED  HELD  SEEN
+captain  1            1               no    -
+chief    0            0               yes   <timestamp>
