@@ -1,6 +1,6 @@
 //! Message queries and row mapping.
 
-use crate::contract::{DeliveryState, LogMessage, Message, SentMessage, rfc3339};
+use crate::contract::{DeliveryState, LogMessage, Message, SentMessage, ThreadLink, rfc3339};
 use crate::error;
 use cw_base::Error;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension, Row, params};
@@ -21,8 +21,8 @@ pub struct LogQuery<'a> {
     pub no_watch: bool,
     /// Maximum number of results.
     pub limit: i64,
-    /// Select one receipt.
-    pub receipt: Option<i64>,
+    /// Select only these receipts.
+    pub receipts: Option<&'a [i64]>,
 }
 
 /// Envelopes visible in a committed read.
@@ -32,6 +32,8 @@ pub struct Messages<'a> {
     pub(crate) has_delivered_column: bool,
     pub(crate) has_watch_mail: bool,
     pub(crate) has_terminal_mail: bool,
+    pub(crate) has_request_mail: bool,
+    pub(crate) has_reply_mail: bool,
 }
 
 impl Messages<'_> {
@@ -48,10 +50,12 @@ impl Messages<'_> {
         } else {
             "0"
         };
+        let (reply, request) = self.link_columns();
         let mut statement = self
             .conn
             .prepare(&format!(
-                "SELECT receipt, id, sender, body, {sent}, {delivered}, {watch}, {terminal}
+                "SELECT receipt, id, sender, body, {sent}, {delivered}, {watch}, {terminal},
+                        {reply}, {request}
                    FROM messages
                   WHERE recipient = ?1 AND ack = 0
                   ORDER BY receipt
@@ -122,6 +126,15 @@ impl Messages<'_> {
 
     /// Read matching room history, constrained before applying the limit.
     pub fn log(&self, query: &LogQuery<'_>) -> Result<Vec<LogMessage>, Error> {
+        self.log_matching(query, |_| true)
+    }
+
+    /// Visit matching receipts in newest-first order and load only the selected envelopes.
+    pub fn log_matching(
+        &self,
+        query: &LogQuery<'_>,
+        mut include: impl FnMut(i64) -> bool,
+    ) -> Result<Vec<LogMessage>, Error> {
         let (sent, delivered) = self.timestamp_columns();
         let watch = if self.has_watch_mail {
             "watch_name"
@@ -138,56 +151,82 @@ impl Messages<'_> {
         } else {
             "0"
         };
+        let (reply, request) = self.link_columns();
+        let receipts = query
+            .receipts
+            .map(|receipts| serde_json::json!(receipts).to_string());
+        let receipt_filter = if receipts.is_some() {
+            "AND receipt IN (SELECT value FROM json_each(?6))"
+        } else {
+            ""
+        };
         let sql = format!(
             "SELECT receipt, id, sender, recipient, body, {sent}, ack,
-            {delivered}, {watch}, {added}, {terminal} FROM messages
+            {delivered}, {watch}, {added}, {terminal}, {reply}, {request} FROM messages
             WHERE (?1 IS NULL OR sender = ?1 OR recipient = ?1)
               AND (?2 IS NULL OR sender = ?2 OR recipient = ?2)
               AND (?3 IS NULL OR sender = ?3 OR recipient = ?3)
               AND (?4 IS NULL OR {sent} >= ?4)
               AND (?5 = 0 OR {watch} IS NULL)
-              AND (?6 IS NULL OR receipt = ?6)
+              {receipt_filter}
             ORDER BY receipt DESC LIMIT ?7"
         );
         let mut statement = self.conn.prepare(&sql).map_err(error::sql)?;
+        let mut rows = statement
+            .query(params![
+                query.caller,
+                query.seat,
+                query.with,
+                query.since,
+                query.no_watch,
+                receipts,
+                query.limit
+            ])
+            .map_err(error::sql)?;
+        let mut messages = Vec::new();
+        while let Some(row) = rows.next().map_err(error::sql)? {
+            if include(row.get(0).map_err(error::sql)?) {
+                messages.push(log_message(row).map_err(error::sql)?);
+            }
+        }
+        Ok(messages)
+    }
+
+    /// Explicit links in receipt order, including links through envelopes omitted by a log filter.
+    pub fn thread_links(&self) -> Result<Vec<ThreadLink>, Error> {
+        let (reply, request) = self.link_columns();
+        let mut statement = self
+            .conn
+            .prepare(&format!(
+                "SELECT receipt, {reply}, {request} FROM messages
+              WHERE {reply} IS NOT NULL OR {request} IS NOT NULL ORDER BY receipt"
+            ))
+            .map_err(error::sql)?;
         statement
-            .query_map(
-                params![
-                    query.caller,
-                    query.seat,
-                    query.with,
-                    query.since,
-                    query.no_watch,
-                    query.receipt,
-                    query.limit
-                ],
-                |row| {
-                    let ack: bool = row.get(6)?;
-                    let delivered: Option<i64> = row.get(7)?;
-                    Ok(LogMessage {
-                        receipt: row.get(0)?,
-                        id: row.get(1)?,
-                        sender: row.get(2)?,
-                        recipient: row.get(3)?,
-                        body: row.get(4)?,
-                        sent: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
-                        state: if ack {
-                            DeliveryState::Acked
-                        } else if delivered.is_some() {
-                            DeliveryState::Delivered
-                        } else {
-                            DeliveryState::Stored
-                        },
-                        watch_name: row.get(8)?,
-                        watch_added_by: row.get(9)?,
-                        terminal: row.get(10)?,
-                        delivered: delivered.and_then(rfc3339),
-                    })
-                },
-            )
+            .query_map([], |row| {
+                Ok(ThreadLink {
+                    receipt: row.get(0)?,
+                    reply_to: row.get(1)?,
+                    request_id: row.get(2)?,
+                })
+            })
             .map_err(error::sql)?
             .collect::<Result<_, _>>()
             .map_err(error::sql)
+    }
+
+    fn link_columns(&self) -> (&'static str, &'static str) {
+        let reply = if self.has_reply_mail {
+            "reply_to"
+        } else {
+            "NULL"
+        };
+        let request = if self.has_request_mail {
+            "request_id"
+        } else {
+            "NULL"
+        };
+        (reply, request)
     }
 
     fn timestamp_columns(&self) -> (&'static str, &'static str) {
@@ -209,6 +248,8 @@ pub struct PriorDelivery {
     pub recipient: String,
     /// Payload that must match on replay.
     pub body: String,
+    /// Answered receipt that must match on replay.
+    pub reply_to: Option<i64>,
 }
 
 /// Envelopes within a write transaction.
@@ -239,7 +280,7 @@ impl MessagesMut<'_> {
             .conn
             .prepare(
                 "SELECT receipt, id, sender, body, sent, delivered, watch_name, watch_added_by,
-                        terminal
+                        terminal, reply_to, request_id
                    FROM messages
                   WHERE recipient = ? AND ack = 0 AND delivered IS NULL ORDER BY receipt",
             )
@@ -274,7 +315,7 @@ impl MessagesMut<'_> {
     pub fn prior_delivery(&self, sender: &str, id: &str) -> Result<Option<PriorDelivery>, Error> {
         self.conn
             .query_row(
-                "SELECT receipt, recipient, body
+                "SELECT receipt, recipient, body, reply_to
                    FROM messages
                   WHERE sender = ? AND id = ?",
                 params![sender, id],
@@ -283,10 +324,34 @@ impl MessagesMut<'_> {
                         receipt: row.get(0)?,
                         recipient: row.get(1)?,
                         body: row.get(2)?,
+                        reply_to: row.get(3)?,
                     })
                 },
             )
             .optional()
+            .map_err(error::sql)
+    }
+
+    /// Whether the receipt exists and involves the specified seat, if one was specified.
+    pub fn can_reply_to(&self, receipt: i64, seat: Option<&str>) -> Result<bool, Error> {
+        self.conn
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM messages WHERE receipt = ?1
+                   AND (?2 IS NULL OR sender = ?2 OR recipient = ?2))",
+                params![receipt, seat],
+                |row| row.get(0),
+            )
+            .map_err(error::sql)
+    }
+
+    /// Associate a newly inserted envelope with the receipt it answers.
+    pub fn mark_reply(&self, receipt: i64, reply_to: i64) -> Result<(), Error> {
+        self.conn
+            .execute(
+                "UPDATE messages SET reply_to = ?2 WHERE receipt = ?1",
+                params![receipt, reply_to],
+            )
+            .map(|_| ())
             .map_err(error::sql)
     }
 
@@ -386,7 +451,35 @@ fn envelope(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Message> {
         watch_name: row.get(6)?,
         watch_added_by: row.get(7)?,
         terminal: row.get(8)?,
+        reply_to: row.get(9)?,
+        request_id: row.get(10)?,
         sent: row.get::<_, Option<i64>>(4)?.and_then(rfc3339),
         delivered: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
+    })
+}
+
+fn log_message(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<LogMessage> {
+    let ack: bool = row.get(6)?;
+    let delivered: Option<i64> = row.get(7)?;
+    Ok(LogMessage {
+        receipt: row.get(0)?,
+        id: row.get(1)?,
+        sender: row.get(2)?,
+        recipient: row.get(3)?,
+        body: row.get(4)?,
+        sent: row.get::<_, Option<i64>>(5)?.and_then(rfc3339),
+        state: if ack {
+            DeliveryState::Acked
+        } else if delivered.is_some() {
+            DeliveryState::Delivered
+        } else {
+            DeliveryState::Stored
+        },
+        watch_name: row.get(8)?,
+        watch_added_by: row.get(9)?,
+        terminal: row.get(10)?,
+        reply_to: row.get(11)?,
+        request_id: row.get(12)?,
+        delivered: delivered.and_then(rfc3339),
     })
 }

@@ -220,14 +220,15 @@ impl Mutation<'_> {
             self.tx,
             SeatRef::Name(&self.actor.name),
             self.now.unix_timestamp(),
-            to,
-            id,
-            &body,
+            send::Draft {
+                to,
+                id,
+                body: &body,
+                reply_to: None,
+            },
         )?;
-        if to == ADMIRAL
-            && let MailOutcome::Sent { receipt, .. } = outcome
-        {
-            self.tx.messages().mark_request(receipt, &request.id)?;
+        if let MailOutcome::Sent { receipt, .. } = outcome {
+            messages.mark_request(receipt, &request.id)?;
         }
         Ok(())
     }
@@ -409,6 +410,7 @@ fn admiral_change(
                 request.id, request.id
             );
             let receipt = messages.insert(ADMIRAL, recipient, &id, &body, now.unix_timestamp())?;
+            messages.mark_request(receipt, &request.id)?;
             if terminal {
                 messages.mark_terminal(receipt)?;
             }

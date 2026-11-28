@@ -4,43 +4,49 @@ use crate::runtime;
 /// Joined seats named in an `unknown_recipient` refusal.
 const LISTED_SEATS: usize = 32;
 
+pub(in crate::app) struct Draft<'a> {
+    pub(in crate::app) to: &'a str,
+    pub(in crate::app) id: String,
+    pub(in crate::app) body: &'a str,
+    pub(in crate::app) reply_to: Option<i64>,
+}
+
 pub(super) fn commit(
     store: &Store,
     caller: SeatRef<'_>,
     now: i64,
-    to: &str,
-    id: String,
-    body: &str,
+    draft: Draft<'_>,
 ) -> Result<(Outcome, bool), Error> {
-    validate(to, &id, body)?;
-    store.write(|tx| deliver(tx, caller, now, to, id, body))
+    validate(&draft)?;
+    store.write(|tx| deliver(tx, caller, now, draft))
 }
 
 pub(in crate::app) fn in_transaction(
     tx: &Tx<'_>,
     caller: SeatRef<'_>,
     now: i64,
-    to: &str,
-    id: String,
-    body: &str,
+    draft: Draft<'_>,
 ) -> Result<(Outcome, bool), Error> {
-    validate(to, &id, body)?;
-    deliver(tx, caller, now, to, id, body)
+    validate(&draft)?;
+    deliver(tx, caller, now, draft)
 }
 
-fn validate(to: &str, id: &str, body: &str) -> Result<(), Error> {
-    rule::name(to)?;
-    rule::name(id)?;
-    rule::body(body)
+fn validate(draft: &Draft<'_>) -> Result<(), Error> {
+    rule::name(draft.to)?;
+    rule::name(&draft.id)?;
+    rule::body(draft.body)
 }
 
 fn deliver(
     tx: &Tx<'_>,
     caller: SeatRef<'_>,
     now: i64,
-    to: &str,
-    id: String,
-    body: &str,
+    Draft {
+        to,
+        id,
+        body,
+        reply_to,
+    }: Draft<'_>,
 ) -> Result<(Outcome, bool), Error> {
     let sender = touch(tx, caller, now)?;
     if to == ADMIRAL {
@@ -52,8 +58,9 @@ fn deliver(
     };
     let held = runtime::held(seen, now);
 
-    if let Some(prior) = tx.messages().prior_delivery(&sender, &id)? {
-        if prior.recipient == to && prior.body == body {
+    let messages = tx.messages();
+    if let Some(prior) = messages.prior_delivery(&sender, &id)? {
+        if prior.recipient == to && prior.body == body && prior.reply_to == reply_to {
             return Ok((
                 Outcome::Sent {
                     id,
@@ -65,13 +72,26 @@ fn deliver(
         }
         return Err(refused(
             "message_conflict",
-            "message ID already used with different content or recipient",
+            "message ID already used with different content, recipient or reply receipt",
         ));
     }
 
-    let receipt = tx.messages().insert(&sender, to, &id, body, now)?;
+    if let Some(reply_to) = reply_to {
+        let participant = (!matches!(caller, SeatRef::Admiral)).then_some(sender.as_str());
+        if !messages.can_reply_to(reply_to, participant)? {
+            return Err(refused(
+                "invalid_reply_receipt",
+                format!("cannot reply to receipt {reply_to}; choose a receipt from your mail log"),
+            ));
+        }
+    }
+
+    let receipt = messages.insert(&sender, to, &id, body, now)?;
+    if let Some(reply_to) = reply_to {
+        messages.mark_reply(receipt, reply_to)?;
+    }
     if matches!(caller, SeatRef::Admiral) {
-        tx.messages().mark_terminal(receipt)?;
+        messages.mark_terminal(receipt)?;
     }
     Ok((Outcome::Sent { id, receipt, held }, true))
 }

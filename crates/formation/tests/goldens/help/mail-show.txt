@@ -1,4 +1,4 @@
-Show one envelope in full
+Show an envelope and its thread in full
 
 Usage: formation mail show [OPTIONS] <RECEIPT>
 

@@ -2,18 +2,18 @@
 title: Formation — Mail log and status
 owner: claude
 created_date: 2026-11-27
-updated_date: 2026-11-27
+updated_date: 2026-11-28
 status: Accepted
 feature: mail-log
 doc_role: scope
 summary: The admiral reads every envelope in a room with one command, replies link into threads, and one status screen shows the room, his inbox and the latest mail.
-stage: idea
-next: Build `mail log` and `mail show`, after the admiral caller.
+stage: building
+next: Build the read-only room status screen.
 ---
 
 # Formation — Mail log and status
 
-The operator approved this scope on 2026-11-27 ([Decided](#decided)). Nothing in it is built. It builds on the admiral-seat scope, which makes a terminal call the admiral's.
+The operator approved this scope on 2026-11-27 ([Decided](#decided)). It builds on the admiral-seat scope, which makes a terminal call the admiral's.
 
 ## Problem
 
@@ -53,7 +53,7 @@ TIME    FROM              TO             STATE      RE   ID                 FIRS
 ```
 
 - **Every envelope in the room, newest first,** fifty by default. `--seat` keeps mail a seat sent or received, `--with` narrows that to one other seat, `--since` takes a time.
-- **One line per envelope:** when it was stored, sender, recipient, how far it got (`stored`, `delivered`, `acked`), what it replies to, its id and its first line. `--full` prints whole bodies; `mail show <receipt>` prints one.
+- **One line per envelope:** when it was stored, sender, recipient, how far it got (`stored`, `delivered`, `acked`), what it replies to, its id and its first line. `--full` prints whole bodies; `mail show <receipt>` prints the envelopes in its thread.
 - **It is read-only.** It marks nothing delivered or acknowledged and renews no presence.
 - **The admiral reads all of it. A seat reads its own.** Called by a seat, the log holds only envelopes that seat sent or received, and `mail show` refuses any other. A seat that pulled the whole room's mail into its context would pay for text it has no use for, and a message body is untrusted text from another session.
 - **Watch mail is marked.** An envelope a watch produced shows the watch's name as its sender's source, and `--no-watch` leaves those out, because probe results outnumber seat mail.
@@ -97,7 +97,7 @@ Not designed here. Both would read `status --json` and `mail log --json`, which 
 ### Compatibility
 
 - `mail inbox`, `mail sent`, `mail who` and `mail send` without `--re` behave as before.
-- The reply link is one nullable value on an envelope, added by an append-only schema step. Older envelopes have none and list as threads of one.
+- The reply link is one nullable value on an envelope, added by an append-only schema step. Older envelopes have no reply links. Unlinked mail lists as threads of one and stored request IDs still group request envelopes.
 - A hook's delivery text gains one line only when an envelope has a link.
 
 ### Passed over

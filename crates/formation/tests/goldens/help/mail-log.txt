@@ -9,7 +9,8 @@ Options:
       --with <WITH>       Include envelopes involving this other seat
       --json              Print JSON, overriding $FORMATION_FORMAT (auto, human or json)
       --since <SINCE>     Include envelopes stored at or after this RFC 3339 timestamp
-      --limit <LIMIT>     Maximum number of envelopes [default: 50]
+      --limit <LIMIT>     Maximum number of envelopes or threads [default: 50]
       --no-watch          Exclude envelopes produced by watches
       --full              Print whole bodies
+      --threads           Group envelopes linked by a reply or a request
   -h, --help              Print help

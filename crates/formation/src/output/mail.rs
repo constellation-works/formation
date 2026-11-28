@@ -1,15 +1,31 @@
 //! Mail command output: wire shapes and human views.
 
 use super::common::Mode;
-use formation_core::app::mail::{LogMessage, Outcome, SentMessage};
+use formation_core::app::mail::{LogMessage, Outcome, SentMessage, Thread};
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::process::ExitCode;
+
+#[derive(Serialize)]
+struct ThreadView<'a> {
+    latest: Option<&'a str>,
+    seats: &'a [String],
+    count: usize,
+    state: &'static str,
+    first_line: &'a str,
+    messages: &'a [LogMessage],
+}
 
 /// Render one mail result in the resolved mode.
 pub(crate) fn result(result: Result<Outcome, formation_core::Error>, mode: Mode) -> ExitCode {
     match result {
         Ok(Outcome::SentHistory { messages, total }) => sent_history(&messages, total, mode),
+        Ok(Outcome::Threads {
+            threads,
+            total,
+            full,
+        }) => thread_history(&threads, total, full, mode),
         Ok(out) if mode == Mode::Human => human(&out),
         Ok(out) => super::common::json::write_json(&payload(&out)),
         Err(error) => failure(&error, mode),
@@ -53,7 +69,10 @@ fn payload(out: &Outcome) -> Value {
         Outcome::Inbox(messages) => json!({"messages": messages}),
         Outcome::SentHistory { messages, total } => sent_history_payload(messages, *total),
         Outcome::Log { messages, .. } => json!({"messages": messages}),
-        Outcome::Show(message) => json!({"message": message}),
+        Outcome::Threads { .. } => unreachable!("rendered with thread history"),
+        Outcome::Show { selected, thread } => {
+            json!({"message": thread[*selected], "thread": thread})
+        }
         Outcome::Ack(receipt) => json!({"acknowledged": receipt}),
     }
 }
@@ -66,7 +85,8 @@ fn human(out: &Outcome) -> ExitCode {
         | Outcome::Sent { .. }
         | Outcome::SentHistory { .. }
         | Outcome::Log { .. }
-        | Outcome::Show(_)
+        | Outcome::Threads { .. }
+        | Outcome::Show { .. }
         | Outcome::Ack(_) => None,
     };
     if let Some(notice) = empty {
@@ -161,7 +181,7 @@ fn write_human(out: &mut impl Write, outcome: &Outcome) -> io::Result<()> {
         }
         Outcome::SentHistory { messages, .. } => write_sent_history(out, messages, true),
         Outcome::Log { messages, full } => {
-            let rows: Vec<[String; 7]> = messages
+            let rows: Vec<[String; 8]> = messages
                 .iter()
                 .map(|message| {
                     [
@@ -173,26 +193,127 @@ fn write_human(out: &mut impl Write, outcome: &Outcome) -> io::Result<()> {
                         message.recipient.clone(),
                         message.state.as_str().to_owned(),
                         message.receipt.to_string(),
+                        message
+                            .reply_to
+                            .map(|receipt| receipt.to_string())
+                            .or_else(|| message.request_id.clone())
+                            .unwrap_or_else(|| "-".to_owned()),
                         message.id.clone(),
-                        message.body.lines().next().unwrap_or("").to_owned(),
+                        first_line(message).to_owned(),
                     ]
                 })
                 .collect();
             write_table(
                 out,
-                ["TIME", "FROM", "TO", "STATE", "RECEIPT", "ID", "FIRST LINE"],
+                [
+                    "TIME",
+                    "FROM",
+                    "TO",
+                    "STATE",
+                    "RECEIPT",
+                    "RE",
+                    "ID",
+                    "FIRST LINE",
+                ],
                 &rows,
             )?;
             if *full {
-                for message in messages {
-                    writeln!(out, "\nReceipt {}:\n{}", message.receipt, message.body)?;
-                }
+                write_bodies(out, messages.iter())?;
             }
             Ok(())
         }
-        Outcome::Show(message) => write_log_message(out, message),
+        Outcome::Threads { .. } => unreachable!("rendered with thread history"),
+        Outcome::Show { thread, .. } => {
+            for (index, message) in thread.iter().enumerate() {
+                if index > 0 {
+                    writeln!(out)?;
+                }
+                write_log_message(out, message)?;
+            }
+            Ok(())
+        }
         Outcome::Ack(receipt) => writeln!(out, "Acknowledged receipt {receipt}"),
     }
+}
+
+fn thread_history(threads: &[Thread], total: usize, full: bool, mode: Mode) -> ExitCode {
+    let views: Vec<_> = threads
+        .iter()
+        .map(|thread| {
+            let latest = &thread.messages[thread.messages.len() - 1];
+            ThreadView {
+                latest: latest.sent.as_deref(),
+                seats: &thread.seats,
+                count: thread.messages.len(),
+                state: latest.state.as_str(),
+                first_line: first_line(&thread.messages[0]),
+                messages: &thread.messages,
+            }
+        })
+        .collect();
+    if views.is_empty() {
+        let _ = writeln!(
+            io::stderr().lock(),
+            "No matching mail threads in this room."
+        );
+    }
+    let truncated = views.len() < total;
+    if mode == Mode::Json {
+        return super::common::json::write_json(&json!({
+            "threads": views, "total": total, "truncated": truncated,
+        }));
+    }
+    let mut stdout = io::stdout().lock();
+    let result = write_threads(&mut stdout, &views, full);
+    if result.is_ok() && truncated {
+        let _ = writeln!(
+            io::stderr().lock(),
+            "Showing {} of {total} mail threads.",
+            views.len()
+        );
+    }
+    finish(result)
+}
+
+fn write_threads(out: &mut impl Write, threads: &[ThreadView<'_>], full: bool) -> io::Result<()> {
+    const COUNT: &str = "COUNT";
+    let count_width = threads
+        .iter()
+        .map(|thread| thread.count.to_string().len())
+        .max()
+        .unwrap_or(0)
+        .max(COUNT.len());
+    let rows: Vec<_> = threads
+        .iter()
+        .map(|thread| {
+            [
+                thread.latest.unwrap_or("-").to_owned(),
+                thread.seats.join(", "),
+                format!("{:>count_width$}", thread.count),
+                thread.state.to_owned(),
+                thread.first_line.to_owned(),
+            ]
+        })
+        .collect();
+    write_table(out, ["TIME", "SEATS", COUNT, "STATE", "FIRST LINE"], &rows)?;
+    if full {
+        write_bodies(out, threads.iter().flat_map(|thread| thread.messages))?;
+    }
+    Ok(())
+}
+
+fn first_line(message: &LogMessage) -> &str {
+    message.body.lines().next().unwrap_or("")
+}
+
+fn write_bodies<'a>(
+    out: &mut impl Write,
+    messages: impl Iterator<Item = &'a LogMessage>,
+) -> io::Result<()> {
+    for message in messages {
+        writeln!(out, "\nReceipt {}:\n{}", message.receipt, message.body)?;
+    }
+    Ok(())
 }
 
 /// Write a header and rows with columns padded to their widest cell; the last is left unpadded.
@@ -332,6 +453,12 @@ fn write_log_message(out: &mut impl Write, message: &LogMessage) -> io::Result<(
     )?;
     if message.terminal {
         writeln!(out, "Sent from a terminal")?;
+    }
+    if let Some(receipt) = message.reply_to {
+        writeln!(out, "In reply to receipt {receipt}")?;
+    }
+    if let Some(request) = &message.request_id {
+        writeln!(out, "Request {request}")?;
     }
     if let Some(name) = &message.watch_name {
         writeln!(

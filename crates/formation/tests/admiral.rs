@@ -539,6 +539,20 @@ fn mail_from_the_terminal_is_the_admirals_and_the_hook_says_it_came_from_a_termi
     let history = json_of(&home.terminal(None, &["sent"]));
     assert_eq!(history["total"], 1);
     assert_eq!(home.audit().len(), events, "`mail sent` only reads");
+    let original = sent["receipt"].to_string();
+    let reply = json_of(&home.terminal(
+        None,
+        &[
+            "send",
+            "captain",
+            "--id",
+            "go-2",
+            "--body",
+            "Start now.",
+            "--re",
+            &original,
+        ],
+    ));
 
     let mut hook = home
         .command(None)
@@ -569,9 +583,18 @@ fn mail_from_the_terminal_is_the_admirals_and_the_hook_says_it_came_from_a_termi
     assert_eq!(mail["receipt"], sent["receipt"]);
     let stamp = mail["sent"].as_str().unwrap();
     assert!(
-        text.ends_with(&format!(
+        text.contains(&format!(
             "\nFrom admiral, sent from a terminal at {stamp}, receipt {}, id go-1:\nGo ahead.",
             sent["receipt"]
+        )),
+        "{text}"
+    );
+    let reply_stamp = inbox["messages"][1]["sent"].as_str().unwrap();
+    assert!(
+        text.ends_with(&format!(
+            "\nFrom admiral, sent from a terminal at {reply_stamp}, receipt {}, id go-2:\n\
+             In reply to receipt {original}\nStart now.",
+            reply["receipt"]
         )),
         "{text}"
     );
@@ -590,11 +613,197 @@ fn mail_from_the_terminal_is_the_admirals_and_the_hook_says_it_came_from_a_termi
 }
 
 #[test]
+fn replies_are_authorized_and_part_of_the_idempotency_key() {
+    let home = Home::new();
+    let first = home.ok(
+        CHIEF,
+        &["send", "chief", "--id", "private", "--body", "First."],
+    );
+    let second = home.ok(
+        CHIEF,
+        &["send", "captain", "--id", "shared", "--body", "Second."],
+    );
+    let private = first["receipt"].to_string();
+    let shared = second["receipt"].to_string();
+
+    for receipt in [private.as_str(), "9999"] {
+        let failure = home.piped(
+            Some(CAPTAIN),
+            &[
+                "--room", "trial", "--json", "send", "chief", "--id", "reply", "--body", "Reply.",
+                "--re", receipt,
+            ],
+        );
+        assert_eq!(failure.status.code(), Some(1), "{failure:?}");
+        assert!(failure.stdout.is_empty());
+        let error: Value = serde_json::from_slice(&failure.stderr).unwrap();
+        assert_eq!(error["code"], "invalid_reply_receipt");
+    }
+    assert_eq!(
+        json_of(&home.terminal(None, &["log"]))["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let args = [
+        "send", "chief", "--id", "reply", "--body", "Reply.", "--re", &shared,
+    ];
+    let reply = home.ok(CAPTAIN, &args);
+    let receipt = reply["receipt"].to_string();
+    home.ok(CHIEF, &["ack", &receipt]);
+    assert_eq!(home.ok(CAPTAIN, &args)["receipt"], reply["receipt"]);
+    let conflict = home.piped(
+        Some(CAPTAIN),
+        &[
+            "--room", "trial", "--json", "send", "chief", "--id", "reply", "--body", "Reply.",
+            "--re", &receipt,
+        ],
+    );
+    let error: Value = serde_json::from_slice(&conflict.stderr).unwrap();
+    assert_eq!(error["code"], "message_conflict");
+    assert_eq!(
+        json_of(&home.terminal(None, &["log"]))["messages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+
+    json_of(&home.terminal(
+        None,
+        &[
+            "send",
+            "captain",
+            "--id",
+            "admiral-reply",
+            "--body",
+            "Approved.",
+            "--re",
+            &private,
+        ],
+    ));
+}
+
+#[test]
+fn thread_views_count_only_visible_envelopes_and_keep_their_order() {
+    let home = Home::new();
+    let other = home.piped(
+        Some("observer-session"),
+        &["join", "observer", "--room", "trial"],
+    );
+    assert!(other.status.success(), "{other:?}");
+    home.ok(
+        CHIEF,
+        &[
+            "send",
+            "captain",
+            "--id",
+            "first",
+            "--body",
+            "First line\nMore",
+        ],
+    );
+    home.ok(
+        CAPTAIN,
+        &[
+            "send",
+            "observer",
+            "--id",
+            "second",
+            "--body",
+            "Hidden from chief",
+            "--re",
+            "1",
+        ],
+    );
+    home.ok(
+        CAPTAIN,
+        &["send", "observer", "--id", "plain", "--body", "Unrelated"],
+    );
+    home.ok(
+        "observer-session",
+        &[
+            "send", "chief", "--id", "last", "--body", "Last", "--re", "2",
+        ],
+    );
+    home.sql("UPDATE messages SET sent = receipt * 10;");
+    home.ok(CHIEF, &["ack", "4"]);
+    let before = home.snapshot();
+
+    let all = json_of(&home.terminal(None, &["log", "--threads"]));
+    assert_eq!(all["total"], 2);
+    let thread = &all["threads"][0];
+    assert_eq!(thread["count"], 3);
+    assert_eq!(thread["latest"], "1970-01-01T00:00:40Z");
+    assert_eq!(thread["first_line"], "First line");
+    assert_eq!(thread["state"], "acked");
+    assert_eq!(thread["seats"], json!(["captain", "chief", "observer"]));
+    assert_eq!(all["threads"][1]["count"], 1);
+    let limited = json_of(&home.terminal(None, &["log", "--threads", "--limit", "1"]));
+    assert_eq!(limited["total"], 2);
+    assert_eq!(limited["truncated"], true);
+    assert_eq!(limited["threads"], json!([thread]));
+
+    let chief = home.ok(CHIEF, &["log", "--threads"]);
+    let visible = &chief["threads"][0];
+    assert_eq!(chief["total"], 1);
+    assert_eq!(visible["count"], 2);
+    assert_eq!(visible["messages"][0]["receipt"], 1);
+    assert_eq!(visible["messages"][1]["receipt"], 4);
+    for receipt in ["1", "4"] {
+        let shown = home.ok(CHIEF, &["show", receipt]);
+        assert_eq!(shown["thread"], visible["messages"]);
+        assert_eq!(shown["message"]["receipt"].to_string(), receipt);
+    }
+    home.assert_unchanged(&before);
+}
+
+#[test]
+fn mail_from_the_previous_schema_reads_as_singletons_and_can_receive_a_reply() {
+    let home = Home::new();
+    home.ok(
+        CHIEF,
+        &["send", "captain", "--id", "old-first", "--body", "One"],
+    );
+    home.ok(
+        CHIEF,
+        &["send", "captain", "--id", "old-second", "--body", "Two"],
+    );
+    home.sql("ALTER TABLE messages DROP COLUMN reply_to; PRAGMA user_version = 23;");
+    // Restore the WAL companions that a Formation writer leaves in place.
+    let database = home.database();
+    let store = formation_store::Store::open(database.parent().unwrap()).unwrap();
+    store.read().unwrap();
+
+    let files = home.snapshot();
+    let before = home.ok(CAPTAIN, &["log", "--threads"]);
+    assert_eq!(before["total"], 2);
+    assert_eq!(before["threads"][0]["count"], 1);
+    assert_eq!(before["threads"][1]["count"], 1);
+    assert_eq!(before["threads"][1]["messages"][0]["reply_to"], Value::Null);
+    home.assert_unchanged(&files);
+    home.ok(
+        CAPTAIN,
+        &[
+            "send", "chief", "--id", "new", "--body", "Three", "--re", "1",
+        ],
+    );
+    let after = home.ok(CAPTAIN, &["log", "--threads"]);
+    assert_eq!(after["total"], 2);
+    assert_eq!(after["threads"][0]["count"], 2);
+    assert_eq!(after["threads"][0]["messages"][0]["body"], "One");
+    assert_eq!(after["threads"][0]["messages"][1]["reply_to"], 1);
+}
+
+#[test]
 fn a_room_from_the_current_release_lists_the_admiral_once_opened() {
     let home = Home::new();
     // Undo the admiral steps, so the file is what release 19 wrote.
     home.sql(
-        "ALTER TABLE messages DROP COLUMN request_id;
+        "ALTER TABLE messages DROP COLUMN reply_to;
+         ALTER TABLE messages DROP COLUMN request_id;
          DROP TABLE room_house_catalog;
          ALTER TABLE room_grant DROP COLUMN origin;
          ALTER TABLE messages DROP COLUMN terminal;
@@ -723,6 +932,20 @@ fn a_passed_request_lands_in_the_admirals_mailbox_and_terminal_settlement_clears
     let after_messages = inbox_after["messages"].as_array().unwrap();
     assert_eq!(after_messages.len(), 1, "{after_messages:?}");
     assert_eq!(after_messages[0]["id"], "plain-1");
+
+    let log = json_of(&home.terminal(None, &["log"]));
+    let messages = log["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 4);
+    assert!(
+        messages[..3]
+            .iter()
+            .all(|message| message["request_id"] == id)
+    );
+    assert_eq!(messages[3]["request_id"], Value::Null);
+    let threads = json_of(&home.terminal(None, &["log", "--threads"]));
+    assert_eq!(threads["total"], 2);
+    assert_eq!(threads["threads"][0]["count"], 3);
+    assert_eq!(threads["threads"][1]["count"], 1);
 
     let waiting_after = json_of(&home.terminal_cmd(
         None,

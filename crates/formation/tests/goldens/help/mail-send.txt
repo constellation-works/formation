@@ -11,4 +11,5 @@ Options:
       --as <SEAT>         Seat name for this command (default: seat recorded for this session, or admiral at a terminal)
       --body <BODY>       Message text (up to 8192 bytes)
       --json              Print JSON, overriding $FORMATION_FORMAT (auto, human or json)
+      --re <RECEIPT>      Reply to a receipt from your mail log
   -h, --help              Print help

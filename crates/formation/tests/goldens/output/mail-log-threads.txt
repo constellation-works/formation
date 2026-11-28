@@ -1,0 +1,2 @@
+TIME                  SEATS               COUNT  STATE   FIRST LINE
+<timestamp>  alpha, beta, gamma      2  stored  first

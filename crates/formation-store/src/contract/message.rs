@@ -22,6 +22,12 @@ pub struct Message {
     /// Whether the admiral sent the envelope from a terminal.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub terminal: bool,
+    /// Receipt this envelope answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<i64>,
+    /// Request that produced the envelope.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
     /// When the envelope was stored, as RFC 3339 UTC. Null for envelopes stored by earlier builds.
     pub sent: Option<String>,
     /// When a hook delivered the envelope, as RFC 3339 UTC, if delivered.
@@ -89,8 +95,22 @@ pub struct LogMessage {
     pub watch_added_by: Option<String>,
     /// Whether sent from a terminal.
     pub terminal: bool,
+    /// Receipt this envelope answers.
+    pub reply_to: Option<i64>,
+    /// Request that produced the envelope.
+    pub request_id: Option<String>,
     /// Hook delivery time, if known.
     pub delivered: Option<String>,
+}
+
+/// An envelope's explicit links, without its participants or body.
+pub struct ThreadLink {
+    /// Durable receipt.
+    pub receipt: i64,
+    /// Receipt this envelope answers.
+    pub reply_to: Option<i64>,
+    /// Request that produced the envelope.
+    pub request_id: Option<String>,
 }
 
 /// One joined seat's mailbox, as listed for the room.
