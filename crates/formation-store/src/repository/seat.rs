@@ -10,6 +10,7 @@ pub struct SeatsRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) has_session_column: bool,
     pub(crate) has_hook_state: bool,
+    pub(crate) has_delivered: bool,
 }
 
 impl SeatsRead<'_> {
@@ -79,6 +80,36 @@ impl SeatsRead<'_> {
             .collect::<Result<_, _>>()
             .map_err(error::sql)
     }
+
+    /// Every joined seat with its undelivered and unacknowledged counts, ordered alphabetically.
+    pub fn mailboxes(&self) -> Result<Vec<Mailbox>, Error> {
+        let delivered = if self.has_delivered {
+            "AND delivered IS NULL"
+        } else {
+            ""
+        };
+        let sql = format!(
+            "SELECT name, seen,
+                        (SELECT count(*) FROM messages
+                          WHERE recipient = seats.name AND ack = 0 {delivered}),
+                        (SELECT count(*) FROM messages
+                          WHERE recipient = seats.name AND ack = 0)
+                   FROM seats ORDER BY name"
+        );
+        let mut statement = self.conn.prepare(&sql).map_err(error::sql)?;
+        statement
+            .query_map([], |row| {
+                Ok(Mailbox {
+                    name: row.get(0)?,
+                    undelivered: row.get(2)?,
+                    unacknowledged: row.get(3)?,
+                    seen: row.get(1)?,
+                })
+            })
+            .map_err(error::sql)?
+            .collect::<Result<_, _>>()
+            .map_err(error::sql)
+    }
 }
 
 /// Seats in one room transaction.
@@ -93,6 +124,7 @@ impl Seats<'_> {
             conn: self.conn,
             has_session_column: true,
             has_hook_state: true,
+            has_delivered: true,
         }
         .by_session(session)
     }
@@ -222,6 +254,17 @@ impl Seats<'_> {
             .map_err(error::sql)
     }
 
+    /// Every joined seat and mailbox count.
+    pub fn mailboxes(&self) -> Result<Vec<Mailbox>, Error> {
+        SeatsRead {
+            conn: self.conn,
+            has_session_column: true,
+            has_hook_state: true,
+            has_delivered: true,
+        }
+        .mailboxes()
+    }
+
     /// Unix seconds when a seat last renewed its presence (0 for never), or `None` if not joined.
     pub fn seen(&self, name: &str) -> Result<Option<i64>, Error> {
         self.conn
@@ -238,6 +281,7 @@ impl Seats<'_> {
             conn: self.conn,
             has_session_column: true,
             has_hook_state: true,
+            has_delivered: true,
         }
         .names()
     }
@@ -250,33 +294,6 @@ impl Seats<'_> {
             .map_err(error::sql)?;
         statement
             .query_map([i64::try_from(limit).unwrap_or(i64::MAX)], |row| row.get(0))
-            .map_err(error::sql)?
-            .collect::<Result<_, _>>()
-            .map_err(error::sql)
-    }
-
-    /// Every joined seat with its undelivered and unacknowledged counts, ordered alphabetically.
-    pub fn mailboxes(&self) -> Result<Vec<Mailbox>, Error> {
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT name, seen,
-                        (SELECT count(*) FROM messages
-                          WHERE recipient = seats.name AND ack = 0 AND delivered IS NULL),
-                        (SELECT count(*) FROM messages
-                          WHERE recipient = seats.name AND ack = 0)
-                   FROM seats ORDER BY name",
-            )
-            .map_err(error::sql)?;
-        statement
-            .query_map([], |row| {
-                Ok(Mailbox {
-                    name: row.get(0)?,
-                    undelivered: row.get(2)?,
-                    unacknowledged: row.get(3)?,
-                    seen: row.get(1)?,
-                })
-            })
             .map_err(error::sql)?
             .collect::<Result<_, _>>()
             .map_err(error::sql)

@@ -27,7 +27,7 @@ pub(crate) use hook::{
 };
 pub(crate) use mail::{failure as mail_failure, result as mail_result};
 pub(crate) use request::write as request;
-pub(crate) use roster::summary;
+pub(crate) use roster::{summary, view as roster_view};
 pub(crate) use watch::{
     checked as watch_checked, exited as watch_exited, list as watch_list, payload as watch_payload,
     set_payload as watch_set_payload, write as watch_write,

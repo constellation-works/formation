@@ -29,6 +29,12 @@ pub struct Seat {
     pub host: Host,
     /// Workspace whose work this seat covers.
     pub workspace: Option<String>,
+    /// Expected model.
+    pub model: Option<String>,
+    /// Expected effort.
+    pub effort: Option<String>,
+    /// Assignment record.
+    pub record: Option<String>,
     /// Parent seat, or None for the admiral.
     pub reports_to: Option<String>,
 }

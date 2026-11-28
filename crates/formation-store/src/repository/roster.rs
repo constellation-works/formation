@@ -13,6 +13,12 @@ pub struct RosterSeat {
     pub role: String,
     /// Workspace, if any.
     pub workspace: Option<String>,
+    /// Model, if specified.
+    pub model: Option<String>,
+    /// Effort, if specified.
+    pub effort: Option<String>,
+    /// Assignment record, if specified.
+    pub record: Option<String>,
     /// Parent seat, if any.
     pub reports_to: Option<String>,
 }
@@ -21,6 +27,7 @@ pub struct RosterSeat {
 pub struct RosterRead<'a> {
     pub(crate) conn: &'a Connection,
     pub(crate) available: bool,
+    pub(crate) details: bool,
 }
 
 impl RosterRead<'_> {
@@ -29,21 +36,42 @@ impl RosterRead<'_> {
         if !self.available {
             return Ok(Vec::new());
         }
-        let mut stmt = self
-            .conn
-            .prepare("SELECT name, role, workspace, reports_to FROM roster_seat ORDER BY name")
-            .map_err(error::sql)?;
+        let query = if self.details {
+            "SELECT name, role, workspace, reports_to, model, effort, record FROM roster_seat ORDER BY name"
+        } else {
+            "SELECT name, role, workspace, reports_to, NULL, NULL, NULL FROM roster_seat ORDER BY name"
+        };
+        let mut stmt = self.conn.prepare(query).map_err(error::sql)?;
         stmt.query_map([], |row| {
             Ok(RosterSeat {
                 name: row.get(0)?,
                 role: row.get(1)?,
                 workspace: row.get(2)?,
+                model: row.get(4)?,
+                effort: row.get(5)?,
+                record: row.get(6)?,
                 reports_to: row.get(3)?,
             })
         })
         .map_err(error::sql)?
         .collect::<Result<_, _>>()
         .map_err(error::sql)
+    }
+
+    /// Application time and seat, if recorded.
+    pub fn application(&self) -> Result<Option<(i64, Option<String>)>, Error> {
+        use cw_sqlite::rusqlite::OptionalExtension;
+        if !self.details {
+            return Ok(None);
+        }
+        self.conn
+            .query_row(
+                "SELECT applied_at, applied_by FROM roster_application LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(error::sql)
     }
 }
 
@@ -58,8 +86,23 @@ impl RosterSeats<'_> {
         RosterRead {
             conn: self.conn,
             available: true,
+            details: true,
         }
         .seats()
+    }
+
+    /// Record who applied the roster and when.
+    pub fn stamp(&self, now: i64, seat: Option<&str>) -> Result<(), Error> {
+        self.conn
+            .execute("DELETE FROM roster_application", [])
+            .map_err(error::sql)?;
+        self.conn
+            .execute(
+                "INSERT INTO roster_application VALUES (?1, ?2)",
+                params![now, seat],
+            )
+            .map_err(error::sql)?;
+        Ok(())
     }
 
     /// Replace the entire applied roster atomically.
@@ -70,13 +113,17 @@ impl RosterSeats<'_> {
         for seat in &roster.seats {
             self.conn
                 .execute(
-                    "INSERT INTO roster_seat (name, role, workspace, reports_to)
-                     VALUES (?1, ?2, ?3, ?4)",
+                    "INSERT INTO roster_seat
+                     (name, role, workspace, reports_to, model, effort, record)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     params![
                         seat.name,
                         seat.role.as_str(),
                         seat.workspace,
-                        seat.reports_to
+                        seat.reports_to,
+                        seat.model,
+                        seat.effort,
+                        seat.record
                     ],
                 )
                 .map_err(error::sql)?;

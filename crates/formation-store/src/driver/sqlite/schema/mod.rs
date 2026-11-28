@@ -52,4 +52,5 @@ pub(super) const MIGRATIONS: &[cw_sqlite::Step] = &[
     grant::CREATE,
     request::CREATE,
     request::HISTORY,
+    seat::ROSTER_DETAILS,
 ];

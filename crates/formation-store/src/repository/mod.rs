@@ -46,6 +46,7 @@ impl Snapshot {
         RosterRead {
             conn: &self.reader,
             available: self.reader.version() >= 14,
+            details: self.reader.version() >= 18,
         }
     }
 
@@ -72,6 +73,7 @@ impl Snapshot {
             conn: &self.reader,
             has_session_column: sqlite::has_session_column(self.reader.version()),
             has_hook_state: sqlite::has_hook_state(self.reader.version()),
+            has_delivered: sqlite::has_delivered_column(self.reader.version()),
         }
     }
 

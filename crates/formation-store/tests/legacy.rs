@@ -19,6 +19,15 @@ fn drop_hook_state(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
     )
 }
 
+fn drop_roster_details(connection: &Connection) -> cw_sqlite::rusqlite::Result<()> {
+    connection.execute_batch(
+        "DROP TABLE roster_application;
+         ALTER TABLE roster_seat DROP COLUMN model;
+         ALTER TABLE roster_seat DROP COLUMN effort;
+         ALTER TABLE roster_seat DROP COLUMN record;",
+    )
+}
+
 #[test]
 fn upgrade_retains_seats_and_pending_receipts() -> Result<(), Box<dyn std::error::Error>> {
     let root = cw_testkit::TempRoot::new("FORMATION")?;
@@ -109,6 +118,7 @@ fn upgrade_to_the_watch_set_retains_mail_and_handovers() -> Result<(), Box<dyn s
     // Rewind the room to the schema before the watch set, as an earlier build left it.
     let path = root.path().join("inbox.sqlite3");
     let connection = cw_sqlite::rusqlite::Connection::open(&path)?;
+    drop_roster_details(&connection)?;
     drop_hook_state(&connection)?;
     connection.execute_batch(
         "DROP TABLE watch_reader; DROP TABLE watch_participant;
@@ -157,6 +167,7 @@ fn upgrade_to_the_reader_retains_existing_watch_rows() -> Result<(), Box<dyn std
     store.write(|tx| tx.watch().put(&watch))?;
 
     let connection = cw_sqlite::rusqlite::Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&connection)?;
     drop_hook_state(&connection)?;
     connection.execute_batch(
         "DROP TABLE watch_reader; DROP TABLE watch_participant;
@@ -196,6 +207,7 @@ fn upgrade_keeps_binding_without_granting_a_wake() -> Result<(), Box<dyn std::er
             .insert("chief", "captain", "first", "retained", 100)
     })?;
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&connection)?;
     drop_hook_state(&connection)?;
     connection.execute_batch("PRAGMA user_version = 9;")?;
     drop(connection);
@@ -239,6 +251,7 @@ fn upgrade_to_watch_absence_retains_handovers_with_zero_missed_reads()
     })?;
 
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&connection)?;
     connection.execute_batch(
         "DROP TABLE room_request;
          DROP TABLE hook_waiter;
@@ -280,6 +293,7 @@ fn upgrade_to_hook_waiter_retains_mail_and_seat_links() -> Result<(), Box<dyn st
     })?;
 
     let connection = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&connection)?;
     connection.execute_batch(
         "DROP TABLE room_request;
          DROP TABLE hook_waiter;
@@ -333,6 +347,7 @@ fn upgrade_to_roster_preserves_room_records() -> Result<(), Box<dyn std::error::
         Ok(())
     })?;
     let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&db)?;
     db.execute_batch(
         "INSERT INTO watch_set (recipient,name,command,cwd,every,state,added_by,added_at)
          VALUES ('chief','probe','true','/',10,'on','chief',100);
@@ -373,6 +388,7 @@ fn upgrade_to_grant_preserves_room_records() -> Result<(), Box<dyn std::error::E
         Ok(())
     })?;
     let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&db)?;
     db.execute_batch(
         "DROP TABLE room_request;
          DROP TABLE room_grant; PRAGMA user_version = 14;",
@@ -425,6 +441,7 @@ fn upgrade_to_request_preserves_room_records() -> Result<(), Box<dyn std::error:
     })?;
 
     let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&db)?;
     db.execute_batch("DROP TABLE room_request; PRAGMA user_version = 15;")?;
     let snapshot = store.read()?;
     assert!(snapshot.requests().list()?.is_empty());
@@ -485,6 +502,7 @@ fn request_history_upgrade_reads_version_sixteen_before_and_after_write()
     let store = Store::create(root.path())?;
     store.write(|_| Ok(()))?;
     let db = Connection::open(root.path().join("inbox.sqlite3"))?;
+    drop_roster_details(&db)?;
     db.execute_batch("ALTER TABLE room_request DROP COLUMN overturned; PRAGMA user_version = 16;")?;
     drop(db);
     assert!(store.read()?.requests().list()?.is_empty());

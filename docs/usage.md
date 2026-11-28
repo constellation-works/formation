@@ -198,3 +198,13 @@ open requests or `--waiting admiral` for the admiral's queue. Use `--settled-by 
 for that seat's decisions. `--since` includes activity at or after an RFC 3339 timestamp.
 With `--settled-by`, it compares the settlement time. `show` includes the original ask,
 options and recommendation, the advice history, and any settlement.
+
+### Viewing a roster
+
+Run `formation roster show [<room>] [--json]` to compare planned seats with joined
+seats. Without a room it uses the calling session's joined room. The tree shows
+reporting lines, rank, workspace, optional model, effort and record, and live
+presence and undelivered mail. Unjoined planned seats and joined seats absent
+from the roster are identified. The command does not renew presence. A room
+without an applied roster lists its joined seats. Version 2 roster seats may
+include the optional string fields `model`, `effort` and `record`.

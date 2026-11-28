@@ -12,7 +12,7 @@ pub(super) mod send;
 
 mod sent;
 
-mod who;
+pub(crate) mod who;
 
 use crate::Env;
 use crate::composition::Caller;
@@ -94,6 +94,7 @@ pub enum Outcome {
 }
 
 /// One joined seat as `mail who` lists it.
+#[derive(serde::Serialize)]
 pub struct SeatStatus {
     /// Seat name.
     pub name: String,
