@@ -296,6 +296,34 @@ fn is_rfc3339_utc(text: &str) -> bool {
         })
 }
 
+fn assert_who_envelope(value: &Value) {
+    let envelope = value.as_object().unwrap();
+    assert_eq!(envelope.len(), 1);
+    let seats = value["seats"].as_array().unwrap();
+    assert_eq!(seats.len(), 2);
+    for seat in seats {
+        assert_eq!(seat.as_object().unwrap().len(), 5);
+    }
+    assert_eq!(seats[0]["name"], "captain");
+    assert_eq!(seats[0]["undelivered"], 1);
+    assert_eq!(seats[0]["unacknowledged"], 1);
+    assert_eq!(seats[0]["held"], false);
+    assert_eq!(seats[0]["seen"], Value::Null);
+    assert_eq!(seats[1]["name"], "chief");
+    assert_eq!(seats[1]["undelivered"], 0);
+    assert_eq!(seats[1]["unacknowledged"], 0);
+    assert_eq!(seats[1]["held"], true);
+    assert!(is_rfc3339_utc(seats[1]["seen"].as_str().unwrap()));
+}
+
+fn who_without_seen(value: &Value) -> Value {
+    let mut stable = value.clone();
+    for seat in stable["seats"].as_array_mut().unwrap() {
+        seat.as_object_mut().unwrap().remove("seen");
+    }
+    stable
+}
+
 fn held(who: &Value, name: &str) -> bool {
     who["seats"]
         .as_array()
@@ -1132,10 +1160,23 @@ fn piped_output_keeps_the_json_envelopes_and_every_verb_accepts_json() {
                 .env("FORMATION_FORMAT", "pretty")
                 .args(verb),
         );
-        assert_eq!(plain, flagged);
-        assert_eq!(plain, setting);
-        assert_eq!(plain, unknown);
         assert!(plain[key].is_array());
+        if key == "seats" {
+            for who in [&plain, &flagged, &setting, &unknown] {
+                assert_who_envelope(who);
+                assert_eq!(who_without_seen(&plain), who_without_seen(who));
+            }
+
+            let mut later_seen = plain.clone();
+            later_seen["seats"][1]["seen"] = "2020-01-01T00:00:00Z".into();
+            assert_who_envelope(&later_seen);
+            assert_ne!(plain["seats"][1]["seen"], later_seen["seats"][1]["seen"]);
+            assert_eq!(who_without_seen(&plain), who_without_seen(&later_seen));
+        } else {
+            assert_eq!(plain, flagged);
+            assert_eq!(plain, setting);
+            assert_eq!(plain, unknown);
+        }
     }
     let inbox = run_ok(room.command("captain").arg("inbox"));
     assert_eq!(inbox["messages"][0]["body"], "hello");
